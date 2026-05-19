@@ -1,10 +1,25 @@
-# Frontend
+# Link Town Frontend
 
-このディレクトリには、LinkTwon のフロントエンド実装を配置します。
+Link Town の本実装フロントエンドです。`community-mile-app` は過去モック置き場のため、このアプリでは参照しません。
 
-- 画面 UI
-- 画面遷移
-- 状態管理
-- API との接続処理
+## 方針
 
-ユーザーが直接操作する Web アプリケーションのコードはここで管理します。
+- React + Vite + TypeScript
+- Androidスマートフォン閲覧前提
+- バックエンド未完成のためモックデータで表示
+- ロゴとアイコンはReact SVGコンポーネントとして再利用
+
+## 起動
+
+```bash
+npm install
+npm run dev
+```
+
+PCでは `http://localhost:5173` を開きます。Android実機では同一LAN上のPC IPを使って `http://<PCのIP>:5173` にアクセスします。
+
+## ビルド
+
+```bash
+npm run build
+```
