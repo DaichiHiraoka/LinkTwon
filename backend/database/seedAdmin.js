@@ -1,4 +1,4 @@
-require('dotenv').config({ path: require('path').join(__dirname, '../../.env') });
+require('../config/loadEnv');
 const bcrypt = require('bcryptjs');
 const pool = require('../config/db');
 
@@ -9,12 +9,25 @@ async function seedAdmin() {
 
     const hashedPassword = await bcrypt.hash(adminPassword, 10);
 
-    await pool.query(
-      `INSERT INTO admins (admin_id, password_hash)
-    VALUES (?, ?)
-    ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash)`,
-      [adminId, hashedPassword]
+    const [admins] = await pool.query(
+      `SELECT admin_id FROM admins WHERE admin_id = ?`,
+      [adminId]
     );
+
+    if (admins.length > 0) {
+      await pool.query(
+        `UPDATE admins
+         SET password_hash = ?
+         WHERE admin_id = ?`,
+        [hashedPassword, adminId]
+      );
+    } else {
+      await pool.query(
+        `INSERT INTO admins (admin_id, password_hash)
+         VALUES (?, ?)`,
+        [adminId, hashedPassword]
+      );
+    }
 
     console.log('Admin account created or updated.');
     console.log(`Admin ID: ${adminId}`);

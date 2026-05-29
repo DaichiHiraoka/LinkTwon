@@ -11,7 +11,7 @@ CREATE TABLE users (
 
 CREATE TABLE admins (
   admin_id VARCHAR(100) PRIMARY KEY,
-  password VARCHAR(255) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
