@@ -96,6 +96,16 @@ async function main() {
       headers: userAuth,
       body: JSON.stringify({ check_in_code: 'EVENT-1' })
     }, 400);
+    const cancelledParticipation = await request(`/events/${checkIn.event_id}/participation`, {
+      method: 'DELETE',
+      headers: userAuth
+    });
+    assert.strictEqual(cancelledParticipation.event_id, checkIn.event_id);
+    assert.strictEqual(cancelledParticipation.revoked_points, checkIn.granted_points);
+    await request(`/events/${checkIn.event_id}/participation`, {
+      method: 'DELETE',
+      headers: userAuth
+    }, 404);
 
     const services = await request('/points/services', { headers: userAuth });
     assert.ok(services.length > 0);

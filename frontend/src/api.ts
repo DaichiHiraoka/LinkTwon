@@ -8,6 +8,7 @@ import type {
   ExchangeResponse,
   ManagedUser,
   NotificationItem,
+  ParticipationCancellationResponse,
   ParticipationResponse,
   PasswordResetRequestResponse,
   PaymentMethod,
@@ -244,6 +245,16 @@ export function participateInEvent(eventId: number, token: string) {
     {
       method: "POST",
       body: JSON.stringify({ event_id: eventId }),
+    },
+    token,
+  );
+}
+
+export function cancelEventParticipation(eventId: number, token: string) {
+  return request<ParticipationCancellationResponse>(
+    `/events/${eventId}/participation`,
+    {
+      method: "DELETE",
     },
     token,
   );

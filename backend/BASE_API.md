@@ -52,6 +52,7 @@
 | --- | --- | --- | --- |
 | GET | `/events` | user | 公開中イベント一覧取得。`liked`, `like_count` を含む |
 | POST | `/events/participate` | user | `event_id` 指定のイベント参加登録とポイント付与 |
+| DELETE | `/events/:id/participation` | user | 指定イベントの参加応募キャンセル、付与ポイントの取り消し |
 | POST | `/events/check-in` | user | `check_in_code` による QR チェックイン参加 |
 | POST | `/events/:id/like` | user | イベントいいね追加 |
 | DELETE | `/events/:id/like` | user | イベントいいね解除 |

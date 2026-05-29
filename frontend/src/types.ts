@@ -127,6 +127,13 @@ export type ParticipationResponse = {
   check_in_code?: string;
 };
 
+export type ParticipationCancellationResponse = {
+  message: string;
+  event_id: number;
+  revoked_points: number;
+  current_points: number;
+};
+
 export type ExchangeResponse = {
   message: string;
   service_id: number;

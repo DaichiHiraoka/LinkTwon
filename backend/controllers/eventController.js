@@ -115,6 +115,69 @@ async function participateInEvent(req, res, next) {
   }
 }
 
+async function cancelEventParticipation(req, res, next) {
+  const connection = await pool.getConnection();
+
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+
+    await connection.beginTransaction();
+
+    const [participations] = await connection.query(
+      `SELECT p.participation_id, p.granted_points, e.event_name
+       FROM participations p
+       JOIN events e ON p.event_id = e.event_id
+       WHERE p.user_id = ? AND p.event_id = ?`,
+      [userId, id]
+    );
+
+    if (participations.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Event participation not found.' });
+    }
+
+    const participation = participations[0];
+
+    await connection.query(
+      `DELETE FROM participations
+       WHERE participation_id = ?`,
+      [participation.participation_id]
+    );
+
+    await connection.query(
+      `UPDATE users
+       SET points = CASE WHEN points >= ? THEN points - ? ELSE 0 END
+       WHERE user_id = ?`,
+      [participation.granted_points, participation.granted_points, userId]
+    );
+
+    await connection.query(
+      `INSERT INTO point_transactions (user_id, type, points, description)
+       VALUES (?, 'grant', ?, ?)`,
+      [userId, -participation.granted_points, `Points revoked for cancelled event: ${participation.event_name}`]
+    );
+
+    const [updatedUsers] = await connection.query(
+      'SELECT user_id, points FROM users WHERE user_id = ?',
+      [userId]
+    );
+
+    await connection.commit();
+    res.json({
+      message: 'Event participation cancelled successfully.',
+      event_id: Number(id),
+      revoked_points: participation.granted_points,
+      current_points: updatedUsers[0].points
+    });
+  } catch (error) {
+    await connection.rollback();
+    next(error);
+  } finally {
+    connection.release();
+  }
+}
+
 async function checkInEvent(req, res, next) {
   const connection = await pool.getConnection();
 
@@ -218,6 +281,7 @@ async function unlikeEvent(req, res, next) {
 module.exports = {
   getEvents,
   participateInEvent,
+  cancelEventParticipation,
   checkInEvent,
   likeEvent,
   unlikeEvent
