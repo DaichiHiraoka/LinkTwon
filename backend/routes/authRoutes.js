@@ -3,11 +3,21 @@ const router = express.Router();
 const {
   register,
   login,
-  adminLogin
+  adminLogin,
+  requestPasswordReset,
+  resetPassword,
+  changePassword
 } = require('../controllers/authController');
+const { authenticateToken } = require('../middlewares/authMiddleware');
+const { rateLimit } = require('../middlewares/rateLimitMiddleware');
 
-router.post('/register', register);
-router.post('/login', login);
-router.post('/admin/login', adminLogin);
+const authLimiter = rateLimit({ windowMs: 60 * 1000, max: 30 });
+
+router.post('/register', authLimiter, register);
+router.post('/login', authLimiter, login);
+router.post('/admin/login', authLimiter, adminLogin);
+router.post('/password/reset-request', authLimiter, requestPasswordReset);
+router.post('/password/reset', authLimiter, resetPassword);
+router.put('/password', authenticateToken, changePassword);
 
 module.exports = router;

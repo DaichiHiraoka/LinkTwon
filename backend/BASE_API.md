@@ -1,483 +1,115 @@
 # Link Town Backend API
 
-2026/05/26時点での実装済みAPIリスト　これを元に追加実装していきます。
+2026-05-30 時点の backend 実装に基づく API 一覧です。  
+ローカル開発の Base URL は `http://localhost:3000` です。
 
-`backend/app.js` と各 controller 実装をもとにした API 一覧です。
+## 共通
 
+- 認証が必要な API は `Authorization: Bearer <JWT>` を付与します。
+- 一般ユーザー JWT は `role: "user"`、管理者 JWT は `role: "admin"` を持ちます。
+- 管理者 API は `/admin/*` 配下で、管理者 token のみ成功します。
 
-## Base URL
+## Health
 
-- ローカル想定: `http://localhost:3000`
-
-## 認証
-
-- 認証が必要な API は `Authorization: Bearer <JWT>` ヘッダーを使用します。
-- JWT には `id` と `role` が入ります。
-- 管理者 API は `authenticateToken` に加えて `authorizeRole('admin')` が必要です。
-
-## 共通レスポンス
-
-- すべて JSON を返します。
-- 未認証: `401`
-  - `Token is required.`
-  - `Invalid or expired token.`
-- 権限不足: `403`
-  - `You do not have permission to access this resource.`
-- サーバーエラー: `500`
-  - `Internal server error.` または実際のエラーメッセージ
-
-## Health Check
-
-### `GET /`
-
-- 認証: 不要
-- 概要: API 稼働確認
-
-Response
-
-```json
-{
-  "message": "Link Town Backend API is running."
-}
-```
+| Method | Path | Auth | 概要 |
+| --- | --- | --- | --- |
+| GET | `/` | 不要 | API 稼働確認 |
 
 ## Auth
 
-### `POST /auth/register`
-
-- 認証: 不要
-- 概要: 一般ユーザー登録
-
-Request body
-
-```json
-{
-  "name": "Taro",
-  "email": "taro@example.com",
-  "password": "secret",
-  "age_group": "30s",
-  "user_type": "general"
-}
-```
-
-Notes
-
-- 必須: `name`, `email`, `password`
-- `email` は一意
-- `age_group`, `user_type` は任意
-- `user_type` の既定値は `general`
-
-Response `201`
-
-```json
-{
-  "message": "User registered successfully.",
-  "user_id": 1,
-  "token": "<jwt>"
-}
-```
-
-### `POST /auth/login`
-
-- 認証: 不要
-- 概要: 一般ユーザーログイン
-
-Request body
-
-```json
-{
-  "email": "taro@example.com",
-  "password": "secret"
-}
-```
-
-Response `200`
-
-```json
-{
-  "message": "Login successful.",
-  "token": "<jwt>",
-  "user": {
-    "user_id": 1,
-    "name": "Taro",
-    "email": "taro@example.com",
-    "points": 100,
-    "role": "user"
-  }
-}
-```
-
-### `POST /auth/admin/login`
-
-- 認証: 不要
-- 概要: 管理者ログイン
-
-Request body
-
-```json
-{
-  "admin_id": "admin",
-  "password": "admin123"
-}
-```
-
-Response `200`
-
-```json
-{
-  "message": "Admin login successful.",
-  "token": "<jwt>",
-  "admin": {
-    "admin_id": "admin",
-    "role": "admin"
-  }
-}
-```
+| Method | Path | Auth | 概要 |
+| --- | --- | --- | --- |
+| POST | `/auth/register` | 不要 | 一般ユーザー登録 |
+| POST | `/auth/login` | 不要 | 一般ユーザーログイン |
+| POST | `/auth/admin/login` | 不要 | 管理者ログイン |
+| POST | `/auth/password/reset-request` | 不要 | パスワード再発行 token 発行。開発時は response に `reset_token` を含む |
+| POST | `/auth/password/reset` | 不要 | reset token によるパスワード再設定 |
+| PUT | `/auth/password` | user | 現在パスワード確認付きのパスワード変更 |
 
 ## Users
 
-### `GET /users/:id/points`
+| Method | Path | Auth | 概要 |
+| --- | --- | --- | --- |
+| GET | `/users/:id/points` | user/admin | ユーザー基本情報とポイント取得 |
+| GET | `/users/:id/history` | user/admin | 参加履歴、ポイント取引履歴、購入履歴取得 |
+| GET | `/users/:id/purchases` | user/admin | ポイント購入履歴取得 |
+| GET | `/users/:id/liked-events` | user/admin | いいね済みイベント取得 |
+| GET | `/users/:id/favorite-services` | user/admin | お気に入り交換サービス取得 |
+| PUT | `/users/:id/email` | user/admin | メールアドレス変更 |
+| DELETE | `/users/:id` | user/admin | アカウント削除 |
+| GET | `/users/:id/settings` | user/admin | ユーザー設定取得 |
+| PUT | `/users/:id/settings` | user/admin | 通知、言語、文字サイズ設定更新 |
+| GET | `/users/:id/payment-methods` | user/admin | mock 支払方法一覧取得 |
+| POST | `/users/:id/payment-methods` | user/admin | mock 支払方法追加 |
+| DELETE | `/users/:id/payment-methods/:paymentMethodId` | user/admin | mock 支払方法削除 |
+| GET | `/users/:id/notifications` | user/admin | 通知一覧取得 |
 
-- 認証: ユーザーまたは管理者
-- 概要: ユーザーのポイント情報取得
-
-Rules
-
-- 一般ユーザーは自分自身の `:id` のみ取得可
-- 管理者は任意ユーザーを取得可
-
-Response `200`
-
-```json
-{
-  "user_id": 1,
-  "name": "Taro",
-  "email": "taro@example.com",
-  "points": 120,
-  "age_group": "30s",
-  "user_type": "general"
-}
-```
-
-### `GET /users/:id/history`
-
-- 認証: ユーザーまたは管理者
-- 概要: 参加履歴とポイント取引履歴の取得
-
-Rules
-
-- 一般ユーザーは自分自身の `:id` のみ取得可
-- 管理者は任意ユーザーを取得可
-
-Response `200`
-
-```json
-{
-  "participations": [
-    {
-      "participation_id": 1,
-      "participated_at": "2026-05-26T01:00:00.000Z",
-      "granted_points": 100,
-      "event_id": 10,
-      "event_name": "地域清掃イベント",
-      "event_datetime": "2026-05-25T01:00:00.000Z",
-      "location": "中央公園"
-    }
-  ],
-  "transactions": [
-    {
-      "transaction_id": 1,
-      "type": "exchange",
-      "points": 200,
-      "created_at": "2026-05-26T02:00:00.000Z",
-      "service_id": 3,
-      "service_name": "コーヒー無料券",
-      "store_name": "Link Cafe"
-    }
-  ]
-}
-```
+一般ユーザーは自分の `:id` のみ操作できます。管理者は任意ユーザーを参照、更新できます。
 
 ## Events
 
-### `GET /events`
-
-- 認証: ユーザー
-- 概要: イベント一覧取得
-
-Response `200`
-
-```json
-[
-  {
-    "event_id": 10,
-    "event_name": "地域清掃イベント",
-    "event_datetime": "2026-05-25T01:00:00.000Z",
-    "location": "中央公園",
-    "grant_points": 100
-  }
-]
-```
-
-### `POST /events/participate`
-
-- 認証: ユーザー
-- 概要: イベント参加登録とポイント付与
-
-Request body
-
-```json
-{
-  "event_id": 10
-}
-```
-
-Notes
-
-- 同じユーザーは同一イベントに 1 回のみ参加可
-- 成功時に `users.points` と `point_transactions` が更新されます
-
-Response `201`
-
-```json
-{
-  "message": "Event participation registered successfully.",
-  "event_id": 10,
-  "granted_points": 100,
-  "current_points": 300
-}
-```
+| Method | Path | Auth | 概要 |
+| --- | --- | --- | --- |
+| GET | `/events` | user | 公開中イベント一覧取得。`liked`, `like_count` を含む |
+| POST | `/events/participate` | user | `event_id` 指定のイベント参加登録とポイント付与 |
+| POST | `/events/check-in` | user | `check_in_code` による QR チェックイン参加 |
+| POST | `/events/:id/like` | user | イベントいいね追加 |
+| DELETE | `/events/:id/like` | user | イベントいいね解除 |
 
 ## Points
 
-### `GET /points/services`
+| Method | Path | Auth | 概要 |
+| --- | --- | --- | --- |
+| GET | `/points/services` | user | 公開中の交換サービス一覧取得。`favorited` を含む |
+| POST | `/points/exchange` | user | ポイント交換 |
+| POST | `/points/purchase` | user | mock ポイント購入。`paid` の場合のみ残高加算 |
+| POST | `/points/services/:id/favorite` | user | 交換サービスお気に入り追加 |
+| DELETE | `/points/services/:id/favorite` | user | 交換サービスお気に入り解除 |
 
-- 認証: ユーザー
-- 概要: ポイント交換可能サービス一覧取得
+## Notifications
 
-Response `200`
+| Method | Path | Auth | 概要 |
+| --- | --- | --- | --- |
+| PUT | `/notifications/:id/read` | user/admin | 通知を既読化 |
 
-```json
-[
-  {
-    "service_id": 3,
-    "service_name": "コーヒー無料券",
-    "required_points": 200,
-    "store_id": 1,
-    "store_name": "Link Cafe"
-  }
-]
-```
+## Support
 
-### `POST /points/exchange`
-
-- 認証: ユーザー
-- 概要: ポイント交換実行
-
-Request body
-
-```json
-{
-  "service_id": 3
-}
-```
-
-Notes
-
-- ポイント不足の場合は `400`
-- 成功時に `users.points` と `point_transactions` が更新されます
-
-Response `200`
-
-```json
-{
-  "message": "Point exchange completed successfully.",
-  "service_id": 3,
-  "service_name": "コーヒー無料券",
-  "used_points": 200,
-  "current_points": 100
-}
-```
+| Method | Path | Auth | 概要 |
+| --- | --- | --- | --- |
+| GET | `/support/tickets` | user | 自分の問い合わせ、不具合報告一覧取得 |
+| POST | `/support/tickets` | user/admin | 問い合わせ、不具合報告作成 |
 
 ## Admin
 
-以下はすべて管理者トークン必須です。
+| Method | Path | Auth | 概要 |
+| --- | --- | --- | --- |
+| GET | `/admin/stats` | admin | 集計取得。参加、付与、交換、購入、未解決 ticket、イベント別、サービス別を含む |
+| GET | `/admin/events` | admin | イベント一覧取得。QR check-in code を含む |
+| POST | `/admin/events` | admin | イベント作成。check-in code も発行 |
+| GET | `/admin/events/:id/check-in-code` | admin | イベント check-in code 取得、未発行なら発行 |
+| PUT | `/admin/events/:id` | admin | イベント更新、公開停止/再公開 |
+| DELETE | `/admin/events/:id` | admin | イベント削除 |
+| GET | `/admin/stores` | admin | 店舗一覧取得 |
+| POST | `/admin/stores` | admin | 店舗作成 |
+| PUT | `/admin/stores/:id` | admin | 店舗更新、公開停止/再公開 |
+| DELETE | `/admin/stores/:id` | admin | 店舗削除 |
+| GET | `/admin/services` | admin | 交換サービス一覧取得 |
+| POST | `/admin/services` | admin | 交換サービス作成 |
+| PUT | `/admin/services/:id` | admin | 交換サービス更新、公開停止/再公開 |
+| DELETE | `/admin/services/:id` | admin | 交換サービス削除 |
+| GET | `/admin/users` | admin | ユーザー一覧、`search` query による名前/メール検索 |
+| GET | `/admin/users/:id` | admin | ユーザー詳細、参加/取引/購入履歴取得 |
+| PUT | `/admin/users/:id` | admin | ユーザー情報、ポイント更新 |
+| POST | `/admin/notifications` | admin | 全体または指定ユーザーへ通知配信 |
+| GET | `/admin/support/tickets` | admin | 問い合わせ一覧取得 |
+| PUT | `/admin/support/tickets/:id` | admin | 問い合わせ status/admin note 更新 |
 
-### `GET /admin/events`
+## ローカル検証
 
-- 概要: イベント一覧取得
-
-Response `200`
-
-```json
-[
-  {
-    "event_id": 10,
-    "event_name": "地域清掃イベント",
-    "event_datetime": "2026-05-25T01:00:00.000Z",
-    "location": "中央公園",
-    "grant_points": 100,
-    "created_at": "2026-05-20T00:00:00.000Z"
-  }
-]
+```powershell
+npm run db:reset
+npm run test
+npm run db:report
 ```
 
-### `POST /admin/events`
-
-- 概要: イベント作成
-
-Request body
-
-```json
-{
-  "event_name": "地域清掃イベント",
-  "event_datetime": "2026-05-25 10:00:00",
-  "location": "中央公園",
-  "grant_points": 100
-}
-```
-
-Response `201`
-
-```json
-{
-  "message": "Event created successfully.",
-  "event_id": 10
-}
-```
-
-### `PUT /admin/events/:id`
-
-- 概要: イベント更新
-
-Request body
-
-```json
-{
-  "event_name": "地域清掃イベント",
-  "event_datetime": "2026-05-25 10:00:00",
-  "location": "中央公園",
-  "grant_points": 120
-}
-```
-
-Response `200`
-
-```json
-{
-  "message": "Event updated successfully."
-}
-```
-
-### `GET /admin/stores`
-
-- 概要: 店舗一覧取得
-
-Response `200`
-
-```json
-[
-  {
-    "store_id": 1,
-    "store_name": "Link Cafe",
-    "created_at": "2026-05-20T00:00:00.000Z"
-  }
-]
-```
-
-### `POST /admin/stores`
-
-- 概要: 店舗作成
-
-Request body
-
-```json
-{
-  "store_name": "Link Cafe"
-}
-```
-
-Response `201`
-
-```json
-{
-  "message": "Store created successfully.",
-  "store_id": 1
-}
-```
-
-### `PUT /admin/stores/:id`
-
-- 概要: 店舗更新
-
-Request body
-
-```json
-{
-  "store_name": "Link Cafe"
-}
-```
-
-Response `200`
-
-```json
-{
-  "message": "Store updated successfully."
-}
-```
-
-### `GET /admin/services`
-
-- 概要: サービス一覧取得
-
-Response `200`
-
-```json
-[
-  {
-    "service_id": 3,
-    "store_id": 1,
-    "service_name": "コーヒー無料券",
-    "required_points": 200,
-    "created_at": "2026-05-20T00:00:00.000Z",
-    "store_name": "Link Cafe"
-  }
-]
-```
-
-### `POST /admin/services`
-
-- 概要: サービス作成
-
-Request body
-
-```json
-{
-  "store_id": 1,
-  "service_name": "コーヒー無料券",
-  "required_points": 200
-}
-```
-
-Response `201`
-
-```json
-{
-  "message": "Service created successfully.",
-  "service_id": 3
-}
-```
-
-### `GET /admin/stats`
-
-- 概要: 集計情報取得
-
-Response `200`
-
-```json
-{
-  "total_participations": 12,
-  "total_granted_points": 840,
-  "total_exchanges": 5
-}
-```
+`npm run test` は backend smoke test と frontend build を実行します。

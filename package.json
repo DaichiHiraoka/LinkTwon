@@ -7,7 +7,8 @@
     "db:reset": "npm --prefix backend run db:reset",
     "dev": "concurrently -k -n backend,frontend -c blue,green \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\"",
     "dev:backend": "npm --prefix backend run dev",
-    "dev:frontend": "npm --prefix frontend run dev"
+    "dev:frontend": "npm --prefix frontend run dev",
+    "test": "npm --prefix backend run test:smoke && npm --prefix frontend run build"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

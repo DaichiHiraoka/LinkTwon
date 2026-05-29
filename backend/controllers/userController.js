@@ -1,11 +1,35 @@
 const pool = require('../config/db');
 
+function canAccessUser(req, userId) {
+  return Number(req.user.id) === Number(userId) || req.user.role === 'admin';
+}
+
+async function assertUserAccess(req, res, userId, message) {
+  if (!canAccessUser(req, userId)) {
+    res.status(403).json({ message });
+    return false;
+  }
+
+  return true;
+}
+
+async function ensureSettings(userId) {
+  const [settings] = await pool.query('SELECT user_id FROM user_settings WHERE user_id = ?', [userId]);
+  if (settings.length === 0) {
+    await pool.query(
+      `INSERT INTO user_settings (user_id, notification_enabled, language, font_size)
+       VALUES (?, 1, 'ja', 'medium')`,
+      [userId]
+    );
+  }
+}
+
 async function getUserPoints(req, res, next) {
   try {
     const { id } = req.params;
 
-    if (Number(req.user.id) !== Number(id) && req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'You can only view your own points.' });
+    if (!(await assertUserAccess(req, res, id, 'You can only view your own points.'))) {
+      return;
     }
 
     const [users] = await pool.query(
@@ -29,8 +53,8 @@ async function getUserHistory(req, res, next) {
   try {
     const { id } = req.params;
 
-    if (Number(req.user.id) !== Number(id) && req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'You can only view your own history.' });
+    if (!(await assertUserAccess(req, res, id, 'You can only view your own history.'))) {
+      return;
     }
 
     const [participations] = await pool.query(
@@ -44,7 +68,7 @@ async function getUserHistory(req, res, next) {
     );
 
     const [transactions] = await pool.query(
-      `SELECT pt.transaction_id, pt.type, pt.points, pt.created_at,
+      `SELECT pt.transaction_id, pt.type, pt.points, pt.description, pt.created_at,
               s.service_id, s.service_name, st.store_name
        FROM point_transactions pt
        LEFT JOIN services s ON pt.service_id = s.service_id
@@ -54,10 +78,313 @@ async function getUserHistory(req, res, next) {
       [id]
     );
 
+    const [purchases] = await pool.query(
+      `SELECT purchase_id, payment_method_id, points, amount_yen, status, created_at
+       FROM point_purchases
+       WHERE user_id = ?
+       ORDER BY created_at DESC`,
+      [id]
+    );
+
     res.json({
       participations,
-      transactions
+      transactions,
+      purchases
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function getUserPurchases(req, res, next) {
+  try {
+    const { id } = req.params;
+
+    if (!(await assertUserAccess(req, res, id, 'You can only view your own purchases.'))) {
+      return;
+    }
+
+    const [rows] = await pool.query(
+      `SELECT p.purchase_id, p.payment_method_id, pm.label AS payment_method_label,
+              p.points, p.amount_yen, p.status, p.created_at
+       FROM point_purchases p
+       LEFT JOIN payment_methods pm ON p.payment_method_id = pm.payment_method_id
+       WHERE p.user_id = ?
+       ORDER BY p.created_at DESC`,
+      [id]
+    );
+
+    res.json(rows);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function getLikedEvents(req, res, next) {
+  try {
+    const { id } = req.params;
+
+    if (!(await assertUserAccess(req, res, id, 'You can only view your own liked events.'))) {
+      return;
+    }
+
+    const [rows] = await pool.query(
+      `SELECT e.event_id, e.event_name, e.event_datetime, e.location, e.grant_points,
+              e.status, 1 AS liked, COUNT(el_all.like_id) AS like_count
+       FROM event_likes el
+       JOIN events e ON el.event_id = e.event_id
+       LEFT JOIN event_likes el_all ON e.event_id = el_all.event_id
+       WHERE el.user_id = ?
+       GROUP BY e.event_id, e.event_name, e.event_datetime, e.location, e.grant_points, e.status
+       ORDER BY el.created_at DESC`,
+      [id]
+    );
+
+    res.json(rows);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function getFavoriteServices(req, res, next) {
+  try {
+    const { id } = req.params;
+
+    if (!(await assertUserAccess(req, res, id, 'You can only view your own favorite services.'))) {
+      return;
+    }
+
+    const [rows] = await pool.query(
+      `SELECT s.service_id, s.service_name, s.required_points, s.status,
+              st.store_id, st.store_name, 1 AS favorited
+       FROM service_favorites sf
+       JOIN services s ON sf.service_id = s.service_id
+       JOIN stores st ON s.store_id = st.store_id
+       WHERE sf.user_id = ?
+       ORDER BY sf.created_at DESC`,
+      [id]
+    );
+
+    res.json(rows);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function updateEmail(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { email } = req.body;
+
+    if (!(await assertUserAccess(req, res, id, 'You can only update your own email.'))) {
+      return;
+    }
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required.' });
+    }
+
+    const [existing] = await pool.query(
+      'SELECT user_id FROM users WHERE email = ? AND user_id <> ?',
+      [email, id]
+    );
+
+    if (existing.length > 0) {
+      return res.status(400).json({ message: 'Email is already registered.' });
+    }
+
+    const [result] = await pool.query('UPDATE users SET email = ? WHERE user_id = ?', [email, id]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    res.json({ message: 'Email updated successfully.', email });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function deleteUser(req, res, next) {
+  try {
+    const { id } = req.params;
+
+    if (!(await assertUserAccess(req, res, id, 'You can only delete your own account.'))) {
+      return;
+    }
+
+    const [result] = await pool.query('DELETE FROM users WHERE user_id = ?', [id]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    res.json({ message: 'User deleted successfully.' });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function getSettings(req, res, next) {
+  try {
+    const { id } = req.params;
+
+    if (!(await assertUserAccess(req, res, id, 'You can only view your own settings.'))) {
+      return;
+    }
+
+    await ensureSettings(id);
+
+    const [settings] = await pool.query(
+      `SELECT user_id, notification_enabled, language, font_size, updated_at
+       FROM user_settings
+       WHERE user_id = ?`,
+      [id]
+    );
+
+    res.json(settings[0]);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function updateSettings(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { notification_enabled, language, font_size } = req.body;
+
+    if (!(await assertUserAccess(req, res, id, 'You can only update your own settings.'))) {
+      return;
+    }
+
+    if (font_size && !['small', 'medium', 'large'].includes(font_size)) {
+      return res.status(400).json({ message: 'Invalid font size.' });
+    }
+
+    await ensureSettings(id);
+
+    const [currentRows] = await pool.query('SELECT * FROM user_settings WHERE user_id = ?', [id]);
+    const current = currentRows[0];
+
+    await pool.query(
+      `UPDATE user_settings
+       SET notification_enabled = ?, language = ?, font_size = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = ?`,
+      [
+        notification_enabled === undefined ? current.notification_enabled : Number(Boolean(notification_enabled)),
+        language || current.language,
+        font_size || current.font_size,
+        id
+      ]
+    );
+
+    const [settings] = await pool.query(
+      `SELECT user_id, notification_enabled, language, font_size, updated_at
+       FROM user_settings
+       WHERE user_id = ?`,
+      [id]
+    );
+
+    res.json(settings[0]);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function getPaymentMethods(req, res, next) {
+  try {
+    const { id } = req.params;
+
+    if (!(await assertUserAccess(req, res, id, 'You can only view your own payment methods.'))) {
+      return;
+    }
+
+    const [rows] = await pool.query(
+      `SELECT payment_method_id, label, brand, last4, is_default, created_at
+       FROM payment_methods
+       WHERE user_id = ?
+       ORDER BY is_default DESC, payment_method_id DESC`,
+      [id]
+    );
+
+    res.json(rows);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function addPaymentMethod(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { label, brand, last4, is_default } = req.body;
+
+    if (!(await assertUserAccess(req, res, id, 'You can only update your own payment methods.'))) {
+      return;
+    }
+
+    if (!label) {
+      return res.status(400).json({ message: 'Payment method label is required.' });
+    }
+
+    if (is_default) {
+      await pool.query('UPDATE payment_methods SET is_default = 0 WHERE user_id = ?', [id]);
+    }
+
+    const [result] = await pool.query(
+      `INSERT INTO payment_methods (user_id, label, brand, last4, is_default)
+       VALUES (?, ?, ?, ?, ?)`,
+      [id, label, brand || 'mock', last4 || '0000', is_default ? 1 : 0]
+    );
+
+    res.status(201).json({
+      message: 'Payment method added successfully.',
+      payment_method_id: result.insertId
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function deletePaymentMethod(req, res, next) {
+  try {
+    const { id, paymentMethodId } = req.params;
+
+    if (!(await assertUserAccess(req, res, id, 'You can only update your own payment methods.'))) {
+      return;
+    }
+
+    const [result] = await pool.query(
+      'DELETE FROM payment_methods WHERE payment_method_id = ? AND user_id = ?',
+      [paymentMethodId, id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: 'Payment method not found.' });
+    }
+
+    res.json({ message: 'Payment method deleted successfully.' });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function getNotifications(req, res, next) {
+  try {
+    const { id } = req.params;
+
+    if (!(await assertUserAccess(req, res, id, 'You can only view your own notifications.'))) {
+      return;
+    }
+
+    const [rows] = await pool.query(
+      `SELECT notification_id, title, body, read_at, created_at
+       FROM notifications
+       WHERE user_id = ?
+       ORDER BY created_at DESC`,
+      [id]
+    );
+
+    res.json(rows);
   } catch (error) {
     next(error);
   }
@@ -65,5 +392,16 @@ async function getUserHistory(req, res, next) {
 
 module.exports = {
   getUserPoints,
-  getUserHistory
+  getUserHistory,
+  getUserPurchases,
+  getLikedEvents,
+  getFavoriteServices,
+  updateEmail,
+  deleteUser,
+  getSettings,
+  updateSettings,
+  getPaymentMethods,
+  addPaymentMethod,
+  deletePaymentMethod,
+  getNotifications
 };
