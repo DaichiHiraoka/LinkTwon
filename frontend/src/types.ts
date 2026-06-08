@@ -88,6 +88,7 @@ export type ServiceItem = {
   required_points: number;
   store_id: number;
   store_name: string;
+  store_address?: string | null;
   status?: "active" | "paused";
   favorited?: boolean | number;
 };

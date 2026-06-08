@@ -36,11 +36,103 @@ import {
   user as fallbackUser,
   type EventItem,
   type ProductCategory,
+  type ProductItem,
   type Screen,
 } from "./data/mockData";
 import type { AuthResponse, EventItem as ApiEventItem, Participation, ServiceItem, UserProfile, UserSettings } from "./types";
 
 const SESSION_STORAGE_KEY = "link-town-session";
+
+type AppLanguage = "ja" | "en";
+
+const translations = {
+  ja: {
+    translate: "翻訳",
+    home: "ホーム",
+    events: "イベント",
+    scan: "読み取る",
+    wallet: "ウォレット",
+    account: "アカウント",
+    pointsBalance: "ポイント残高",
+    availablePoints: "現在の利用可能ポイント",
+    buyPoints: "ポイント購入画面へ",
+    exchangePoints: "ポイント交換",
+    recommended: "おすすめ",
+    favorite: "お気に入り",
+    storeMapHint: "商品を選ぶと、提供店舗をGoogle Map上にピン表示します。",
+    providedBy: "提供店舗",
+    address: "住所",
+    requiredPoints: "必要ポイント",
+    openInGoogleMaps: "Google Mapで開く",
+    close: "閉じる",
+    accountType: "アカウント区分",
+    userId: "ユーザーID",
+    emailSettings: "メールアドレス設定",
+    notificationSettings: "通知設定",
+    languageSettings: "言語設定",
+    fontSizeSettings: "文字サイズの変更",
+    saveSettings: "設定を保存",
+    security: "セキュリティ",
+    currentPassword: "現在のパスワード",
+    newPassword: "新しいパスワード",
+    changePassword: "パスワード変更",
+    other: "その他",
+    logout: "ログアウト",
+    deleteAccount: "アカウントの削除",
+    purchasePoints: "購入ポイント",
+    paymentAmount: "支払い金額",
+    totalAvailablePoints: "合計利用可能ポイント",
+    mapTitle: "店舗マップ",
+  },
+  en: {
+    translate: "Translate",
+    home: "Home",
+    events: "Events",
+    scan: "Scan",
+    wallet: "Wallet",
+    account: "Account",
+    pointsBalance: "Point Balance",
+    availablePoints: "Available points",
+    buyPoints: "Buy points",
+    exchangePoints: "Exchange Points",
+    recommended: "Recommended",
+    favorite: "Favorites",
+    storeMapHint: "Select a product to pin the shop on Google Maps.",
+    providedBy: "Shop",
+    address: "Address",
+    requiredPoints: "Required points",
+    openInGoogleMaps: "Open in Google Maps",
+    close: "Close",
+    accountType: "Account type",
+    userId: "User ID",
+    emailSettings: "Email address",
+    notificationSettings: "Notifications",
+    languageSettings: "Language",
+    fontSizeSettings: "Font size",
+    saveSettings: "Save settings",
+    security: "Security",
+    currentPassword: "Current password",
+    newPassword: "New password",
+    changePassword: "Change password",
+    other: "Other",
+    logout: "Log out",
+    deleteAccount: "Delete account",
+    purchasePoints: "Purchase points",
+    paymentAmount: "Payment amount",
+    totalAvailablePoints: "Total available points",
+    mapTitle: "Shop map",
+  },
+} as const;
+
+type TranslationKey = keyof typeof translations.ja;
+
+function translate(key: TranslationKey, language: AppLanguage) {
+  return translations[language][key];
+}
+
+function normalizeLanguage(value: string | undefined | null): AppLanguage {
+  return value === "en" ? "en" : "ja";
+}
 
 type Session = Pick<AuthResponse, "token" | "user">;
 type DisplayEvent = EventItem & {
@@ -132,17 +224,25 @@ function mapServices(services: ServiceItem[]): ProductCategory[] {
   const grouped = new Map<number, ProductCategory>();
 
   for (const service of services) {
+    const product: ProductItem = {
+      id: String(service.service_id),
+      name: service.service_name,
+      storeName: service.store_name,
+      storeAddress: service.store_address ?? "地域商店街周辺",
+      mapQuery: `${service.store_name} ${service.store_address ?? ""}`.trim(),
+      requiredPoints: service.required_points,
+    };
     const existing = grouped.get(service.store_id);
 
     if (existing) {
-      existing.products.push(service.service_name);
+      existing.products.push(product);
       continue;
     }
 
     grouped.set(service.store_id, {
       id: String(service.store_id),
       name: service.store_name,
-      products: [service.service_name],
+      products: [product],
     });
   }
 
@@ -164,6 +264,7 @@ function toBoolean(value: boolean | number | undefined | null) {
 export function App() {
   const initialSession = readStoredSession();
   const [eventDisplayDate] = useState(getEventDisplayDate);
+  const [appLanguage, setAppLanguage] = useState<AppLanguage>("ja");
   const [screen, setScreen] = useState<Screen>(initialSession ? "home" : "login");
   const [eventTab, setEventTab] = useState<"recommended" | "liked" | "participated">("recommended");
   const [exchangeTab, setExchangeTab] = useState<"recommended" | "favorite">("recommended");
@@ -179,6 +280,7 @@ export function App() {
   const [participatedEvents, setParticipatedEvents] = useState<DisplayEvent[]>([]);
   const [scheduledEvent, setScheduledEvent] = useState<DisplayEvent>(() => withEventDisplayDate(fallbackScheduledEvent, eventDisplayDate));
   const [selectedEvent, setSelectedEvent] = useState<DisplayEvent | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<ProductItem | null>(null);
   const [participatedEventIds, setParticipatedEventIds] = useState<Set<number>>(new Set());
   const [productCategories, setProductCategories] = useState<ProductCategory[]>(fallbackProductCategories);
   const [accountEmail, setAccountEmail] = useState("");
@@ -212,6 +314,7 @@ export function App() {
       });
       setProfile(nextProfile);
       setSettings(nextSettings);
+      setAppLanguage(normalizeLanguage(nextSettings.language));
       setAccountEmail(nextProfile.email);
       setRecommendedEvents(mappedEvents.length > 0 ? mappedEvents : fallbackEvents.map((event) => withEventDisplayDate(event, eventDisplayDate)));
       setLikedEvents(mappedLikedEvents);
@@ -256,6 +359,37 @@ export function App() {
 
   function openEventDetail(event: DisplayEvent) {
     setSelectedEvent(event);
+  }
+
+  async function handleToggleLanguage() {
+    const nextLanguage: AppLanguage = appLanguage === "ja" ? "en" : "ja";
+    setAppLanguage(nextLanguage);
+
+    if (!session || !profile || !settings) {
+      return;
+    }
+
+    const nextSettings = { ...settings, language: nextLanguage };
+    setSettings(nextSettings);
+
+    try {
+      await updateUserSettings(
+        profile.user_id,
+        {
+          notification_enabled: nextSettings.notification_enabled,
+          language: nextSettings.language,
+          font_size: nextSettings.font_size,
+        },
+        session.token,
+      );
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+  function handleSettingsChange(nextSettings: UserSettings) {
+    setSettings(nextSettings);
+    setAppLanguage(normalizeLanguage(nextSettings.language));
   }
 
   async function handleApplyToEvent(event: DisplayEvent) {
@@ -402,6 +536,8 @@ export function App() {
               user={displayUser}
               events={recommendedEvents}
               scheduledEvent={scheduledEvent}
+              language={appLanguage}
+              onLanguageToggle={handleToggleLanguage}
               onNavigate={setScreen}
               onEventSelect={openEventDetail}
             />
@@ -412,26 +548,33 @@ export function App() {
               events={recommendedEvents}
               likedEvents={likedEvents}
               participatedEvents={participatedEvents}
+              language={appLanguage}
+              onLanguageToggle={handleToggleLanguage}
               onTabChange={setEventTab}
               onEventSelect={openEventDetail}
               onCancelParticipation={handleCancelParticipation}
             />
           ) : null}
-          {screen === "scan" ? <ScanScreen onHome={() => setScreen("home")} /> : null}
+          {screen === "scan" ? <ScanScreen language={appLanguage} onHome={() => setScreen("home")} /> : null}
           {screen === "wallet" ? (
             <WalletScreen
               tab={exchangeTab}
               user={displayUser}
               productCategories={productCategories}
+              language={appLanguage}
+              onLanguageToggle={handleToggleLanguage}
               onTabChange={setExchangeTab}
               onPurchase={() => setScreen("purchase")}
+              onProductSelect={setSelectedProduct}
             />
           ) : null}
-          {screen === "purchase" ? <PurchaseScreen points={displayUser.walletPoints} /> : null}
+          {screen === "purchase" ? <PurchaseScreen language={appLanguage} onLanguageToggle={handleToggleLanguage} points={displayUser.walletPoints} /> : null}
           {screen === "account" ? (
             <AccountScreen
               user={displayUser}
               settings={settings}
+              language={appLanguage}
+              onLanguageToggle={handleToggleLanguage}
               accountEmail={accountEmail}
               currentPassword={currentPassword}
               newPassword={newPassword}
@@ -439,7 +582,7 @@ export function App() {
               onEmailChange={setAccountEmail}
               onCurrentPasswordChange={setCurrentPassword}
               onNewPasswordChange={setNewPassword}
-              onSettingsChange={setSettings}
+              onSettingsChange={handleSettingsChange}
               onSaveAccount={handleSaveAccount}
               onChangePassword={handleChangePassword}
               onDeleteAccount={handleDeleteAccount}
@@ -447,28 +590,48 @@ export function App() {
             />
           ) : null}
         </div>
-        {screen !== "login" ? <BottomNav current={screen} onNavigate={setScreen} /> : null}
+        {screen !== "login" ? <BottomNav current={screen} language={appLanguage} onNavigate={setScreen} /> : null}
         {selectedEvent ? (
           <EventDetailScreen
             event={selectedEvent}
+            language={appLanguage}
+            onLanguageToggle={handleToggleLanguage}
             isParticipated={selectedEvent.rawEventId ? participatedEventIds.has(selectedEvent.rawEventId) : false}
             onApply={handleApplyToEvent}
             onLike={handleToggleEventLike}
             onClose={() => setSelectedEvent(null)}
           />
         ) : null}
+        {selectedProduct ? (
+          <ProductMapModal product={selectedProduct} language={appLanguage} onClose={() => setSelectedProduct(null)} />
+        ) : null}
       </section>
     </main>
   );
 }
 
-function Header({ help = false }: { help?: boolean }) {
+function Header({
+  help = false,
+  language = "ja",
+  onLanguageToggle,
+}: {
+  help?: boolean;
+  language?: AppLanguage;
+  onLanguageToggle?: () => void;
+}) {
   return (
     <header className="app-header">
       <Logo />
-      <button type="button" className="icon-button" aria-label={help ? "ヘルプ" : "メール"}>
-        {help ? <HelpIcon /> : <MailIcon />}
-      </button>
+      <div className="header-actions">
+        {onLanguageToggle ? (
+          <button type="button" className="translation-button" onClick={onLanguageToggle} aria-label={translate("translate", language)}>
+            {language === "ja" ? "EN" : "JA"}
+          </button>
+        ) : null}
+        <button type="button" className="icon-button" aria-label={help ? "ヘルプ" : "メール"}>
+          {help ? <HelpIcon /> : <MailIcon />}
+        </button>
+      </div>
     </header>
   );
 }
@@ -510,18 +673,22 @@ function HomeScreen({
   user,
   events,
   scheduledEvent,
+  language,
+  onLanguageToggle,
   onNavigate,
   onEventSelect,
 }: {
   user: typeof fallbackUser;
   events: DisplayEvent[];
   scheduledEvent: DisplayEvent;
+  language: AppLanguage;
+  onLanguageToggle: () => void;
   onNavigate: (screen: Screen) => void;
   onEventSelect: (event: DisplayEvent) => void;
 }) {
   return (
     <section>
-      <Header />
+      <Header language={language} onLanguageToggle={onLanguageToggle} />
       <article className="points-card points-card--home">
         <div className="points-card__row">
           <span>ポイント残高</span>
@@ -565,6 +732,8 @@ function EventsScreen({
   events,
   likedEvents,
   participatedEvents,
+  language,
+  onLanguageToggle,
   onTabChange,
   onEventSelect,
   onCancelParticipation,
@@ -573,6 +742,8 @@ function EventsScreen({
   events: DisplayEvent[];
   likedEvents: DisplayEvent[];
   participatedEvents: DisplayEvent[];
+  language: AppLanguage;
+  onLanguageToggle: () => void;
   onTabChange: (tab: "recommended" | "liked" | "participated") => void;
   onEventSelect: (event: DisplayEvent) => void;
   onCancelParticipation: (event: DisplayEvent) => void;
@@ -581,7 +752,7 @@ function EventsScreen({
 
   return (
     <section>
-      <Header />
+      <Header language={language} onLanguageToggle={onLanguageToggle} />
       <Tabs
         value={tab}
         items={[
@@ -615,50 +786,58 @@ function WalletScreen({
   tab,
   user,
   productCategories,
+  language,
+  onLanguageToggle,
   onTabChange,
   onPurchase,
+  onProductSelect,
 }: {
   tab: "recommended" | "favorite";
   user: typeof fallbackUser;
   productCategories: ProductCategory[];
+  language: AppLanguage;
+  onLanguageToggle: () => void;
   onTabChange: (tab: "recommended" | "favorite") => void;
   onPurchase: () => void;
+  onProductSelect: (product: ProductItem) => void;
 }) {
   const visibleCategories = tab === "recommended" ? productCategories : productCategories.slice(0, 1);
 
   return (
     <section>
-      <Header />
+      <Header language={language} onLanguageToggle={onLanguageToggle} />
       <section className="section section--tight">
-        <h1 className="screen-title screen-title--center">ポイント残高</h1>
+        <h1 className="screen-title screen-title--center">{translate("pointsBalance", language)}</h1>
         <article className="points-card points-card--wallet">
-          <span>現在の利用可能ポイント</span>
+          <span>{translate("availablePoints", language)}</span>
           <strong>{user.walletPoints}pt</strong>
           <button type="button" onClick={onPurchase}>
-            ポイント購入画面へ
+            {translate("buyPoints", language)}
           </button>
         </article>
       </section>
       <section className="section">
-        <h2 className="screen-title">ポイント交換</h2>
+        <h2 className="screen-title">{translate("exchangePoints", language)}</h2>
         <Tabs
           value={tab}
           items={[
-            ["recommended", "おすすめ"],
-            ["favorite", "お気に入り"],
+            ["recommended", translate("recommended", language)],
+            ["favorite", translate("favorite", language)],
           ]}
           onChange={onTabChange}
         />
+        <p className="map-hint">{translate("storeMapHint", language)}</p>
         <div className="product-stack">
           {visibleCategories.map((category) => (
             <section key={category.id}>
               <SectionHeading>{category.name}</SectionHeading>
               <div className="product-rail">
                 {category.products.map((product) => (
-                  <article className="product-card" key={product}>
+                  <button className="product-card product-card--button" type="button" key={product.id} onClick={() => onProductSelect(product)}>
                     <div />
-                    <span>{product}</span>
-                  </article>
+                    <span>{product.name}</span>
+                    <small>{product.storeName}</small>
+                  </button>
                 ))}
               </div>
             </section>
@@ -669,24 +848,32 @@ function WalletScreen({
   );
 }
 
-function PurchaseScreen({ points }: { points: number }) {
+function PurchaseScreen({
+  points,
+  language,
+  onLanguageToggle,
+}: {
+  points: number;
+  language: AppLanguage;
+  onLanguageToggle: () => void;
+}) {
   return (
     <section>
-      <Header help />
+      <Header help language={language} onLanguageToggle={onLanguageToggle} />
       <article className="purchase-summary">
-        <span>現在の利用可能ポイント</span>
+        <span>{translate("availablePoints", language)}</span>
         <strong>{points}pt</strong>
         <dl>
           <div>
-            <dt>購入ポイント</dt>
+            <dt>{translate("purchasePoints", language)}</dt>
             <dd>500 pt</dd>
           </div>
           <div>
-            <dt>支払い金額</dt>
+            <dt>{translate("paymentAmount", language)}</dt>
             <dd>500 円</dd>
           </div>
           <div>
-            <dt>合計利用可能ポイント</dt>
+            <dt>{translate("totalAvailablePoints", language)}</dt>
             <dd>{points + 500} pt</dd>
           </div>
         </dl>
@@ -712,6 +899,8 @@ function PurchaseScreen({ points }: { points: number }) {
 function AccountScreen({
   user,
   settings,
+  language,
+  onLanguageToggle,
   accountEmail,
   currentPassword,
   newPassword,
@@ -727,6 +916,8 @@ function AccountScreen({
 }: {
   user: typeof fallbackUser;
   settings: UserSettings | null;
+  language: AppLanguage;
+  onLanguageToggle: () => void;
   accountEmail: string;
   currentPassword: string;
   newPassword: string;
@@ -742,22 +933,22 @@ function AccountScreen({
 }) {
   return (
     <section>
-      <Header />
+      <Header language={language} onLanguageToggle={onLanguageToggle} />
       <div className="account-form-list">
         {message ? <p className="account-message">{message}</p> : null}
         <section className="account-form-section">
-          <h2>アカウント</h2>
+          <h2>{translate("account", language)}</h2>
           <div className="account-info-row">
-            <span>アカウント区分</span>
+            <span>{translate("accountType", language)}</span>
             <strong>{user.accountType}</strong>
           </div>
           <div className="account-info-row">
-            <span>ユーザーID</span>
+            <span>{translate("userId", language)}</span>
             <strong>{user.userId}</strong>
           </div>
           <form onSubmit={onSaveAccount}>
             <label className="account-field">
-              <span>メールアドレス設定</span>
+              <span>{translate("emailSettings", language)}</span>
               <input value={accountEmail} onChange={(event) => onEmailChange(event.target.value)} />
             </label>
             {settings ? (
@@ -768,17 +959,17 @@ function AccountScreen({
                     checked={toBoolean(settings.notification_enabled)}
                     onChange={(event) => onSettingsChange({ ...settings, notification_enabled: event.target.checked })}
                   />
-                  <span>通知設定</span>
+                  <span>{translate("notificationSettings", language)}</span>
                 </label>
                 <label className="account-field">
-                  <span>言語設定</span>
+                  <span>{translate("languageSettings", language)}</span>
                   <select value={settings.language} onChange={(event) => onSettingsChange({ ...settings, language: event.target.value })}>
                     <option value="ja">日本語</option>
                     <option value="en">English</option>
                   </select>
                 </label>
                 <label className="account-field">
-                  <span>文字サイズの変更</span>
+                  <span>{translate("fontSizeSettings", language)}</span>
                   <select
                     value={settings.font_size}
                     onChange={(event) => onSettingsChange({ ...settings, font_size: event.target.value as UserSettings["font_size"] })}
@@ -791,35 +982,35 @@ function AccountScreen({
               </>
             ) : null}
             <button className="account-action-button" type="submit">
-              設定を保存
+              {translate("saveSettings", language)}
             </button>
           </form>
         </section>
 
         <section className="account-form-section">
-          <h2>セキュリティ</h2>
+          <h2>{translate("security", language)}</h2>
           <form onSubmit={onChangePassword}>
             <label className="account-field">
-              <span>現在のパスワード</span>
+              <span>{translate("currentPassword", language)}</span>
               <input type="password" value={currentPassword} onChange={(event) => onCurrentPasswordChange(event.target.value)} />
             </label>
             <label className="account-field">
-              <span>新しいパスワード</span>
+              <span>{translate("newPassword", language)}</span>
               <input type="password" value={newPassword} onChange={(event) => onNewPasswordChange(event.target.value)} />
             </label>
             <button className="account-action-button" type="submit">
-              パスワード変更
+              {translate("changePassword", language)}
             </button>
           </form>
         </section>
 
         <section className="account-form-section">
-          <h2>その他</h2>
+          <h2>{translate("other", language)}</h2>
           <button className="settings-row" type="button" onClick={onLogout}>
-            <span>ログアウト</span>
+            <span>{translate("logout", language)}</span>
           </button>
           <button className="settings-row settings-row--danger" type="button" onClick={onDeleteAccount}>
-            <span>アカウントの削除</span>
+            <span>{translate("deleteAccount", language)}</span>
           </button>
         </section>
       </div>
@@ -827,7 +1018,7 @@ function AccountScreen({
   );
 }
 
-function ScanScreen({ onHome }: { onHome: () => void }) {
+function ScanScreen({ language, onHome }: { language: AppLanguage; onHome: () => void }) {
   return (
     <section className="scan-screen">
       <div className="scan-screen__center">
@@ -837,7 +1028,7 @@ function ScanScreen({ onHome }: { onHome: () => void }) {
         <h1>読み取りを完了しました</h1>
       </div>
       <button className="primary-button scan-screen__button" type="button" onClick={onHome}>
-        ホームに戻る
+        {translate("home", language)}
       </button>
     </section>
   );
@@ -845,12 +1036,16 @@ function ScanScreen({ onHome }: { onHome: () => void }) {
 
 function EventDetailScreen({
   event,
+  language,
+  onLanguageToggle,
   isParticipated,
   onApply,
   onLike,
   onClose,
 }: {
   event: DisplayEvent;
+  language: AppLanguage;
+  onLanguageToggle: () => void;
   isParticipated: boolean;
   onApply: (event: DisplayEvent) => void;
   onLike: (event: DisplayEvent) => void;
@@ -859,7 +1054,7 @@ function EventDetailScreen({
   return (
     <div className="event-detail-modal" role="presentation" onClick={onClose}>
       <section className="event-detail-screen" role="dialog" aria-modal="true" aria-label={event.title} onClick={(clickEvent) => clickEvent.stopPropagation()}>
-        <Header />
+        <Header language={language} onLanguageToggle={onLanguageToggle} />
         <p className="event-detail__date">{event.date}</p>
         <div className="event-detail__photo">写真</div>
         <article className="event-detail__body">
@@ -985,13 +1180,13 @@ function AdFrame() {
   return <div className="ad-frame">広告掲載フレーム</div>;
 }
 
-function BottomNav({ current, onNavigate }: { current: Screen; onNavigate: (screen: Screen) => void }) {
+function BottomNav({ current, language, onNavigate }: { current: Screen; language: AppLanguage; onNavigate: (screen: Screen) => void }) {
   const items = [
-    ["home", "ホーム", <HomeIcon />],
-    ["events", "イベント", <EventIcon />],
-    ["scan", "読み取る", <QrIcon />],
-    ["wallet", "ウォレット", <WalletIcon />],
-    ["account", "アカウント", <AccountIcon />],
+    ["home", translate("home", language), <HomeIcon />],
+    ["events", translate("events", language), <EventIcon />],
+    ["scan", translate("scan", language), <QrIcon />],
+    ["wallet", translate("wallet", language), <WalletIcon />],
+    ["account", translate("account", language), <AccountIcon />],
   ] as const;
 
   return (
@@ -1010,5 +1205,54 @@ function BottomNav({ current, onNavigate }: { current: Screen; onNavigate: (scre
         </button>
       ))}
     </nav>
+  );
+}
+
+function ProductMapModal({
+  product,
+  language,
+  onClose,
+}: {
+  product: ProductItem;
+  language: AppLanguage;
+  onClose: () => void;
+}) {
+  const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(product.mapQuery)}&output=embed`;
+  const externalMapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(product.mapQuery)}`;
+
+  return (
+    <div className="product-map-modal" role="presentation" onClick={onClose}>
+      <section className="product-map-sheet" role="dialog" aria-modal="true" aria-label={`${product.name} ${translate("mapTitle", language)}`} onClick={(event) => event.stopPropagation()}>
+        <header className="product-map-header">
+          <div>
+            <p>{translate("mapTitle", language)}</p>
+            <h2>{product.name}</h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label={translate("close", language)}>
+            ×
+          </button>
+        </header>
+        <dl className="product-map-details">
+          <div>
+            <dt>{translate("providedBy", language)}</dt>
+            <dd>{product.storeName}</dd>
+          </div>
+          <div>
+            <dt>{translate("address", language)}</dt>
+            <dd>{product.storeAddress}</dd>
+          </div>
+          {product.requiredPoints ? (
+            <div>
+              <dt>{translate("requiredPoints", language)}</dt>
+              <dd>{product.requiredPoints}pt</dd>
+            </div>
+          ) : null}
+        </dl>
+        <iframe className="product-map-frame" title={`${product.storeName} Google Map`} src={mapUrl} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
+        <a className="product-map-link" href={externalMapUrl} target="_blank" rel="noreferrer">
+          {translate("openInGoogleMaps", language)}
+        </a>
+      </section>
+    </div>
   );
 }
