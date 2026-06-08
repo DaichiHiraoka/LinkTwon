@@ -144,3 +144,9 @@ vite.config.ts.timestamp-*
 
 # Local database
 backend/database/*.sqlite
+
+# Local external document forwarding/share
+external-doc-share/
+tools/serve-external-doc-share.js
+doc-share.*.log
+ngrok-doc-share.*.log
