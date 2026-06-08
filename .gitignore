@@ -150,3 +150,9 @@ external-doc-share/
 tools/serve-external-doc-share.js
 doc-share.*.log
 ngrok-doc-share.*.log
+
+# Codex local attachments
+.codex-remote-attachments/
+
+# Partner portal runtime cache
+partner-portals/data/translation-cache.json

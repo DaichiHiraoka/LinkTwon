@@ -1,0 +1,15 @@
+{
+  "name": "linktown-partner-portals",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Event organizer and store QR portals for LinkTwon.",
+  "main": "server.js",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "test": "node test/smoke-test.js"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4"
+  }
+}
