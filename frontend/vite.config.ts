@@ -6,7 +6,14 @@ const proxyTarget = process.env.VITE_API_BASE_URL ?? process.env.VITE_PROXY_TARG
 export default defineConfig({
   plugins: [react()],
   server: {
-    allowedHosts: [".ngrok-free.app"],
+    allowedHosts: [
+      ".ngrok-free.app",
+      ".ngrok-free.dev",
+      ".ngrok-free.pizza",
+      ".ngrok.app",
+      ".ngrok.dev",
+      ".ngrok.io",
+    ],
     proxy: {
       "/auth": proxyTarget,
       "/users": proxyTarget,

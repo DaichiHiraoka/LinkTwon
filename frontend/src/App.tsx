@@ -1,4 +1,15 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+  type KeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type TouchEvent as ReactTouchEvent,
+} from "react";
 import QRCode from "qrcode";
 import {
   ApiError,
@@ -316,6 +327,275 @@ function localizeProductCategories(categories: ProductCategory[], language: AppL
     name: localizeApiText(category.name, language),
     products: category.products.map((product) => localizeProduct(product, language)),
   }));
+}
+
+const SWIPE_DISMISS_START_PX = 18;
+const SWIPE_DISMISS_DISTANCE_PX = 126;
+const SWIPE_DISMISS_FAST_DISTANCE_PX = 84;
+const SWIPE_DISMISS_FAST_VELOCITY = 0.7;
+const SWIPE_DISMISS_DIRECTION_RATIO = 1.35;
+const SWIPE_DISMISS_SETTLE_MS = 180;
+
+type SwipeDismissGesture = {
+  startX: number;
+  startY: number;
+  lastY: number;
+  startedAt: number;
+  dragging: boolean;
+  shouldTrack: boolean;
+};
+
+type SwipeDismissStyle = CSSProperties & {
+  "--modal-swipe-y"?: string;
+  "--modal-swipe-scale"?: string;
+  "--modal-swipe-opacity"?: string;
+};
+
+function getResistedSwipeDistance(distance: number) {
+  if (distance <= 180) {
+    return distance;
+  }
+
+  return 180 + (distance - 180) * 0.28;
+}
+
+function useSwipeDownDismiss<T extends HTMLElement>(onClose: () => void) {
+  const panelRef = useRef<T | null>(null);
+  const gestureRef = useRef<SwipeDismissGesture | null>(null);
+  const settleTimerRef = useRef<number | null>(null);
+  const suppressClickTimerRef = useRef<number | null>(null);
+  const suppressNextClickRef = useRef(false);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [dragPhase, setDragPhase] = useState<"idle" | "dragging" | "settling">("idle");
+  const [hasInteracted, setHasInteracted] = useState(false);
+  const [mouseTracking, setMouseTracking] = useState(false);
+
+  const clearSettleTimer = useCallback(() => {
+    if (settleTimerRef.current !== null) {
+      window.clearTimeout(settleTimerRef.current);
+      settleTimerRef.current = null;
+    }
+  }, []);
+
+  const clearSuppressClickTimer = useCallback(() => {
+    if (suppressClickTimerRef.current !== null) {
+      window.clearTimeout(suppressClickTimerRef.current);
+      suppressClickTimerRef.current = null;
+    }
+  }, []);
+
+  const beginGesture = useCallback(
+    (clientX: number, clientY: number) => {
+      clearSettleTimer();
+      setDragOffset(0);
+      setDragPhase("idle");
+      gestureRef.current = {
+        startX: clientX,
+        startY: clientY,
+        lastY: clientY,
+        startedAt: Date.now(),
+        dragging: false,
+        shouldTrack: (panelRef.current?.scrollTop ?? 0) <= 0,
+      };
+    },
+    [clearSettleTimer],
+  );
+
+  const updateGesture = useCallback((clientX: number, clientY: number, preventNativeScroll: () => void) => {
+    const gesture = gestureRef.current;
+
+    if (!gesture?.shouldTrack) {
+      return;
+    }
+
+    const deltaX = clientX - gesture.startX;
+    const deltaY = clientY - gesture.startY;
+    gesture.lastY = clientY;
+
+    if (!gesture.dragging) {
+      if (deltaY < SWIPE_DISMISS_START_PX) {
+        return;
+      }
+
+      if (deltaY <= Math.abs(deltaX) * SWIPE_DISMISS_DIRECTION_RATIO) {
+        gesture.shouldTrack = false;
+        return;
+      }
+
+      if ((panelRef.current?.scrollTop ?? 0) > 0) {
+        gesture.shouldTrack = false;
+        return;
+      }
+
+      gesture.dragging = true;
+      setHasInteracted(true);
+      setDragPhase("dragging");
+    }
+
+    preventNativeScroll();
+    const nextOffset = getResistedSwipeDistance(Math.max(0, deltaY));
+    setDragOffset(nextOffset);
+  }, []);
+
+  const finishGesture = useCallback(() => {
+    const gesture = gestureRef.current;
+    setMouseTracking(false);
+
+    if (!gesture) {
+      return;
+    }
+
+    gestureRef.current = null;
+
+    if (!gesture.dragging) {
+      return;
+    }
+
+    const distance = Math.max(0, gesture.lastY - gesture.startY);
+    const duration = Math.max(1, Date.now() - gesture.startedAt);
+    const velocity = distance / duration;
+    const shouldClose =
+      distance >= SWIPE_DISMISS_DISTANCE_PX ||
+      (distance >= SWIPE_DISMISS_FAST_DISTANCE_PX && velocity >= SWIPE_DISMISS_FAST_VELOCITY);
+
+    if (shouldClose) {
+      setDragOffset(0);
+      setDragPhase("idle");
+      onClose();
+      return;
+    }
+
+    suppressNextClickRef.current = true;
+    clearSuppressClickTimer();
+    suppressClickTimerRef.current = window.setTimeout(() => {
+      suppressNextClickRef.current = false;
+      suppressClickTimerRef.current = null;
+    }, 350);
+    setDragOffset(0);
+    setDragPhase("settling");
+    clearSettleTimer();
+    settleTimerRef.current = window.setTimeout(() => {
+      setDragPhase("idle");
+      settleTimerRef.current = null;
+    }, SWIPE_DISMISS_SETTLE_MS);
+  }, [clearSettleTimer, clearSuppressClickTimer, onClose]);
+
+  const cancelGesture = useCallback(() => {
+    setMouseTracking(false);
+    gestureRef.current = null;
+    setDragOffset(0);
+    setDragPhase("settling");
+    clearSettleTimer();
+    settleTimerRef.current = window.setTimeout(() => {
+      setDragPhase("idle");
+      settleTimerRef.current = null;
+    }, SWIPE_DISMISS_SETTLE_MS);
+  }, [clearSettleTimer]);
+
+  const handleTouchStart = useCallback(
+    (event: ReactTouchEvent<T>) => {
+      if (event.touches.length !== 1) {
+        return;
+      }
+
+      const touch = event.touches[0];
+      beginGesture(touch.clientX, touch.clientY);
+    },
+    [beginGesture],
+  );
+
+  const handleTouchMove = useCallback(
+    (event: ReactTouchEvent<T>) => {
+      if (event.touches.length !== 1) {
+        return;
+      }
+
+      const touch = event.touches[0];
+      updateGesture(touch.clientX, touch.clientY, () => {
+        if (event.cancelable) {
+          event.preventDefault();
+        }
+      });
+    },
+    [updateGesture],
+  );
+
+  const handleMouseDown = useCallback(
+    (event: ReactMouseEvent<T>) => {
+      if (event.button !== 0) {
+        return;
+      }
+
+      beginGesture(event.clientX, event.clientY);
+      setMouseTracking(true);
+    },
+    [beginGesture],
+  );
+
+  const handleClickCapture = useCallback((event: ReactMouseEvent<T>) => {
+    if (!suppressNextClickRef.current) {
+      return;
+    }
+
+    suppressNextClickRef.current = false;
+    event.preventDefault();
+    event.stopPropagation();
+  }, []);
+
+  useEffect(() => {
+    if (!mouseTracking) {
+      return undefined;
+    }
+
+    const handleMouseMove = (event: globalThis.MouseEvent) => {
+      updateGesture(event.clientX, event.clientY, () => event.preventDefault());
+    };
+    const handleMouseUp = () => finishGesture();
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [finishGesture, mouseTracking, updateGesture]);
+
+  useEffect(() => {
+    return () => {
+      clearSettleTimer();
+      clearSuppressClickTimer();
+    };
+  }, [clearSettleTimer, clearSuppressClickTimer]);
+
+  const dragScale = Math.max(0.985, 1 - dragOffset / 1800);
+  const dragOpacity = Math.max(0.72, 1 - dragOffset / 440);
+  const style: SwipeDismissStyle | undefined =
+    dragPhase === "idle"
+      ? undefined
+      : {
+          "--modal-swipe-y": `${dragOffset}px`,
+          "--modal-swipe-scale": String(dragScale),
+          "--modal-swipe-opacity": String(dragOpacity),
+        };
+
+  const className = [hasInteracted ? "has-swipe-interacted" : "", dragPhase === "idle" ? "" : `is-swipe-${dragPhase}`]
+    .filter(Boolean)
+    .join(" ");
+
+  return {
+    ref: panelRef,
+    className,
+    style,
+    handlers: {
+      onTouchStart: handleTouchStart,
+      onTouchMove: handleTouchMove,
+      onTouchEnd: finishGesture,
+      onTouchCancel: cancelGesture,
+      onMouseDown: handleMouseDown,
+      onClickCapture: handleClickCapture,
+    },
+  };
 }
 
 function getErrorMessage(error: unknown) {
@@ -1236,9 +1516,20 @@ function EventDetailScreen({
   onLike: (event: DisplayEvent) => void;
   onClose: () => void;
 }) {
+  const swipeDismiss = useSwipeDownDismiss<HTMLElement>(onClose);
+
   return (
     <div className="event-detail-modal" role="presentation" onClick={onClose}>
-      <section className="event-detail-screen" role="dialog" aria-modal="true" aria-label={event.title} onClick={(clickEvent) => clickEvent.stopPropagation()}>
+      <section
+        ref={swipeDismiss.ref}
+        className={`event-detail-screen ${swipeDismiss.className}`.trim()}
+        style={swipeDismiss.style}
+        role="dialog"
+        aria-modal="true"
+        aria-label={event.title}
+        onClick={(clickEvent) => clickEvent.stopPropagation()}
+        {...swipeDismiss.handlers}
+      >
         <Header language={language} onLanguageToggle={onLanguageToggle} />
         <p className="event-detail__date">{event.date}</p>
         <div className="event-detail__photo">写真</div>
@@ -1404,10 +1695,20 @@ function ProductMapModal({
 }) {
   const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(product.mapQuery)}&output=embed`;
   const externalMapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(product.mapQuery)}`;
+  const swipeDismiss = useSwipeDownDismiss<HTMLElement>(onClose);
 
   return (
     <div className="product-map-modal" role="presentation" onClick={onClose}>
-      <section className="product-map-sheet" role="dialog" aria-modal="true" aria-label={`${product.name} ${translate("mapTitle", language)}`} onClick={(event) => event.stopPropagation()}>
+      <section
+        ref={swipeDismiss.ref}
+        className={`product-map-sheet ${swipeDismiss.className}`.trim()}
+        style={swipeDismiss.style}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${product.name} ${translate("mapTitle", language)}`}
+        onClick={(event) => event.stopPropagation()}
+        {...swipeDismiss.handlers}
+      >
         <header className="product-map-header">
           <div>
             <p>{translate("mapTitle", language)}</p>
