@@ -2,23 +2,17 @@ const assert = require('assert/strict');
 const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
-const { createQrImage } = require('../lib/qr');
 const {
   extractTranslationRecords,
   getTranslatedField,
   loadTranslationCache,
   refreshTranslationCache
 } = require('../lib/translationCache');
-const { buildEventPayload, buildStorePayload } = require('../server');
+const { buildEventPayload, buildStorePayload, parseUserQrPayload, processEventCheckIn, processStoreExchange } = require('../server');
 
 async function readFixtureData() {
   const raw = await fs.readFile(path.join(__dirname, '..', 'data', 'partner-data.json'), 'utf8');
   return JSON.parse(raw);
-}
-
-async function testQrGeneration() {
-  const dataUrl = await createQrImage('linktown://check-in?event_id=event-001&code=EVT-001-LKTWN');
-  assert.match(dataUrl, /^data:image\/png;base64,/);
 }
 
 async function prepareTempTranslationCache() {
@@ -53,20 +47,75 @@ async function testPortalPayloads(cachePath) {
 
   assert.equal(eventPayload.role, 'event');
   assert.equal(eventPayload.events.length, 2);
-  assert.match(eventPayload.events[0].qr_image, /^data:image\/png;base64,/);
   assert.equal(eventPayload.events[0].event_name, 'Disaster Supply Check and Local Guidance');
 
   assert.equal(storePayload.role, 'store');
   assert.equal(storePayload.services.length, 3);
-  assert.match(storePayload.services[0].qr_image, /^data:image\/png;base64,/);
   assert.equal(storePayload.account.name, '地域マルシェ');
   assert.equal(storePayload.services[0].service_name, 'Seasonal Vegetable Set');
 }
 
+function createUserQrPayload(nonce) {
+  const issuedAt = new Date();
+  const expiresAt = new Date(issuedAt.getTime() + 5 * 60 * 1000);
+  const params = new URLSearchParams({
+    v: '1',
+    type: 'user-present',
+    user_id: '1',
+    name: 'Demo User',
+    issued_at: issuedAt.toISOString(),
+    expires_at: expiresAt.toISOString(),
+    nonce
+  });
+
+  return `linktown://user-present?${params.toString()}`;
+}
+
+async function testUserQrProcessing() {
+  const userQrPayload = createUserQrPayload('smoke-event');
+  const parsed = parseUserQrPayload(userQrPayload);
+  assert.equal(parsed.user_id, '1');
+  assert.equal(parsed.name, 'Demo User');
+
+  const eventResult = await processEventCheckIn(
+    {
+      code: 'event-demo',
+      event_id: 'event-001',
+      user_qr_payload: userQrPayload
+    },
+    'en'
+  );
+  assert.equal(eventResult.status, 201);
+  assert.equal(eventResult.body.granted_points, 100);
+  assert.equal(eventResult.body.user.user_id, '1');
+
+  const duplicateResult = await processEventCheckIn(
+    {
+      code: 'event-demo',
+      event_id: 'event-001',
+      user_qr_payload: userQrPayload
+    },
+    'en'
+  );
+  assert.equal(duplicateResult.status, 409);
+
+  const exchangeResult = await processStoreExchange(
+    {
+      code: 'store-demo',
+      service_id: 'service-001',
+      user_qr_payload: createUserQrPayload('smoke-store')
+    },
+    'en'
+  );
+  assert.equal(exchangeResult.status, 201);
+  assert.equal(exchangeResult.body.used_points, 220);
+  assert.equal(exchangeResult.body.user.name, 'Demo User');
+}
+
 async function main() {
-  await testQrGeneration();
   const cachePath = await prepareTempTranslationCache();
   await testPortalPayloads(cachePath);
+  await testUserQrProcessing();
   console.log('partner-portals smoke test passed');
 }
 

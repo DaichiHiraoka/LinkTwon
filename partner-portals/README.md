@@ -1,6 +1,6 @@
 # LinkTwon Partner Portals
 
-イベント主催者側と商店側のQR提示機能を、既存の住民向けfrontend/backendから分離した専用ディレクトリとして実装している。
+イベント主催者側と商店側が、エンドユーザーのアプリに表示された本人確認QRを読み取るための専用アプリを実装している。
 
 ## 起動
 
@@ -30,21 +30,21 @@ npm --prefix partner-portals run dev:store
 
 - イベント主催者アプリでのアクセスコード入力
 - 商店アプリでのアクセスコード入力
-- 管理者発行済みQRの画面表示
-- QR PNG保存
-- ブラウザ印刷によるPDF保存
+- エンドユーザー提示QRのカメラ読取
+- カメラ未対応環境向けのQR内容手入力
+- イベント受付確定
+- 商品交換確定
 - 商品・イベントなど可変コンテンツの翻訳キャッシュ参照
 - 翻訳キャッシュの起動時更新、24時間ごとの定期更新、手動更新API
 
 ## 主要ファイル
 
-- `server.js`: 専用画面配信、QR画像生成、翻訳キャッシュ更新API
+- `server.js`: 専用画面配信、ユーザーQR検証、受付/交換API、翻訳キャッシュ更新API
 - `lib/translationCache.js`: 翻訳対象抽出、翻訳API呼び出し、キャッシュ保存、キャッシュ参照
-- `lib/qr.js`: QR PNG生成
 - `event-organizer-app/`: イベント主催者側の画面
 - `store-app/`: 商店側の画面
 - `shared.css`: 2つのアプリで共有する見た目
-- `data/partner-data.json`: 管理者発行済みQRを含むデモデータ
+- `data/partner-data.json`: 主催者、商店、イベント、商品のデモデータ
 - `data/translation-cache.json`: 翻訳キャッシュ保存先。実行時生成のため `.gitignore` 対象
 - `data/translation-cache.example.json`: キャッシュ構造の例
 
@@ -80,3 +80,12 @@ Invoke-RestMethod -Method Post http://localhost:5181/api/translations/refresh
 ```
 
 `PARTNER_REFRESH_KEY` を設定した場合は、`x-refresh-key` ヘッダーに同じ値を付けたリクエストのみ受け付ける。
+
+## QR読取方式
+
+住民向け `frontend/` のQRタブで本人確認QRを表示し、イベント主催者アプリまたは商店アプリがそのQRを読み取る。
+
+- イベント主催者アプリ: `POST /api/event/check-ins`
+- 商店アプリ: `POST /api/store/exchanges`
+
+QRには `user_id`、表示名、発行時刻、有効期限、nonce を含める。認証トークンやパスワードは含めない。

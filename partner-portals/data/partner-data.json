@@ -29,10 +29,7 @@
       "grant_points": 100,
       "description": "地域の防災備蓄品を確認し、避難経路を住民に案内します。",
       "activity": "備蓄品の数量確認、期限確認、避難経路の案内、受付補助を行います。",
-      "notes": "動きやすい服装で集合してください。雨天時は屋内作業へ切り替えます。",
-      "check_in_code": "EVT-001-LKTWN",
-      "check_in_expires_at": "2030-12-31T23:59:59+09:00",
-      "qr_payload": "linktown://check-in?event_id=event-001&code=EVT-001-LKTWN"
+      "notes": "動きやすい服装で集合してください。雨天時は屋内作業へ切り替えます。"
     },
     {
       "event_id": "event-002",
@@ -43,10 +40,7 @@
       "grant_points": 60,
       "description": "商店街周辺の歩道と広場を清掃し、来街者が歩きやすい環境を整えます。",
       "activity": "ごみ拾い、落ち葉の回収、掲示板周辺の拭き掃除を担当します。",
-      "notes": "軍手とごみ袋は主催者が用意します。",
-      "check_in_code": "EVT-002-LKTWN",
-      "check_in_expires_at": "2030-12-31T23:59:59+09:00",
-      "qr_payload": "linktown://check-in?event_id=event-002&code=EVT-002-LKTWN"
+      "notes": "軍手とごみ袋は主催者が用意します。"
     }
   ],
   "serviceCategories": [
@@ -66,9 +60,7 @@
       "category_id": "category-food",
       "service_name": "季節の野菜セット",
       "description": "地域で仕入れた旬の野菜を少量ずつ詰め合わせた交換商品です。",
-      "required_points": 220,
-      "exchange_code": "SRV-001-LKTWN",
-      "qr_payload": "linktown://exchange?store_id=store-001&service_id=service-001&code=SRV-001-LKTWN"
+      "required_points": 220
     },
     {
       "service_id": "service-002",
@@ -76,9 +68,7 @@
       "category_id": "category-food",
       "service_name": "焼き菓子詰め合わせ",
       "description": "商店街の協力店舗が用意する焼き菓子の詰め合わせです。",
-      "required_points": 180,
-      "exchange_code": "SRV-002-LKTWN",
-      "qr_payload": "linktown://exchange?store_id=store-001&service_id=service-002&code=SRV-002-LKTWN"
+      "required_points": 180
     },
     {
       "service_id": "service-003",
@@ -86,9 +76,7 @@
       "category_id": "category-life",
       "service_name": "日用品ミニセット",
       "description": "ティッシュや洗剤など、日常で使いやすい日用品をまとめた商品です。",
-      "required_points": 150,
-      "exchange_code": "SRV-003-LKTWN",
-      "qr_payload": "linktown://exchange?store_id=store-001&service_id=service-003&code=SRV-003-LKTWN"
+      "required_points": 150
     }
   ]
 }

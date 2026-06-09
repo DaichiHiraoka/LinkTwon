@@ -76,7 +76,7 @@ async function readJson(filePath, fallbackValue) {
     const raw = await fs.readFile(filePath, 'utf8');
     return JSON.parse(raw);
   } catch (error) {
-    if (error.code === 'ENOENT') {
+    if (error.code === 'ENOENT' || error instanceof SyntaxError) {
       return fallbackValue;
     }
 
@@ -95,7 +95,9 @@ async function loadTranslationCache(cachePath) {
 
 async function saveTranslationCache(cachePath, cache) {
   await fs.mkdir(path.dirname(cachePath), { recursive: true });
-  await fs.writeFile(cachePath, `${JSON.stringify(cache, null, 2)}\n`, 'utf8');
+  const tempPath = `${cachePath}.${process.pid}.tmp`;
+  await fs.writeFile(tempPath, `${JSON.stringify(cache, null, 2)}\n`, 'utf8');
+  await fs.rename(tempPath, cachePath);
 }
 
 function findEntry(cache, record, targetLocale) {

@@ -2,7 +2,6 @@ const fs = require('fs/promises');
 const http = require('http');
 const path = require('path');
 const { URL } = require('url');
-const { attachQrImages } = require('./lib/qr');
 const {
   getTranslatedField,
   loadTranslationCache,
@@ -16,6 +15,7 @@ const PUBLIC_DIR = path.join(ROOT_DIR, APP_ROLE === 'store' ? 'store-app' : 'eve
 const DATA_PATH = path.join(ROOT_DIR, 'data', 'partner-data.json');
 const CACHE_PATH = path.join(ROOT_DIR, 'data', 'translation-cache.json');
 const DAY_MS = 24 * 60 * 60 * 1000;
+const processedScans = new Set();
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -43,6 +43,69 @@ function sendError(response, statusCode, message) {
   sendJson(response, statusCode, { message });
 }
 
+async function readJsonBody(request) {
+  const chunks = [];
+
+  for await (const chunk of request) {
+    chunks.push(chunk);
+  }
+
+  const rawBody = Buffer.concat(chunks).toString('utf8').trim();
+
+  if (!rawBody) {
+    return {};
+  }
+
+  return JSON.parse(rawBody);
+}
+
+function parseUserQrPayload(rawPayload) {
+  if (typeof rawPayload !== 'string' || rawPayload.trim() === '') {
+    throw new Error('User QR payload is required.');
+  }
+
+  const trimmed = rawPayload.trim();
+  let payload;
+
+  if (trimmed.startsWith('{')) {
+    payload = JSON.parse(trimmed);
+  } else {
+    const payloadUrl = new URL(trimmed);
+    const isUserPresentUrl = payloadUrl.protocol === 'linktown:' && payloadUrl.hostname === 'user-present';
+
+    if (!isUserPresentUrl) {
+      throw new Error('Invalid user QR format.');
+    }
+
+    payload = Object.fromEntries(payloadUrl.searchParams.entries());
+  }
+
+  if (payload.type !== 'user-present') {
+    throw new Error('Invalid user QR type.');
+  }
+
+  const userId = String(payload.user_id || '').trim();
+  const name = String(payload.name || '').trim();
+  const nonce = String(payload.nonce || '').trim();
+  const expiresAt = new Date(payload.expires_at);
+
+  if (!userId || !nonce || Number.isNaN(expiresAt.getTime())) {
+    throw new Error('User QR is missing required fields.');
+  }
+
+  if (expiresAt.getTime() < Date.now()) {
+    throw new Error('User QR has expired.');
+  }
+
+  return {
+    user_id: userId,
+    name: name || `User ${userId}`,
+    nonce,
+    issued_at: payload.issued_at || null,
+    expires_at: expiresAt.toISOString()
+  };
+}
+
 function notTranslatedFields() {
   return [
     'store_name',
@@ -51,10 +114,7 @@ function notTranslatedFields() {
     'location',
     'event_datetime',
     'grant_points',
-    'required_points',
-    'check_in_code',
-    'exchange_code',
-    'qr_payload'
+    'required_points'
   ];
 }
 
@@ -101,7 +161,7 @@ async function buildEventPayload(code, locale, options = {}) {
       email: organizer.contact_email
     },
     not_translated_fields: notTranslatedFields(),
-    events: await attachQrImages(events, (event) => event.qr_payload)
+    events
   };
 }
 
@@ -130,7 +190,84 @@ async function buildStorePayload(code, locale, options = {}) {
       map_query: store.map_query
     },
     not_translated_fields: notTranslatedFields(),
-    services: await attachQrImages(services, (service) => service.qr_payload)
+    services
+  };
+}
+
+async function processEventCheckIn(body, locale) {
+  const data = await readPartnerData();
+  const organizer = data.eventOrganizers.find((item) => item.login_code === body.code);
+
+  if (!organizer) {
+    return { status: 401, body: { message: 'Invalid event organizer access code.' } };
+  }
+
+  const event = data.events.find((item) => item.event_id === body.event_id && organizer.event_ids.includes(item.event_id));
+
+  if (!event) {
+    return { status: 404, body: { message: 'Event not found for this organizer.' } };
+  }
+
+  const user = parseUserQrPayload(body.user_qr_payload);
+  const scanKey = `event:${event.event_id}:${user.user_id}:${user.nonce}`;
+
+  if (processedScans.has(scanKey)) {
+    return { status: 409, body: { message: 'This user QR has already been used for this event.', user, event_id: event.event_id } };
+  }
+
+  processedScans.add(scanKey);
+
+  const cache = await loadTranslationCache(CACHE_PATH);
+  const translatedEvent = translateEvent(event, cache, locale);
+
+  return {
+    status: 201,
+    body: {
+      message: 'Event check-in completed.',
+      user,
+      event_id: event.event_id,
+      event_name: translatedEvent.event_name,
+      granted_points: event.grant_points
+    }
+  };
+}
+
+async function processStoreExchange(body, locale) {
+  const data = await readPartnerData();
+  const store = data.stores.find((item) => item.login_code === body.code);
+
+  if (!store) {
+    return { status: 401, body: { message: 'Invalid store access code.' } };
+  }
+
+  const service = data.services.find((item) => item.service_id === body.service_id && store.service_ids.includes(item.service_id));
+
+  if (!service) {
+    return { status: 404, body: { message: 'Service not found for this store.' } };
+  }
+
+  const user = parseUserQrPayload(body.user_qr_payload);
+  const scanKey = `store:${service.service_id}:${user.user_id}:${user.nonce}`;
+
+  if (processedScans.has(scanKey)) {
+    return { status: 409, body: { message: 'This user QR has already been used for this service.', user, service_id: service.service_id } };
+  }
+
+  processedScans.add(scanKey);
+
+  const cache = await loadTranslationCache(CACHE_PATH);
+  const category = data.serviceCategories.find((item) => item.category_id === service.category_id);
+  const translatedService = translateService(service, category, cache, locale);
+
+  return {
+    status: 201,
+    body: {
+      message: 'Store exchange completed.',
+      user,
+      service_id: service.service_id,
+      service_name: translatedService.service_name,
+      used_points: service.required_points
+    }
   };
 }
 
@@ -156,6 +293,34 @@ async function handleApi(request, response, requestUrl) {
     }
 
     return sendJson(response, 200, payload);
+  }
+
+  if (request.method === 'POST' && requestUrl.pathname === '/api/event/check-ins') {
+    if (APP_ROLE !== 'event') {
+      return sendError(response, 404, 'API route not found.');
+    }
+
+    try {
+      const locale = requestUrl.searchParams.get('locale') === 'en' ? 'en' : 'ja';
+      const result = await processEventCheckIn(await readJsonBody(request), locale);
+      return sendJson(response, result.status, result.body);
+    } catch (error) {
+      return sendError(response, 400, error.message);
+    }
+  }
+
+  if (request.method === 'POST' && requestUrl.pathname === '/api/store/exchanges') {
+    if (APP_ROLE !== 'store') {
+      return sendError(response, 404, 'API route not found.');
+    }
+
+    try {
+      const locale = requestUrl.searchParams.get('locale') === 'en' ? 'en' : 'ja';
+      const result = await processStoreExchange(await readJsonBody(request), locale);
+      return sendJson(response, result.status, result.body);
+    } catch (error) {
+      return sendError(response, 400, error.message);
+    }
   }
 
   if (request.method === 'POST' && requestUrl.pathname === '/api/translations/refresh') {
@@ -256,6 +421,9 @@ module.exports = {
   buildEventPayload,
   buildStorePayload,
   handleRequest,
+  parseUserQrPayload,
+  processEventCheckIn,
+  processStoreExchange,
   refreshTranslationsOnSchedule,
   startServer
 };

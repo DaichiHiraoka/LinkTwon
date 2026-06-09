@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import QRCode from "qrcode";
 import {
   ApiError,
   cancelEventParticipation,
@@ -21,7 +22,6 @@ import { Logo } from "./components/Logo";
 import {
   AccountIcon,
   ArrowIcon,
-  CheckIcon,
   EventIcon,
   HelpIcon,
   HomeIcon,
@@ -50,7 +50,7 @@ const translations = {
     translate: "翻訳",
     home: "ホーム",
     events: "イベント",
-    scan: "読み取る",
+    scan: "提示QR",
     wallet: "ウォレット",
     account: "アカウント",
     pointsBalance: "ポイント残高",
@@ -83,12 +83,17 @@ const translations = {
     paymentAmount: "支払い金額",
     totalAvailablePoints: "合計利用可能ポイント",
     mapTitle: "店舗マップ",
+    userQrTitle: "本人確認QR",
+    userQrDescription: "イベント主催者または商店スタッフにこのQRを提示してください。",
+    userQrExpires: "有効期限",
+    refreshQr: "QRを更新",
+    qrPayloadLabel: "QR内容",
   },
   en: {
     translate: "Translate",
     home: "Home",
     events: "Events",
-    scan: "Scan",
+    scan: "My QR",
     wallet: "Wallet",
     account: "Account",
     pointsBalance: "Point Balance",
@@ -121,6 +126,11 @@ const translations = {
     paymentAmount: "Payment amount",
     totalAvailablePoints: "Total available points",
     mapTitle: "Shop map",
+    userQrTitle: "Identity QR",
+    userQrDescription: "Show this QR to the event organizer or store staff.",
+    userQrExpires: "Expires",
+    refreshQr: "Refresh QR",
+    qrPayloadLabel: "QR payload",
   },
 } as const;
 
@@ -139,6 +149,9 @@ type DisplayEvent = EventItem & {
   rawEventId?: number;
   liked?: boolean;
   likeCount?: number;
+};
+type DisplayUser = typeof fallbackUser & {
+  displayName: string;
 };
 
 function readStoredSession(): Session | null {
@@ -519,6 +532,7 @@ export function App() {
   }
 
   const displayUser = {
+    displayName: profile?.name || session?.user.name || fallbackUser.accountType,
     accountType: profile?.user_type || fallbackUser.accountType,
     userId: profile ? String(profile.user_id) : fallbackUser.userId,
     email: profile?.email || fallbackUser.email,
@@ -555,7 +569,7 @@ export function App() {
               onCancelParticipation={handleCancelParticipation}
             />
           ) : null}
-          {screen === "scan" ? <ScanScreen language={appLanguage} onHome={() => setScreen("home")} /> : null}
+          {screen === "scan" ? <ScanScreen language={appLanguage} user={displayUser} onLanguageToggle={handleToggleLanguage} onHome={() => setScreen("home")} /> : null}
           {screen === "wallet" ? (
             <WalletScreen
               tab={exchangeTab}
@@ -1018,15 +1032,110 @@ function AccountScreen({
   );
 }
 
-function ScanScreen({ language, onHome }: { language: AppLanguage; onHome: () => void }) {
+function createUserQrNonce() {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function buildUserQrPayload(user: DisplayUser, issuedAt: Date, expiresAt: Date, nonce: string) {
+  const params = new URLSearchParams({
+    v: "1",
+    type: "user-present",
+    user_id: user.userId,
+    name: user.displayName,
+    issued_at: issuedAt.toISOString(),
+    expires_at: expiresAt.toISOString(),
+    nonce,
+  });
+
+  return `linktown://user-present?${params.toString()}`;
+}
+
+function formatQrDateTime(value: Date, language: AppLanguage) {
+  return new Intl.DateTimeFormat(language === "en" ? "en-US" : "ja-JP", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(value);
+}
+
+function ScanScreen({
+  language,
+  user,
+  onLanguageToggle,
+  onHome,
+}: {
+  language: AppLanguage;
+  user: DisplayUser;
+  onLanguageToggle: () => void;
+  onHome: () => void;
+}) {
+  const [nonce, setNonce] = useState(createUserQrNonce);
+  const [qrImage, setQrImage] = useState("");
+  const qrData = useMemo(() => {
+    const issuedAt = new Date();
+    const expiresAt = new Date(issuedAt.getTime() + 5 * 60 * 1000);
+
+    return {
+      issuedAt,
+      expiresAt,
+      payload: buildUserQrPayload(user, issuedAt, expiresAt, nonce),
+    };
+  }, [nonce, user.displayName, user.userId]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    QRCode.toDataURL(qrData.payload, {
+      errorCorrectionLevel: "M",
+      margin: 2,
+      width: 256,
+      color: {
+        dark: "#111111",
+        light: "#ffffff",
+      },
+    })
+      .then((nextImage) => {
+        if (isActive) {
+          setQrImage(nextImage);
+        }
+      })
+      .catch((error) => {
+        console.error(error);
+        if (isActive) {
+          setQrImage("");
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [qrData.payload]);
+
   return (
     <section className="scan-screen">
-      <div className="scan-screen__center">
-        <span className="scan-check">
-          <CheckIcon />
-        </span>
-        <h1>読み取りを完了しました</h1>
+      <Header language={language} onLanguageToggle={onLanguageToggle} />
+      <div className="user-qr-card">
+        <p>{translate("userQrTitle", language)}</p>
+        <h1>{user.displayName}</h1>
+        <span>{user.userId}</span>
+        <div className="user-qr-card__image">
+          {qrImage ? <img src={qrImage} alt={translate("userQrTitle", language)} /> : <strong>QR</strong>}
+        </div>
+        <p className="user-qr-card__description">{translate("userQrDescription", language)}</p>
+        <dl>
+          <div>
+            <dt>{translate("userQrExpires", language)}</dt>
+            <dd>{formatQrDateTime(qrData.expiresAt, language)}</dd>
+          </div>
+        </dl>
+        <button type="button" onClick={() => setNonce(createUserQrNonce())}>
+          {translate("refreshQr", language)}
+        </button>
       </div>
+      <details className="user-qr-payload">
+        <summary>{translate("qrPayloadLabel", language)}</summary>
+        <code>{qrData.payload}</code>
+      </details>
       <button className="primary-button scan-screen__button" type="button" onClick={onHome}>
         {translate("home", language)}
       </button>

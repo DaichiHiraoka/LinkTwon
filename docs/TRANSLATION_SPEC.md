@@ -145,13 +145,12 @@ translation_status: current | stale | failed
 
 イベント主催者側と商店側の専用機能は、ルート直下の `partner-portals/` に分離して実装する。
 
-- `partner-portals/server.js`: 専用画面配信、QR画像生成、翻訳キャッシュ更新API
+- `partner-portals/server.js`: 専用画面配信、ユーザー提示QR検証、受付/交換API、翻訳キャッシュ更新API
 - `partner-portals/lib/translationCache.js`: 翻訳対象抽出、翻訳API呼び出し、キャッシュ保存、キャッシュ参照
-- `partner-portals/lib/qr.js`: QR PNG生成
 - `partner-portals/event-organizer-app/`: イベント主催者側の画面。既定ポートは `5181`
 - `partner-portals/store-app/`: 商店側の画面。既定ポートは `5182`
 - `partner-portals/shared.css`: 2つのアプリの共通スタイル
-- `partner-portals/data/partner-data.json`: 管理者発行済みQRを含むデモデータ
+- `partner-portals/data/partner-data.json`: 主催者、商店、イベント、商品のデモデータ
 - `partner-portals/data/translation-cache.json`: 翻訳キャッシュ保存先
 
-既存の住民向け `frontend/` とは分離し、主催者・商店がQRを提示するための専用導線として扱う。
+既存の住民向け `frontend/` とは分離し、主催者・商店がエンドユーザーの本人確認QRを読み取るための専用導線として扱う。

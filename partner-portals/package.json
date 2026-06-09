@@ -14,7 +14,6 @@
     "test": "node test/smoke-test.js"
   },
   "dependencies": {
-    "concurrently": "^9.2.1",
-    "qrcode": "^1.5.4"
+    "concurrently": "^9.2.1"
   }
 }

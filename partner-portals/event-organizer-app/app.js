@@ -2,6 +2,8 @@ const state = {
   locale: localStorage.getItem('event-portal-locale') || 'ja',
   code: localStorage.getItem('event-portal-code') || 'event-demo',
   payload: null,
+  resultById: {},
+  errorById: {},
   error: ''
 };
 
@@ -10,12 +12,7 @@ const ui = {
     title: 'イベント主催者ポータル',
     language: 'EN',
     accessCode: '主催者アクセスコード',
-    signIn: 'QRを表示',
-    qrIssued: '管理者発行済みQR',
-    downloadPng: 'PNG保存',
-    printPdf: 'PDF保存',
-    copyCode: 'コードコピー',
-    copied: 'コピーしました',
+    signIn: 'イベントを表示',
     organizer: '主催者',
     contact: '連絡先',
     eventDate: '開催日時',
@@ -24,20 +21,22 @@ const ui = {
     activity: '活動内容',
     notes: '注意事項',
     description: '説明',
-    expiresAt: '有効期限',
+    scannerTitle: '参加者QR読取',
+    scannerHint: '参加者のアプリに表示された本人確認QRを読み取って受付します。',
+    cameraScan: 'カメラで読む',
+    qrPayload: 'QR内容',
+    confirm: '受付する',
+    completed: '受付完了',
+    user: '参加者',
+    grantedPoints: '付与ポイント',
     invalidCode: '主催者アクセスコードを確認してください。',
-    payload: 'QR内容'
+    cameraUnavailable: 'このブラウザではカメラQR読取を利用できません。QR内容を手入力してください。'
   },
   en: {
     title: 'Event Organizer Portal',
     language: 'JA',
     accessCode: 'Organizer access code',
-    signIn: 'Open QR',
-    qrIssued: 'Admin-issued QR',
-    downloadPng: 'Save PNG',
-    printPdf: 'Save PDF',
-    copyCode: 'Copy code',
-    copied: 'Copied',
+    signIn: 'Open events',
     organizer: 'Organizer',
     contact: 'Contact',
     eventDate: 'Date',
@@ -46,9 +45,16 @@ const ui = {
     activity: 'Activity',
     notes: 'Notes',
     description: 'Description',
-    expiresAt: 'Expires',
+    scannerTitle: 'Participant QR scan',
+    scannerHint: 'Scan the identity QR shown in the participant app to check them in.',
+    cameraScan: 'Scan with camera',
+    qrPayload: 'QR payload',
+    confirm: 'Check in',
+    completed: 'Check-in completed',
+    user: 'Participant',
+    grantedPoints: 'Grant points',
     invalidCode: 'Check the organizer access code.',
-    payload: 'QR payload'
+    cameraUnavailable: 'Camera QR scanning is unavailable in this browser. Enter the QR payload manually.'
   }
 };
 
@@ -90,24 +96,6 @@ function formatDateTime(value) {
   }).format(date);
 }
 
-function downloadDataUrl(dataUrl, fileName) {
-  const anchor = document.createElement('a');
-  anchor.href = dataUrl;
-  anchor.download = fileName;
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-}
-
-async function copyText(value, button) {
-  await navigator.clipboard.writeText(value);
-  const original = button.textContent;
-  button.textContent = t('copied');
-  window.setTimeout(() => {
-    button.textContent = original;
-  }, 1200);
-}
-
 async function loadPortal(event) {
   if (event) {
     event.preventDefault();
@@ -123,9 +111,97 @@ async function loadPortal(event) {
       throw new Error(payload.message || t('invalidCode'));
     }
 
-    setState({ payload, error: '' });
+    setState({ payload, error: '', resultById: {}, errorById: {} });
   } catch (error) {
     setState({ payload: null, error: error.message || t('invalidCode') });
+  }
+}
+
+async function readQrWithCamera() {
+  if (!('BarcodeDetector' in window) || !navigator.mediaDevices?.getUserMedia) {
+    throw new Error(t('cameraUnavailable'));
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'camera-overlay';
+  overlay.innerHTML = '<div class="camera-box"><video autoplay muted playsinline></video><button type="button">×</button></div>';
+  document.body.append(overlay);
+
+  const video = overlay.querySelector('video');
+  const closeButton = overlay.querySelector('button');
+  const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+  const detector = new BarcodeDetector({ formats: ['qr_code'] });
+  let active = true;
+
+  function cleanup() {
+    active = false;
+    stream.getTracks().forEach((track) => track.stop());
+    overlay.remove();
+  }
+
+  closeButton.addEventListener('click', cleanup, { once: true });
+  video.srcObject = stream;
+  await video.play();
+
+  return new Promise((resolve, reject) => {
+    async function tick() {
+      if (!active) {
+        reject(new Error(t('cameraUnavailable')));
+        return;
+      }
+
+      try {
+        const codes = await detector.detect(video);
+        const qr = codes.find((code) => code.rawValue);
+
+        if (qr) {
+          cleanup();
+          resolve(qr.rawValue);
+          return;
+        }
+      } catch (error) {
+        cleanup();
+        reject(error);
+        return;
+      }
+
+      window.requestAnimationFrame(tick);
+    }
+
+    tick();
+  });
+}
+
+async function submitEventScan(eventId, rawPayload) {
+  const payload = rawPayload.trim();
+
+  if (!payload) {
+    setState({ errorById: { ...state.errorById, [eventId]: t('qrPayload') } });
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/event/check-ins?locale=${encodeURIComponent(state.locale)}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        code: state.code,
+        event_id: eventId,
+        user_qr_payload: payload
+      })
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || 'Scan failed.');
+    }
+
+    setState({
+      resultById: { ...state.resultById, [eventId]: result },
+      errorById: { ...state.errorById, [eventId]: '' }
+    });
+  } catch (error) {
+    setState({ errorById: { ...state.errorById, [eventId]: error.message } });
   }
 }
 
@@ -136,7 +212,7 @@ function headerTemplate() {
         <p class="eyebrow">LinkTwon</p>
         <h1>${escapeHtml(t('title'))}</h1>
       </div>
-      <button class="icon-button" type="button" data-action="toggle-locale" aria-label="${escapeHtml(t('language'))}">${escapeHtml(t('language'))}</button>
+      <button class="icon-button" type="button" data-action="toggle-locale">${escapeHtml(t('language'))}</button>
     </header>
   `;
 }
@@ -156,33 +232,44 @@ function loginTemplate() {
   `;
 }
 
-function qrActionsTemplate(item, id, code) {
+function scannerTemplate(eventItem) {
+  const result = state.resultById[eventItem.event_id];
+  const error = state.errorById[eventItem.event_id];
+
   return `
-    <div class="qr-actions">
-      <button type="button" data-action="download-png" data-id="${escapeHtml(id)}">${escapeHtml(t('downloadPng'))}</button>
-      <button type="button" data-action="print">${escapeHtml(t('printPdf'))}</button>
-      <button type="button" data-action="copy-code" data-code="${escapeHtml(code)}">${escapeHtml(t('copyCode'))}</button>
-    </div>
-    <details class="payload-details">
-      <summary>${escapeHtml(t('payload'))}</summary>
-      <code>${escapeHtml(item.qr_payload)}</code>
-    </details>
+    <section class="scan-panel">
+      <h3>${escapeHtml(t('scannerTitle'))}</h3>
+      <p>${escapeHtml(t('scannerHint'))}</p>
+      <button class="secondary-button" type="button" data-action="camera" data-event-id="${escapeHtml(eventItem.event_id)}">${escapeHtml(t('cameraScan'))}</button>
+      <form class="scan-form" data-event-id="${escapeHtml(eventItem.event_id)}">
+        <label>
+          <span>${escapeHtml(t('qrPayload'))}</span>
+          <textarea name="user_qr_payload" rows="3"></textarea>
+        </label>
+        <button class="primary-button" type="submit">${escapeHtml(t('confirm'))}</button>
+      </form>
+      ${error ? `<p class="error-message">${escapeHtml(error)}</p>` : ''}
+      ${
+        result
+          ? `<div class="scan-result"><strong>${escapeHtml(t('completed'))}</strong><dl><div><dt>${escapeHtml(t('user'))}</dt><dd>${escapeHtml(result.user.name)} (${escapeHtml(result.user.user_id)})</dd></div><div><dt>${escapeHtml(t('grantedPoints'))}</dt><dd>${escapeHtml(result.granted_points)}pt</dd></div></dl></div>`
+          : ''
+      }
+    </section>
   `;
 }
 
 function eventCardTemplate(eventItem) {
   return `
-    <article class="portal-card" data-qr-id="${escapeHtml(eventItem.event_id)}">
+    <article class="portal-card">
       <div class="card-main">
         <div class="card-heading">
-          <span class="status-pill">${escapeHtml(t('qrIssued'))}</span>
+          <span class="status-pill">${escapeHtml(t('scannerTitle'))}</span>
           <h2>${escapeHtml(eventItem.event_name)}</h2>
         </div>
         <dl class="meta-grid">
           <div><dt>${escapeHtml(t('eventDate'))}</dt><dd>${escapeHtml(formatDateTime(eventItem.event_datetime))}</dd></div>
           <div><dt>${escapeHtml(t('location'))}</dt><dd>${escapeHtml(eventItem.location)}</dd></div>
           <div><dt>${escapeHtml(t('points'))}</dt><dd>${escapeHtml(eventItem.grant_points)}pt</dd></div>
-          <div><dt>${escapeHtml(t('expiresAt'))}</dt><dd>${escapeHtml(formatDateTime(eventItem.check_in_expires_at))}</dd></div>
         </dl>
         <section class="text-block">
           <h3>${escapeHtml(t('description'))}</h3>
@@ -197,11 +284,7 @@ function eventCardTemplate(eventItem) {
           <p>${escapeHtml(eventItem.notes)}</p>
         </section>
       </div>
-      <aside class="qr-panel">
-        <img src="${escapeHtml(eventItem.qr_image)}" alt="${escapeHtml(eventItem.event_name)} QR" />
-        <strong>${escapeHtml(eventItem.check_in_code)}</strong>
-        ${qrActionsTemplate(eventItem, eventItem.event_id, eventItem.check_in_code)}
-      </aside>
+      ${scannerTemplate(eventItem)}
     </article>
   `;
 }
@@ -236,7 +319,7 @@ function render() {
   app.innerHTML = `${headerTemplate()}${loginTemplate()}${portalTemplate()}`;
 }
 
-app.addEventListener('click', (event) => {
+app.addEventListener('click', async (event) => {
   const target = event.target.closest('button');
 
   if (!target) {
@@ -251,35 +334,31 @@ app.addEventListener('click', (event) => {
     return;
   }
 
-  if (target.dataset.action === 'download-png') {
-    const container = target.closest('[data-qr-id]');
-    const image = container?.querySelector('.qr-panel img');
-    const id = target.dataset.id;
+  if (target.dataset.action === 'camera') {
+    const eventId = target.dataset.eventId;
 
-    if (image && id) {
-      downloadDataUrl(image.src, `linktown-event-${id}.png`);
+    try {
+      const rawPayload = await readQrWithCamera();
+      await submitEventScan(eventId, rawPayload);
+    } catch (error) {
+      setState({ errorById: { ...state.errorById, [eventId]: error.message } });
     }
-    return;
-  }
-
-  if (target.dataset.action === 'print') {
-    window.print();
-    return;
-  }
-
-  if (target.dataset.action === 'copy-code') {
-    copyText(target.dataset.code || '', target);
   }
 });
 
 app.addEventListener('submit', (event) => {
-  if (!event.target.classList.contains('access-form')) {
+  if (event.target.classList.contains('access-form')) {
+    const form = new FormData(event.target);
+    state.code = String(form.get('code') || '').trim();
+    loadPortal(event);
     return;
   }
 
-  const form = new FormData(event.target);
-  state.code = String(form.get('code') || '').trim();
-  loadPortal(event);
+  if (event.target.classList.contains('scan-form')) {
+    event.preventDefault();
+    const form = new FormData(event.target);
+    submitEventScan(event.target.dataset.eventId, String(form.get('user_qr_payload') || ''));
+  }
 });
 
 render();
