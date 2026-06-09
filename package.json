@@ -5,6 +5,7 @@
     "setup": "npm install --prefix backend && npm install --prefix frontend && npm install --prefix partner-portals",
     "db:report": "npm --prefix backend run db:report",
     "db:reset": "npm --prefix backend run db:reset",
+    "db:seed:demo": "npm --prefix backend run db:seed:demo",
     "dev": "concurrently -k -n backend,frontend,event-portal,store-portal -c blue,green,cyan,magenta \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\" \"npm --prefix partner-portals run dev:event\" \"npm --prefix partner-portals run dev:store\"",
     "dev:backend": "npm --prefix backend run dev",
     "dev:frontend": "npm --prefix frontend run dev",

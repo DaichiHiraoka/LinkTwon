@@ -5,6 +5,7 @@
   "scripts": {
     "db:report": "node scripts/dbReport.js",
     "db:reset": "node scripts/resetDb.js",
+    "db:seed:demo": "node scripts/seedDemoData.js",
     "test": "npm run test:smoke",
     "test:smoke": "node scripts/smokeTest.js",
     "start": "node server.js",
