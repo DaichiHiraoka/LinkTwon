@@ -140,6 +140,28 @@ function translate(key: TranslationKey, language: AppLanguage) {
   return translations[language][key];
 }
 
+const localizedContent = [
+  { ja: "地域清掃ボランティア", en: "Demo Community Cleanup" },
+  { ja: "見守りパトロール", en: "Demo Watch Patrol" },
+  { ja: "子ども食堂サポート", en: "Demo Food Support" },
+  { ja: "中央公園", en: "Demo Park" },
+  { ja: "駅前商店街", en: "Demo Station" },
+  { ja: "市民センター", en: "Demo Community Center" },
+  { ja: "まちのパン屋", en: "Demo Bakery" },
+  { ja: "地域マルシェ", en: "Demo Market" },
+  { ja: "コーヒー無料券", en: "Demo Coffee Coupon" },
+  { ja: "ケーキセット割引", en: "Demo Cake Coupon" },
+  { ja: "焼きたてパン引換券", en: "Demo Bread Coupon" },
+  { ja: "野菜セット引換券", en: "Demo Vegetable Coupon" },
+  { ja: "一般", en: "general" },
+  { ja: "ボランティア", en: "volunteer" },
+] as const;
+
+function localizeApiText(value: string, language: AppLanguage) {
+  const match = localizedContent.find((entry) => entry.ja === value || entry.en === value);
+  return match ? match[language] : value;
+}
+
 function normalizeLanguage(value: string | undefined | null): AppLanguage {
   return value === "en" ? "en" : "ja";
 }
@@ -205,14 +227,15 @@ function withEventDisplayDate<T extends EventItem>(event: T, displayDate: string
   return { ...event, date: displayDate };
 }
 
-function mapEvent(event: ApiEventItem, displayDate: string): DisplayEvent {
+function mapEvent(event: ApiEventItem, displayDate: string, language: AppLanguage): DisplayEvent {
   const parts = formatDateTimeParts(event.event_datetime, displayDate);
+  const location = event.location ? localizeApiText(event.location, language) : language === "en" ? "Not set" : "\u672a\u8a2d\u5b9a";
   return {
     id: String(event.event_id),
     date: parts.date,
-    title: event.event_name,
+    title: localizeApiText(event.event_name, language),
     points: event.grant_points,
-    location: event.location ?? "未設定",
+    location,
     time: parts.time,
     rawEventId: event.event_id,
     liked: toBoolean(event.liked),
@@ -220,29 +243,33 @@ function mapEvent(event: ApiEventItem, displayDate: string): DisplayEvent {
   };
 }
 
-function mapParticipation(participation: Participation, displayDate: string): DisplayEvent {
+function mapParticipation(participation: Participation, displayDate: string, language: AppLanguage): DisplayEvent {
   const parts = formatDateTimeParts(participation.event_datetime, displayDate);
+  const location = participation.location ? localizeApiText(participation.location, language) : language === "en" ? "Not set" : "\u672a\u8a2d\u5b9a";
   return {
     id: String(participation.event_id),
     date: parts.date,
-    title: participation.event_name,
+    title: localizeApiText(participation.event_name, language),
     points: participation.granted_points,
-    location: participation.location ?? "未設定",
+    location,
     time: parts.time,
     rawEventId: participation.event_id,
   };
 }
 
-function mapServices(services: ServiceItem[]): ProductCategory[] {
+function mapServices(services: ServiceItem[], language: AppLanguage): ProductCategory[] {
   const grouped = new Map<number, ProductCategory>();
 
   for (const service of services) {
+    const serviceName = localizeApiText(service.service_name, language);
+    const storeName = localizeApiText(service.store_name, language);
+    const storeAddress = service.store_address ? localizeApiText(service.store_address, language) : language === "en" ? "Local shopping district" : "\u5730\u57df\u5546\u5e97\u8857\u5468\u8fba";
     const product: ProductItem = {
       id: String(service.service_id),
-      name: service.service_name,
-      storeName: service.store_name,
-      storeAddress: service.store_address ?? "地域商店街周辺",
-      mapQuery: `${service.store_name} ${service.store_address ?? ""}`.trim(),
+      name: serviceName,
+      storeName,
+      storeAddress,
+      mapQuery: `${storeName} ${storeAddress}`.trim(),
       requiredPoints: service.required_points,
     };
     const existing = grouped.get(service.store_id);
@@ -254,12 +281,41 @@ function mapServices(services: ServiceItem[]): ProductCategory[] {
 
     grouped.set(service.store_id, {
       id: String(service.store_id),
-      name: service.store_name,
+      name: storeName,
       products: [product],
     });
   }
 
   return [...grouped.values()];
+}
+
+function localizeDisplayEvent(event: DisplayEvent, language: AppLanguage): DisplayEvent {
+  return {
+    ...event,
+    title: localizeApiText(event.title, language),
+    location: localizeApiText(event.location, language),
+  };
+}
+
+function localizeProduct(product: ProductItem, language: AppLanguage): ProductItem {
+  const storeName = localizeApiText(product.storeName, language);
+  const storeAddress = localizeApiText(product.storeAddress, language);
+
+  return {
+    ...product,
+    name: localizeApiText(product.name, language),
+    storeName,
+    storeAddress,
+    mapQuery: `${storeName} ${storeAddress}`.trim(),
+  };
+}
+
+function localizeProductCategories(categories: ProductCategory[], language: AppLanguage): ProductCategory[] {
+  return categories.map((category) => ({
+    ...category,
+    name: localizeApiText(category.name, language),
+    products: category.products.map((product) => localizeProduct(product, language)),
+  }));
 }
 
 function getErrorMessage(error: unknown) {
@@ -318,23 +374,29 @@ export function App() {
         getUserHistory(currentSession.user.user_id, currentSession.token),
       ]);
 
-      const mappedEvents = nextEvents.map((event) => mapEvent(event, eventDisplayDate));
+      const nextLanguage = normalizeLanguage(nextSettings.language);
+      const mappedEvents = nextEvents.map((event) => mapEvent(event, eventDisplayDate, nextLanguage));
       const mappedEventsById = new Map(mappedEvents.flatMap((event) => (event.rawEventId ? [[event.rawEventId, event] as const] : [])));
-      const mappedLikedEvents = nextLikedEvents.map((event) => mapEvent(event, eventDisplayDate));
+      const mappedLikedEvents = nextLikedEvents.map((event) => mapEvent(event, eventDisplayDate, nextLanguage));
       const mappedLikedEventsById = new Map(mappedLikedEvents.flatMap((event) => (event.rawEventId ? [[event.rawEventId, event] as const] : [])));
       const mappedParticipatedEvents = nextHistory.participations.map((participation) => {
-        return mappedEventsById.get(participation.event_id) ?? mappedLikedEventsById.get(participation.event_id) ?? mapParticipation(participation, eventDisplayDate);
+        return mappedEventsById.get(participation.event_id) ?? mappedLikedEventsById.get(participation.event_id) ?? mapParticipation(participation, eventDisplayDate, nextLanguage);
       });
+      const mappedProducts = nextServices.length > 0 ? mapServices(nextServices, nextLanguage) : localizeProductCategories(fallbackProductCategories, nextLanguage);
+      const mappedEventsByAnyId = new Map([...mappedEvents, ...mappedLikedEvents, ...mappedParticipatedEvents].flatMap((event) => (event.rawEventId ? [[event.rawEventId, event] as const] : [])));
+      const mappedProductsById = new Map(mappedProducts.flatMap((category) => category.products.map((product) => [product.id, product] as const)));
       setProfile(nextProfile);
       setSettings(nextSettings);
-      setAppLanguage(normalizeLanguage(nextSettings.language));
+      setAppLanguage(nextLanguage);
       setAccountEmail(nextProfile.email);
-      setRecommendedEvents(mappedEvents.length > 0 ? mappedEvents : fallbackEvents.map((event) => withEventDisplayDate(event, eventDisplayDate)));
+      setRecommendedEvents(mappedEvents.length > 0 ? mappedEvents : fallbackEvents.map((event) => localizeDisplayEvent(withEventDisplayDate(event, eventDisplayDate), nextLanguage)));
       setLikedEvents(mappedLikedEvents);
       setParticipatedEvents(mappedParticipatedEvents);
-      setScheduledEvent(mappedParticipatedEvents[0] ?? mappedEvents[0] ?? withEventDisplayDate(fallbackScheduledEvent, eventDisplayDate));
+      setScheduledEvent(mappedParticipatedEvents[0] ?? mappedEvents[0] ?? localizeDisplayEvent(withEventDisplayDate(fallbackScheduledEvent, eventDisplayDate), nextLanguage));
       setParticipatedEventIds(new Set(nextHistory.participations.map((participation) => participation.event_id)));
-      setProductCategories(nextServices.length > 0 ? mapServices(nextServices) : fallbackProductCategories);
+      setProductCategories(mappedProducts);
+      setSelectedEvent((current) => (current?.rawEventId ? mappedEventsByAnyId.get(current.rawEventId) ?? localizeDisplayEvent(current, nextLanguage) : current ? localizeDisplayEvent(current, nextLanguage) : current));
+      setSelectedProduct((current) => (current ? mappedProductsById.get(current.id) ?? localizeProduct(current, nextLanguage) : current));
     } catch (error) {
       if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
         setSession(null);
@@ -374,9 +436,20 @@ export function App() {
     setSelectedEvent(event);
   }
 
+  function applyLanguageToDisplayData(nextLanguage: AppLanguage) {
+    setRecommendedEvents((current) => current.map((event) => localizeDisplayEvent(event, nextLanguage)));
+    setLikedEvents((current) => current.map((event) => localizeDisplayEvent(event, nextLanguage)));
+    setParticipatedEvents((current) => current.map((event) => localizeDisplayEvent(event, nextLanguage)));
+    setScheduledEvent((current) => localizeDisplayEvent(current, nextLanguage));
+    setSelectedEvent((current) => (current ? localizeDisplayEvent(current, nextLanguage) : current));
+    setProductCategories((current) => localizeProductCategories(current, nextLanguage));
+    setSelectedProduct((current) => (current ? localizeProduct(current, nextLanguage) : current));
+  }
+
   async function handleToggleLanguage() {
     const nextLanguage: AppLanguage = appLanguage === "ja" ? "en" : "ja";
     setAppLanguage(nextLanguage);
+    applyLanguageToDisplayData(nextLanguage);
 
     if (!session || !profile || !settings) {
       return;
@@ -395,14 +468,17 @@ export function App() {
         },
         session.token,
       );
+      await loadApplicationData(session);
     } catch (error) {
       console.error(error);
     }
   }
 
   function handleSettingsChange(nextSettings: UserSettings) {
+    const nextLanguage = normalizeLanguage(nextSettings.language);
     setSettings(nextSettings);
-    setAppLanguage(normalizeLanguage(nextSettings.language));
+    setAppLanguage(nextLanguage);
+    applyLanguageToDisplayData(nextLanguage);
   }
 
   async function handleApplyToEvent(event: DisplayEvent) {
@@ -533,7 +609,7 @@ export function App() {
 
   const displayUser = {
     displayName: profile?.name || session?.user.name || fallbackUser.accountType,
-    accountType: profile?.user_type || fallbackUser.accountType,
+    accountType: profile?.user_type ? localizeApiText(profile.user_type, appLanguage) : fallbackUser.accountType,
     userId: profile ? String(profile.user_id) : fallbackUser.userId,
     email: profile?.email || fallbackUser.email,
     homePoints: profile?.points ?? fallbackUser.homePoints,
