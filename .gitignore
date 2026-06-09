@@ -151,6 +151,9 @@ tools/serve-external-doc-share.js
 doc-share.*.log
 ngrok-doc-share.*.log
 
+# Local private notes
+local-notes/
+
 # Codex local attachments
 .codex-remote-attachments/
 
