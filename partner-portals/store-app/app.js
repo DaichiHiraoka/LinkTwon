@@ -1,72 +1,49 @@
 const state = {
-  role: localStorage.getItem('partner-role') || 'event',
-  locale: localStorage.getItem('partner-locale') || 'ja',
-  code: localStorage.getItem('partner-code') || 'event-demo',
+  locale: localStorage.getItem('store-portal-locale') || 'ja',
+  code: localStorage.getItem('store-portal-code') || 'store-demo',
   payload: null,
   error: ''
 };
 
 const ui = {
   ja: {
-    title: 'LinkTwon パートナーポータル',
-    eventPortal: 'イベント主催者',
-    storePortal: '商店',
+    title: '商店ポータル',
     language: 'EN',
-    accessCode: 'アクセスコード',
-    signIn: '表示',
-    signOut: '切替',
+    accessCode: '商店アクセスコード',
+    signIn: 'QRを表示',
     qrIssued: '管理者発行済みQR',
     downloadPng: 'PNG保存',
     printPdf: 'PDF保存',
     copyCode: 'コードコピー',
     copied: 'コピーしました',
-    organizer: '主催者',
     store: '店舗',
     contact: '連絡先',
     address: '住所',
-    eventDate: '開催日時',
-    location: '集合場所',
-    points: '付与ポイント',
     requiredPoints: '必要ポイント',
-    activity: '活動内容',
-    notes: '注意事項',
     description: '説明',
     category: 'カテゴリ',
-    expiresAt: '有効期限',
     openMap: 'Google Map',
-    invalidCode: 'アクセスコードを確認してください。',
-    notTranslated: '原文保持',
+    invalidCode: '商店アクセスコードを確認してください。',
     payload: 'QR内容'
   },
   en: {
-    title: 'LinkTwon Partner Portal',
-    eventPortal: 'Event Organizer',
-    storePortal: 'Store',
+    title: 'Store Portal',
     language: 'JA',
-    accessCode: 'Access code',
-    signIn: 'Open',
-    signOut: 'Switch',
+    accessCode: 'Store access code',
+    signIn: 'Open QR',
     qrIssued: 'Admin-issued QR',
     downloadPng: 'Save PNG',
     printPdf: 'Save PDF',
     copyCode: 'Copy code',
     copied: 'Copied',
-    organizer: 'Organizer',
     store: 'Store',
     contact: 'Contact',
     address: 'Address',
-    eventDate: 'Date',
-    location: 'Meeting point',
-    points: 'Grant points',
     requiredPoints: 'Required points',
-    activity: 'Activity',
-    notes: 'Notes',
     description: 'Description',
     category: 'Category',
-    expiresAt: 'Expires',
     openMap: 'Google Map',
-    invalidCode: 'Check the access code.',
-    notTranslated: 'Original',
+    invalidCode: 'Check the store access code.',
     payload: 'QR payload'
   }
 };
@@ -79,9 +56,8 @@ function t(key) {
 
 function setState(nextState) {
   Object.assign(state, nextState);
-  localStorage.setItem('partner-role', state.role);
-  localStorage.setItem('partner-locale', state.locale);
-  localStorage.setItem('partner-code', state.code);
+  localStorage.setItem('store-portal-locale', state.locale);
+  localStorage.setItem('store-portal-code', state.code);
   render();
 }
 
@@ -92,22 +68,6 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
-}
-
-function formatDateTime(value) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat(state.locale === 'en' ? 'en-US' : 'ja-JP', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(date);
 }
 
 function downloadDataUrl(dataUrl, fileName) {
@@ -136,7 +96,7 @@ async function loadPortal(event) {
   state.error = '';
 
   try {
-    const response = await fetch(`/api/bootstrap?role=${encodeURIComponent(state.role)}&code=${encodeURIComponent(state.code)}&locale=${encodeURIComponent(state.locale)}`);
+    const response = await fetch(`/api/bootstrap?code=${encodeURIComponent(state.code)}&locale=${encodeURIComponent(state.locale)}`);
     const payload = await response.json();
 
     if (!response.ok) {
@@ -147,11 +107,6 @@ async function loadPortal(event) {
   } catch (error) {
     setState({ payload: null, error: error.message || t('invalidCode') });
   }
-}
-
-function roleButton(role, label) {
-  const active = state.role === role ? ' segmented__button--active' : '';
-  return `<button class="segmented__button${active}" type="button" data-role="${role}">${escapeHtml(label)}</button>`;
 }
 
 function headerTemplate() {
@@ -168,11 +123,7 @@ function headerTemplate() {
 
 function loginTemplate() {
   return `
-    <section class="toolbar">
-      <div class="segmented" role="group" aria-label="portal type">
-        ${roleButton('event', t('eventPortal'))}
-        ${roleButton('store', t('storePortal'))}
-      </div>
+    <section class="toolbar toolbar--single">
       <form class="access-form">
         <label>
           <span>${escapeHtml(t('accessCode'))}</span>
@@ -196,42 +147,6 @@ function qrActionsTemplate(item, id, code) {
       <summary>${escapeHtml(t('payload'))}</summary>
       <code>${escapeHtml(item.qr_payload)}</code>
     </details>
-  `;
-}
-
-function eventCardTemplate(eventItem) {
-  return `
-    <article class="portal-card" data-qr-id="${escapeHtml(eventItem.event_id)}">
-      <div class="card-main">
-        <div class="card-heading">
-          <span class="status-pill">${escapeHtml(t('qrIssued'))}</span>
-          <h2>${escapeHtml(eventItem.event_name)}</h2>
-        </div>
-        <dl class="meta-grid">
-          <div><dt>${escapeHtml(t('eventDate'))}</dt><dd>${escapeHtml(formatDateTime(eventItem.event_datetime))}</dd></div>
-          <div><dt>${escapeHtml(t('location'))}</dt><dd>${escapeHtml(eventItem.location)}</dd></div>
-          <div><dt>${escapeHtml(t('points'))}</dt><dd>${escapeHtml(eventItem.grant_points)}pt</dd></div>
-          <div><dt>${escapeHtml(t('expiresAt'))}</dt><dd>${escapeHtml(formatDateTime(eventItem.check_in_expires_at))}</dd></div>
-        </dl>
-        <section class="text-block">
-          <h3>${escapeHtml(t('description'))}</h3>
-          <p>${escapeHtml(eventItem.description)}</p>
-        </section>
-        <section class="text-block">
-          <h3>${escapeHtml(t('activity'))}</h3>
-          <p>${escapeHtml(eventItem.activity)}</p>
-        </section>
-        <section class="text-block">
-          <h3>${escapeHtml(t('notes'))}</h3>
-          <p>${escapeHtml(eventItem.notes)}</p>
-        </section>
-      </div>
-      <aside class="qr-panel">
-        <img src="${escapeHtml(eventItem.qr_image)}" alt="${escapeHtml(eventItem.event_name)} QR" />
-        <strong>${escapeHtml(eventItem.check_in_code)}</strong>
-        ${qrActionsTemplate(eventItem, eventItem.event_id, eventItem.check_in_code)}
-      </aside>
-    </article>
   `;
 }
 
@@ -263,18 +178,6 @@ function serviceCardTemplate(service) {
 
 function accountTemplate(payload) {
   const account = payload.account;
-
-  if (payload.role === 'event') {
-    return `
-      <section class="account-band">
-        <dl>
-          <div><dt>${escapeHtml(t('organizer'))}</dt><dd>${escapeHtml(account.name)}</dd></div>
-          <div><dt>${escapeHtml(t('contact'))}</dt><dd>${escapeHtml(account.email)}</dd></div>
-        </dl>
-      </section>
-    `;
-  }
-
   const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(account.map_query)}`;
   return `
     <section class="account-band">
@@ -289,50 +192,32 @@ function accountTemplate(payload) {
 }
 
 function portalTemplate() {
-  const payload = state.payload;
-
-  if (!payload) {
+  if (!state.payload) {
     return '';
   }
 
-  const items = payload.role === 'event'
-    ? payload.events.map(eventCardTemplate).join('')
-    : payload.services.map(serviceCardTemplate).join('');
-
   return `
-    ${accountTemplate(payload)}
+    ${accountTemplate(state.payload)}
     <section class="portal-list">
-      ${items}
+      ${state.payload.services.map(serviceCardTemplate).join('')}
     </section>
   `;
 }
 
 function render() {
   document.documentElement.lang = state.locale;
-  app.innerHTML = `
-    ${headerTemplate()}
-    ${loginTemplate()}
-    ${portalTemplate()}
-  `;
+  app.innerHTML = `${headerTemplate()}${loginTemplate()}${portalTemplate()}`;
 }
 
 app.addEventListener('click', (event) => {
-  const target = event.target.closest('button, a');
+  const target = event.target.closest('button');
 
   if (!target) {
     return;
   }
 
-  if (target.dataset.role) {
-    const nextCode = target.dataset.role === 'event' ? 'event-demo' : 'store-demo';
-    setState({ role: target.dataset.role, code: nextCode, payload: null, error: '' });
-    loadPortal();
-    return;
-  }
-
   if (target.dataset.action === 'toggle-locale') {
-    const nextLocale = state.locale === 'ja' ? 'en' : 'ja';
-    setState({ locale: nextLocale });
+    setState({ locale: state.locale === 'ja' ? 'en' : 'ja' });
     if (state.payload) {
       loadPortal();
     }
@@ -345,7 +230,7 @@ app.addEventListener('click', (event) => {
     const id = target.dataset.id;
 
     if (image && id) {
-      downloadDataUrl(image.src, `linktown-${state.role}-${id}.png`);
+      downloadDataUrl(image.src, `linktown-store-${id}.png`);
     }
     return;
   }

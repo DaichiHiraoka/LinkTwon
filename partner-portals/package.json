@@ -5,11 +5,16 @@
   "description": "Event organizer and store QR portals for LinkTwon.",
   "main": "server.js",
   "scripts": {
-    "dev": "node server.js",
-    "start": "node server.js",
+    "dev:event": "node scripts/startPortal.js event 5181",
+    "dev:store": "node scripts/startPortal.js store 5182",
+    "dev": "concurrently -k -n event,store -c cyan,magenta \"npm run dev:event\" \"npm run dev:store\"",
+    "start:event": "node scripts/startPortal.js event 5181",
+    "start:store": "node scripts/startPortal.js store 5182",
+    "start": "npm run dev",
     "test": "node test/smoke-test.js"
   },
   "dependencies": {
+    "concurrently": "^9.2.1",
     "qrcode": "^1.5.4"
   }
 }

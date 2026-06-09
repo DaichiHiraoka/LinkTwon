@@ -9,9 +9,10 @@ const {
   refreshTranslationCache
 } = require('./lib/translationCache');
 
-const PORT = Number(process.env.PORT || 5180);
+const APP_ROLE = process.env.PARTNER_APP_ROLE === 'store' ? 'store' : 'event';
+const PORT = Number(process.env.PORT || (APP_ROLE === 'store' ? 5182 : 5181));
 const ROOT_DIR = __dirname;
-const PUBLIC_DIR = path.join(ROOT_DIR, 'public');
+const PUBLIC_DIR = path.join(ROOT_DIR, APP_ROLE === 'store' ? 'store-app' : 'event-organizer-app');
 const DATA_PATH = path.join(ROOT_DIR, 'data', 'partner-data.json');
 const CACHE_PATH = path.join(ROOT_DIR, 'data', 'translation-cache.json');
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -135,11 +136,10 @@ async function buildStorePayload(code, locale, options = {}) {
 
 async function handleApi(request, response, requestUrl) {
   if (request.method === 'GET' && requestUrl.pathname === '/api/bootstrap') {
-    const role = requestUrl.searchParams.get('role');
     const code = requestUrl.searchParams.get('code') || '';
     const locale = requestUrl.searchParams.get('locale') === 'en' ? 'en' : 'ja';
 
-    if (role === 'event') {
+    if (APP_ROLE === 'event') {
       const payload = await buildEventPayload(code, locale);
 
       if (!payload) {
@@ -149,17 +149,13 @@ async function handleApi(request, response, requestUrl) {
       return sendJson(response, 200, payload);
     }
 
-    if (role === 'store') {
-      const payload = await buildStorePayload(code, locale);
+    const payload = await buildStorePayload(code, locale);
 
-      if (!payload) {
-        return sendError(response, 401, 'Invalid store access code.');
-      }
-
-      return sendJson(response, 200, payload);
+    if (!payload) {
+      return sendError(response, 401, 'Invalid store access code.');
     }
 
-    return sendError(response, 400, 'Invalid role.');
+    return sendJson(response, 200, payload);
   }
 
   if (request.method === 'POST' && requestUrl.pathname === '/api/translations/refresh') {
@@ -184,9 +180,10 @@ async function handleApi(request, response, requestUrl) {
 
 async function serveStatic(request, response, requestUrl) {
   const safePath = requestUrl.pathname === '/' ? '/index.html' : requestUrl.pathname;
-  const resolvedPath = path.resolve(PUBLIC_DIR, `.${decodeURIComponent(safePath)}`);
+  const staticRoot = safePath === '/shared.css' ? ROOT_DIR : PUBLIC_DIR;
+  const resolvedPath = path.resolve(staticRoot, `.${decodeURIComponent(safePath)}`);
 
-  if (resolvedPath !== PUBLIC_DIR && !resolvedPath.startsWith(`${PUBLIC_DIR}${path.sep}`)) {
+  if (resolvedPath !== staticRoot && !resolvedPath.startsWith(`${staticRoot}${path.sep}`)) {
     return sendError(response, 403, 'Forbidden.');
   }
 
@@ -247,7 +244,7 @@ async function startServer() {
   }, DAY_MS).unref();
 
   http.createServer(handleRequest).listen(PORT, () => {
-    console.log(`LinkTwon partner portals running at http://localhost:${PORT}/`);
+    console.log(`LinkTwon ${APP_ROLE} portal running at http://localhost:${PORT}/`);
   });
 }
 

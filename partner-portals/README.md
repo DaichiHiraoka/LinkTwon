@@ -6,10 +6,20 @@
 
 ```powershell
 npm --prefix partner-portals install
-npm --prefix partner-portals run dev
+npm run dev
 ```
 
-既定のURLは `http://localhost:5180/`。
+ルートの `npm run dev` で以下を同時起動する。
+
+- イベント主催者アプリ: `http://localhost:5181/`
+- 商店アプリ: `http://localhost:5182/`
+
+個別起動もできる。
+
+```powershell
+npm --prefix partner-portals run dev:event
+npm --prefix partner-portals run dev:store
+```
 
 ## デモ用アクセスコード
 
@@ -18,8 +28,8 @@ npm --prefix partner-portals run dev
 
 ## 実装範囲
 
-- イベント主催者ログイン相当のアクセスコード入力
-- 商店ログイン相当のアクセスコード入力
+- イベント主催者アプリでのアクセスコード入力
+- 商店アプリでのアクセスコード入力
 - 管理者発行済みQRの画面表示
 - QR PNG保存
 - ブラウザ印刷によるPDF保存
@@ -31,7 +41,9 @@ npm --prefix partner-portals run dev
 - `server.js`: 専用画面配信、QR画像生成、翻訳キャッシュ更新API
 - `lib/translationCache.js`: 翻訳対象抽出、翻訳API呼び出し、キャッシュ保存、キャッシュ参照
 - `lib/qr.js`: QR PNG生成
-- `public/`: イベント主催者側・商店側の画面
+- `event-organizer-app/`: イベント主催者側の画面
+- `store-app/`: 商店側の画面
+- `shared.css`: 2つのアプリで共有する見た目
 - `data/partner-data.json`: 管理者発行済みQRを含むデモデータ
 - `data/translation-cache.json`: 翻訳キャッシュ保存先。実行時生成のため `.gitignore` 対象
 - `data/translation-cache.example.json`: キャッシュ構造の例
@@ -64,7 +76,7 @@ npm --prefix partner-portals run dev
 ## 手動更新API
 
 ```powershell
-Invoke-RestMethod -Method Post http://localhost:5180/api/translations/refresh
+Invoke-RestMethod -Method Post http://localhost:5181/api/translations/refresh
 ```
 
 `PARTNER_REFRESH_KEY` を設定した場合は、`x-refresh-key` ヘッダーに同じ値を付けたリクエストのみ受け付ける。

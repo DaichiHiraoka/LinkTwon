@@ -148,7 +148,9 @@ translation_status: current | stale | failed
 - `partner-portals/server.js`: 専用画面配信、QR画像生成、翻訳キャッシュ更新API
 - `partner-portals/lib/translationCache.js`: 翻訳対象抽出、翻訳API呼び出し、キャッシュ保存、キャッシュ参照
 - `partner-portals/lib/qr.js`: QR PNG生成
-- `partner-portals/public/`: イベント主催者側・商店側の画面
+- `partner-portals/event-organizer-app/`: イベント主催者側の画面。既定ポートは `5181`
+- `partner-portals/store-app/`: 商店側の画面。既定ポートは `5182`
+- `partner-portals/shared.css`: 2つのアプリの共通スタイル
 - `partner-portals/data/partner-data.json`: 管理者発行済みQRを含むデモデータ
 - `partner-portals/data/translation-cache.json`: 翻訳キャッシュ保存先
 

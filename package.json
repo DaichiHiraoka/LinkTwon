@@ -5,9 +5,11 @@
     "setup": "npm install --prefix backend && npm install --prefix frontend && npm install --prefix partner-portals",
     "db:report": "npm --prefix backend run db:report",
     "db:reset": "npm --prefix backend run db:reset",
-    "dev": "concurrently -k -n backend,frontend,partners -c blue,green,magenta \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\" \"npm --prefix partner-portals run dev\"",
+    "dev": "concurrently -k -n backend,frontend,event-portal,store-portal -c blue,green,cyan,magenta \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\" \"npm --prefix partner-portals run dev:event\" \"npm --prefix partner-portals run dev:store\"",
     "dev:backend": "npm --prefix backend run dev",
     "dev:frontend": "npm --prefix frontend run dev",
+    "dev:event-portal": "npm --prefix partner-portals run dev:event",
+    "dev:store-portal": "npm --prefix partner-portals run dev:store",
     "dev:partners": "npm --prefix partner-portals run dev",
     "test": "npm --prefix backend run test:smoke && npm --prefix frontend run build && npm --prefix partner-portals run test"
   },
