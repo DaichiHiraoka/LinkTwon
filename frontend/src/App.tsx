@@ -730,7 +730,7 @@ function HomeScreen({
         <EventCard event={scheduledEvent} compact onSelect={onEventSelect} />
       </section>
       <section className="section">
-        <SectionHeading>あなたにおすすめのイベント</SectionHeading>
+        <SectionHeading>おすすめのイベント</SectionHeading>
         <div className="event-rail">
           {events.map((event) => (
             <EventCard key={event.id} event={event} compact onSelect={onEventSelect} />
