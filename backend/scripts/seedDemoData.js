@@ -87,14 +87,24 @@ async function ensureAdmin() {
   );
 }
 
+async function seedDemoData() {
+  const userId = await ensureDemoUser();
+  await ensureAdmin();
+
+  return {
+    userId,
+    demoEmail,
+    adminId
+  };
+}
+
 async function main() {
   try {
-    const userId = await ensureDemoUser();
-    await ensureAdmin();
+    const result = await seedDemoData();
     console.log('Demo data created or updated.');
-    console.log(`User: ${demoEmail}`);
-    console.log(`User ID: ${userId}`);
-    console.log(`Admin ID: ${adminId}`);
+    console.log(`User: ${result.demoEmail}`);
+    console.log(`User ID: ${result.userId}`);
+    console.log(`Admin ID: ${result.adminId}`);
   } catch (error) {
     console.error('Failed to seed demo data.');
     console.error(error);
@@ -106,4 +116,10 @@ async function main() {
   }
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  seedDemoData
+};

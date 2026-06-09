@@ -1,6 +1,7 @@
 require('./config/loadEnv');
 const app = require('./app');
 const pool = require('./config/db');
+const { seedDemoData } = require('./scripts/seedDemoData');
 
 const PORT = Number(process.env.PORT || 3000);
 
@@ -19,6 +20,12 @@ function getDbClientLabel() {
 async function startServer() {
   try {
     await pool.query('SELECT 1');
+
+    if (process.env.AUTO_SEED_DEMO_DATA === 'true') {
+      const result = await seedDemoData();
+      console.log(`Demo data ready for ${result.demoEmail}`);
+    }
+
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
       console.log(`DB client: ${getDbClientLabel()}`);
