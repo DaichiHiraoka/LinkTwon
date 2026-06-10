@@ -19,15 +19,36 @@ function normalizeOrigin(origin) {
   }
 }
 
+function compileOriginPattern(pattern) {
+  try {
+    return new RegExp(pattern);
+  } catch (error) {
+    console.warn(`Ignoring invalid FRONTEND_ORIGIN_PATTERNS entry: ${pattern}`);
+    return null;
+  }
+}
+
 const allowedOrigins = (process.env.FRONTEND_ORIGIN || '')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean)
   .map(normalizeOrigin);
 
+const allowedOriginPatterns = (process.env.FRONTEND_ORIGIN_PATTERNS || '')
+  .split(',')
+  .map((pattern) => pattern.trim())
+  .filter(Boolean)
+  .map(compileOriginPattern)
+  .filter(Boolean);
+
+function isAllowedOrigin(origin) {
+  const normalizedOrigin = normalizeOrigin(origin);
+  return allowedOrigins.includes(normalizedOrigin) || allowedOriginPatterns.some((pattern) => pattern.test(normalizedOrigin));
+}
+
 const corsOptions = {
   origin(origin, callback) {
-    if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(normalizeOrigin(origin))) {
+    if (!origin || (allowedOrigins.length === 0 && allowedOriginPatterns.length === 0) || isAllowedOrigin(origin)) {
       callback(null, true);
       return;
     }
@@ -43,6 +64,10 @@ app.use(express.json());
 
 app.get('/', (req, res) => {
   res.json({ message: 'Link Town Backend API is running.' });
+});
+
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok' });
 });
 
 app.use('/auth', authRoutes);

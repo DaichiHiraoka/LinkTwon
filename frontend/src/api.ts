@@ -23,7 +23,53 @@ import type {
   UserSettings,
 } from "./types";
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+function isLoopbackHost(hostname: string) {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
+type ApiBaseUrlConfig = {
+  baseUrl: string;
+  configurationError?: string;
+};
+
+function getApiBaseUrl(): ApiBaseUrlConfig {
+  const configuredBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+
+  if (!configuredBaseUrl) {
+    if (!import.meta.env.DEV && !isLoopbackHost(window.location.hostname)) {
+      return {
+        baseUrl: "",
+        configurationError:
+          "公開環境のAPI URLが設定されていません。フロントエンドの環境変数 VITE_API_BASE_URL にRenderのBackend URLを設定してください。",
+      };
+    }
+
+    return { baseUrl: "" };
+  }
+
+  try {
+    const url = new URL(configuredBaseUrl);
+    if (isLoopbackHost(url.hostname) && !isLoopbackHost(window.location.hostname)) {
+      if (import.meta.env.DEV) {
+        return { baseUrl: "" };
+      }
+
+      return {
+        baseUrl: "",
+        configurationError:
+          "公開環境のAPI URLがlocalhostを指しています。VITE_API_BASE_URLをRenderのBackend URLに変更して再デプロイしてください。",
+      };
+    }
+  } catch {
+    return { baseUrl: configuredBaseUrl };
+  }
+
+  return { baseUrl: configuredBaseUrl };
+}
+
+const API_BASE_URL_CONFIG = getApiBaseUrl();
+const API_BASE_URL = API_BASE_URL_CONFIG.baseUrl;
+const NETWORK_RETRY_DELAYS_MS = [1200, 3000, 6000];
 
 export class ApiError extends Error {
   status: number;
@@ -35,7 +81,36 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
+async function wait(ms: number) {
+  await new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function fetchWithNetworkRetry(url: string, init: RequestInit, retryOnNetworkError: boolean) {
+  const maxAttempts = retryOnNetworkError ? NETWORK_RETRY_DELAYS_MS.length + 1 : 1;
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      return await fetch(url, init);
+    } catch (error) {
+      lastError = error;
+
+      if (attempt >= maxAttempts - 1) {
+        break;
+      }
+
+      await wait(NETWORK_RETRY_DELAYS_MS[attempt]);
+    }
+  }
+
+  throw lastError;
+}
+
+async function request<T>(path: string, init: RequestInit = {}, token?: string, options: { retryOnNetworkError?: boolean } = {}): Promise<T> {
+  if (API_BASE_URL_CONFIG.configurationError) {
+    throw new ApiError(0, API_BASE_URL_CONFIG.configurationError);
+  }
+
   const headers = new Headers(init.headers);
 
   if (init.body && !headers.has("Content-Type")) {
@@ -46,10 +121,14 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string):
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers,
-  });
+  const response = await fetchWithNetworkRetry(
+    `${API_BASE_URL}${path}`,
+    {
+      ...init,
+      headers,
+    },
+    options.retryOnNetworkError === true,
+  );
 
   const isJson = response.headers.get("content-type")?.includes("application/json");
   const payload = isJson ? await response.json() : null;
@@ -66,17 +145,27 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string):
 }
 
 export function login(email: string, password: string) {
-  return request<AuthResponse>("/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ email, password }),
-  });
+  return request<AuthResponse>(
+    "/auth/login",
+    {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    },
+    undefined,
+    { retryOnNetworkError: true },
+  );
 }
 
 export function adminLogin(adminId: string, password: string) {
-  return request<AdminAuthResponse>("/auth/admin/login", {
-    method: "POST",
-    body: JSON.stringify({ admin_id: adminId, password }),
-  });
+  return request<AdminAuthResponse>(
+    "/auth/admin/login",
+    {
+      method: "POST",
+      body: JSON.stringify({ admin_id: adminId, password }),
+    },
+    undefined,
+    { retryOnNetworkError: true },
+  );
 }
 
 export function register(payload: {

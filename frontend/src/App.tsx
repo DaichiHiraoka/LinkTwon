@@ -600,6 +600,10 @@ function useSwipeDownDismiss<T extends HTMLElement>(onClose: () => void) {
 
 function getErrorMessage(error: unknown) {
   if (error instanceof ApiError || error instanceof Error) {
+    if (error instanceof TypeError && error.message === "Failed to fetch") {
+      return "APIサーバーに接続できません。しばらく待って再試行するか、公開URLとAPI URLの設定を確認してください。";
+    }
+
     return error.message;
   }
 
