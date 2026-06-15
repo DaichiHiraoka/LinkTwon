@@ -1096,7 +1096,11 @@ svg {
 }
 
 .event-detail__like[aria-pressed="true"] {
-  color: var(--green);
+  color: #ffab00;
+}
+
+.event-detail__like[aria-pressed="true"] svg {
+  fill: #ffab00;
 }
 
 .event-detail__like small {
