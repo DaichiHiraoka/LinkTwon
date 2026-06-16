@@ -65,6 +65,7 @@ export type EventItem = {
   event_datetime: string;
   location: string | null;
   grant_points: number;
+  image_url?: string | null;
   status?: "active" | "paused";
   liked?: boolean | number;
   like_count?: number;
@@ -80,6 +81,7 @@ export type Participation = {
   event_name: string;
   event_datetime: string;
   location: string | null;
+  image_url?: string | null;
 };
 
 export type ServiceItem = {
@@ -89,6 +91,7 @@ export type ServiceItem = {
   store_id: number;
   store_name: string;
   store_address?: string | null;
+  image_url?: string | null;
   status?: "active" | "paused";
   favorited?: boolean | number;
 };

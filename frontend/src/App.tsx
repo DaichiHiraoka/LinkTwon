@@ -53,6 +53,8 @@ import {
 import type { AuthResponse, EventItem as ApiEventItem, Participation, ServiceItem, UserProfile, UserSettings } from "./types";
 
 const SESSION_STORAGE_KEY = "link-town-session";
+const DUMMY_EVENT_IMAGE_URL = "/dummy-event-image.svg";
+const DUMMY_PRODUCT_IMAGE_URL = "/dummy-product-image.svg";
 
 type AppLanguage = "ja" | "en";
 
@@ -248,6 +250,7 @@ function mapEvent(event: ApiEventItem, displayDate: string, language: AppLanguag
     points: event.grant_points,
     location,
     time: parts.time,
+    imageUrl: event.image_url || DUMMY_EVENT_IMAGE_URL,
     rawEventId: event.event_id,
     liked: toBoolean(event.liked),
     likeCount: event.like_count,
@@ -264,6 +267,7 @@ function mapParticipation(participation: Participation, displayDate: string, lan
     points: participation.granted_points,
     location,
     time: parts.time,
+    imageUrl: participation.image_url || DUMMY_EVENT_IMAGE_URL,
     rawEventId: participation.event_id,
   };
 }
@@ -282,6 +286,7 @@ function mapServices(services: ServiceItem[], language: AppLanguage): ProductCat
       storeAddress,
       mapQuery: `${storeName} ${storeAddress}`.trim(),
       requiredPoints: service.required_points,
+      imageUrl: service.image_url || DUMMY_PRODUCT_IMAGE_URL,
     };
     const existing = grouped.get(service.store_id);
 
@@ -1208,7 +1213,9 @@ function WalletScreen({
               <div className="product-rail">
                 {category.products.map((product) => (
                   <button className="product-card product-card--button" type="button" key={product.id} onClick={() => onProductSelect(product)}>
-                    <div />
+                    <div>
+                      <img src={product.imageUrl || DUMMY_PRODUCT_IMAGE_URL} alt={`${product.name}の画像`} loading="lazy" />
+                    </div>
                     <span>{product.name}</span>
                     <small>{product.storeName}</small>
                   </button>
@@ -1521,6 +1528,7 @@ function EventDetailScreen({
   onClose: () => void;
 }) {
   const swipeDismiss = useSwipeDownDismiss<HTMLElement>(onClose);
+  const imageUrl = event.imageUrl || DUMMY_EVENT_IMAGE_URL;
 
   return (
     <div className="event-detail-modal" role="presentation" onClick={onClose}>
@@ -1536,7 +1544,9 @@ function EventDetailScreen({
       >
         <Header language={language} onLanguageToggle={onLanguageToggle} />
         <p className="event-detail__date">{event.date}</p>
-        <div className="event-detail__photo">写真</div>
+        <div className="event-detail__photo">
+          <img src={imageUrl} alt={`${event.title}の画像`} loading="lazy" />
+        </div>
         <article className="event-detail__body">
           <h1>{event.title}</h1>
           <p className="event-detail__meta">活動時間：{event.time}　　集合場所：{event.location}　　△△係前</p>
@@ -1592,6 +1602,8 @@ function EventCard({
   compact?: boolean;
   onSelect?: (event: DisplayEvent) => void;
 }) {
+  const imageUrl = event.imageUrl || DUMMY_EVENT_IMAGE_URL;
+
   function handleKeyDown(keyboardEvent: KeyboardEvent<HTMLElement>) {
     if (!onSelect) {
       return;
@@ -1612,7 +1624,9 @@ function EventCard({
       onKeyDown={handleKeyDown}
     >
       <p className="event-card__date">{event.date}</p>
-      <div className="event-card__image" />
+      <div className="event-card__image">
+        <img src={imageUrl} alt={`${event.title}の画像`} loading="lazy" />
+      </div>
       <div>
         <h3>{event.title}</h3>
         <strong>{event.points}pt</strong>

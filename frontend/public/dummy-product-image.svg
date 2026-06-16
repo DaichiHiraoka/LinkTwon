@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="420" viewBox="0 0 640 420" role="img" aria-labelledby="title desc">
+  <title id="title">Dummy product image</title>
+  <desc id="desc">A placeholder image for checking product image delivery.</desc>
+  <rect width="640" height="420" fill="#f7f7ef"/>
+  <rect x="58" y="66" width="524" height="288" rx="34" fill="#ffffff" stroke="#d8decf" stroke-width="8"/>
+  <rect x="98" y="112" width="132" height="154" rx="22" fill="#2f842f"/>
+  <rect x="254" y="112" width="132" height="154" rx="22" fill="#ffab00"/>
+  <rect x="410" y="112" width="132" height="154" rx="22" fill="#6aa9e9"/>
+  <path d="M128 302h384" stroke="#b8c2aa" stroke-width="12" stroke-linecap="round"/>
+  <path d="M142 142h44M142 174h58M142 206h38" stroke="#ffffff" stroke-width="13" stroke-linecap="round"/>
+  <path d="M298 142h44M298 174h58M298 206h38" stroke="#ffffff" stroke-width="13" stroke-linecap="round"/>
+  <path d="M454 142h44M454 174h58M454 206h38" stroke="#ffffff" stroke-width="13" stroke-linecap="round"/>
+  <rect x="44" y="34" width="278" height="54" rx="27" fill="#ffffff" opacity=".9"/>
+  <text x="72" y="68" fill="#2f842f" font-family="Arial, sans-serif" font-size="24" font-weight="700">PRODUCT IMAGE</text>
+</svg>

@@ -320,12 +320,20 @@ svg {
   height: 112px;
   border-radius: 11px;
   background: var(--placeholder);
+  overflow: hidden;
 }
 
 .event-card--compact .event-card__image {
   width: 100%;
   height: 154px;
   margin: 6px 0 11px;
+}
+
+.event-card__image img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
 }
 
 .event-card h3 {
@@ -509,6 +517,14 @@ svg {
   border-radius: 9px;
   background: var(--placeholder);
   margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.product-card div img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
 }
 
 .product-card span {
@@ -973,10 +989,14 @@ svg {
 .event-detail__photo {
   height: 246px;
   background: var(--placeholder);
-  display: grid;
-  place-items: center;
-  font-size: 48px;
-  font-weight: 500;
+  overflow: hidden;
+}
+
+.event-detail__photo img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
 }
 
 .event-detail__body {
