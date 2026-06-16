@@ -5,9 +5,16 @@ const path = require('path');
 process.env.DB_CLIENT = 'sqlite';
 process.env.SQLITE_PATH = path.resolve(__dirname, '../database/test.sqlite');
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'link-town-test-secret';
+process.env.MAIL_DRIVER = 'outbox';
+process.env.MAIL_EXPOSE_VERIFICATION_TOKEN = 'true';
+process.env.MAIL_OUTBOX_DIR = path.resolve(__dirname, '../database/test-mail-outbox');
 
 if (fs.existsSync(process.env.SQLITE_PATH)) {
   fs.unlinkSync(process.env.SQLITE_PATH);
+}
+
+if (fs.existsSync(process.env.MAIL_OUTBOX_DIR)) {
+  fs.rmSync(process.env.MAIL_OUTBOX_DIR, { recursive: true, force: true });
 }
 
 const app = require('../app');
@@ -53,7 +60,21 @@ async function main() {
       },
       201
     );
-    assert.ok(created.token);
+    assert.strictEqual(created.requires_email_verification, true);
+    assert.ok(created.verification_token);
+    await request('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email: 'smoke@example.com', password: 'password123' })
+    }, 403);
+    await request('/auth/email/verify', {
+      method: 'POST',
+      body: JSON.stringify({ verification_token: created.verification_token })
+    });
+    const smokeLogin = await request('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email: 'smoke@example.com', password: 'password123' })
+    });
+    assert.strictEqual(smokeLogin.user.email, 'smoke@example.com');
     await request(
       '/auth/register',
       {

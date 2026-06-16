@@ -336,7 +336,7 @@ async function getUsers(req, res, next) {
   try {
     const search = req.query.search ? `%${req.query.search}%` : '%';
     const [rows] = await pool.query(
-      `SELECT user_id, name, email, points, age_group, user_type, created_at
+      `SELECT user_id, name, email, points, age_group, user_type, email_verified_at, created_at
        FROM users
        WHERE name LIKE ? OR email LIKE ?
        ORDER BY user_id DESC`,
@@ -353,7 +353,7 @@ async function getUserDetail(req, res, next) {
   try {
     const { id } = req.params;
     const [users] = await pool.query(
-      `SELECT user_id, name, email, points, age_group, user_type, created_at
+      `SELECT user_id, name, email, points, age_group, user_type, email_verified_at, created_at
        FROM users
        WHERE user_id = ?`,
       [id]
