@@ -14,5 +14,7 @@
 - `linktown-ui-gap-wireframe.png`: UI不足箇所と追加遷移ワイヤーフレーム
 - `linktown-full-ui-transition-map.png`: 通常系、異常系、モーダル、API結果状態を含む全UI遷移図
 - `linktown-partner-portal-state-transition-map.png`: イベント主催者・商店側アプリの状態遷移図
+- `linktown-event-organizer-wireframe.png`: 赤基調のイベント主催者向けアプリワイヤーフレーム
+- `linktown-store-portal-wireframe.png`: 赤基調の商店向けアプリワイヤーフレーム
 - `TRANSITION_MAP_NOTES.md`: 全UI遷移図の補足メモ
 
