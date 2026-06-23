@@ -4,6 +4,21 @@ const bcrypt = require('bcryptjs');
 const Database = require('better-sqlite3');
 
 const DEFAULT_DB_PATH = path.resolve(__dirname, './dev.sqlite');
+const BACKEND_ROOT = path.resolve(__dirname, '..');
+const REPO_ROOT = path.resolve(BACKEND_ROOT, '..');
+
+function resolveSqlitePath(filePath) {
+  if (path.isAbsolute(filePath)) {
+    return filePath;
+  }
+
+  const normalized = filePath.replace(/\\/g, '/');
+  if (normalized === 'backend' || normalized.startsWith('backend/')) {
+    return path.resolve(REPO_ROOT, filePath);
+  }
+
+  return path.resolve(BACKEND_ROOT, filePath);
+}
 
 const schemaStatements = [
   `CREATE TABLE IF NOT EXISTS users (
@@ -14,6 +29,7 @@ const schemaStatements = [
     points INTEGER NOT NULL DEFAULT 0,
     age_group TEXT,
     user_type TEXT DEFAULT 'general',
+    email_verified_at TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
   )`,
   `CREATE TABLE IF NOT EXISTS admins (
@@ -113,6 +129,15 @@ const schemaStatements = [
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
   )`,
+  `CREATE TABLE IF NOT EXISTS email_verification_tokens (
+    token_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    verification_token TEXT NOT NULL UNIQUE,
+    expires_at TEXT NOT NULL,
+    used_at TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+  )`,
   `CREATE TABLE IF NOT EXISTS user_settings (
     user_id INTEGER PRIMARY KEY,
     notification_enabled INTEGER NOT NULL DEFAULT 1,
@@ -156,6 +181,7 @@ const schemaStatements = [
 ];
 
 const columnMigrations = [
+  ['users', 'email_verified_at', 'TEXT'],
   ['events', 'status', "TEXT NOT NULL DEFAULT 'active'"],
   ['stores', 'status', "TEXT NOT NULL DEFAULT 'active'"],
   ['services', 'status', "TEXT NOT NULL DEFAULT 'active'"]
@@ -175,6 +201,9 @@ function applySchema(db) {
     const exists = columns.some((column) => column.name === columnName);
     if (!exists) {
       db.prepare(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`).run();
+      if (tableName === 'users' && columnName === 'email_verified_at') {
+        db.prepare('UPDATE users SET email_verified_at = CURRENT_TIMESTAMP WHERE email_verified_at IS NULL').run();
+      }
     }
   }
 }
@@ -207,8 +236,8 @@ function seedDatabase(db) {
   const userCount = db.prepare('SELECT COUNT(*) AS count FROM users').get().count;
   if (userCount === 0) {
     const insertUser = db.prepare(
-      `INSERT INTO users (name, email, password, points, age_group, user_type)
-       VALUES (?, ?, ?, ?, ?, ?)`
+      `INSERT INTO users (name, email, password, points, age_group, user_type, email_verified_at)
+       VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
     );
     const passwordHash = bcrypt.hashSync('password123', 10);
     insertUser.run('Demo User', 'demo@example.com', passwordHash, 300, '30s', 'general');
@@ -266,6 +295,8 @@ function seedDatabase(db) {
 
   const demoUser = db.prepare('SELECT user_id FROM users WHERE email = ?').get('demo@example.com');
   if (demoUser) {
+    db.prepare('UPDATE users SET email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP) WHERE user_id = ?').run(demoUser.user_id);
+
     const paymentCount = db.prepare('SELECT COUNT(*) AS count FROM payment_methods WHERE user_id = ?').get(demoUser.user_id).count;
     if (paymentCount === 0) {
       db.prepare(
@@ -362,7 +393,7 @@ let sqlitePool;
 
 function getSqlitePool(filePath = process.env.SQLITE_PATH || DEFAULT_DB_PATH) {
   if (!sqlitePool) {
-    sqlitePool = new SqlitePool(path.resolve(filePath));
+    sqlitePool = new SqlitePool(resolveSqlitePath(filePath));
   }
   return sqlitePool;
 }

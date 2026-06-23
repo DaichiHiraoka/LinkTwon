@@ -19,6 +19,7 @@ export type AuthUser = {
   name: string;
   email: string;
   points: number;
+  email_verified_at?: string | null;
   role: "user";
 };
 
@@ -42,7 +43,19 @@ export type AdminAuthResponse = {
 export type RegisterResponse = {
   message: string;
   user_id: number;
-  token: string;
+  requires_email_verification: boolean;
+  verification_expires_at: string;
+  verification_token?: string;
+  verification_url?: string;
+};
+
+export type EmailVerificationResponse = {
+  message: string;
+  user_id?: number;
+  requires_email_verification?: boolean;
+  verification_expires_at?: string;
+  verification_token?: string;
+  verification_url?: string;
 };
 
 export type PasswordResetRequestResponse = {
@@ -57,6 +70,7 @@ export type UserProfile = {
   points: number;
   age_group: string | null;
   user_type: string | null;
+  email_verified_at?: string | null;
 };
 
 export type EventItem = {
@@ -65,6 +79,7 @@ export type EventItem = {
   event_datetime: string;
   location: string | null;
   grant_points: number;
+  image_url?: string | null;
   status?: "active" | "paused";
   liked?: boolean | number;
   like_count?: number;
@@ -80,6 +95,7 @@ export type Participation = {
   event_name: string;
   event_datetime: string;
   location: string | null;
+  image_url?: string | null;
 };
 
 export type ServiceItem = {
@@ -89,6 +105,7 @@ export type ServiceItem = {
   store_id: number;
   store_name: string;
   store_address?: string | null;
+  image_url?: string | null;
   status?: "active" | "paused";
   favorited?: boolean | number;
 };
@@ -209,6 +226,7 @@ export type ManagedUser = {
   points: number;
   age_group: string | null;
   user_type: string | null;
+  email_verified_at?: string | null;
   created_at: string;
 };
 

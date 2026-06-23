@@ -25,9 +25,14 @@ import {
   likeEvent,
   login,
   participateInEvent,
+  register as registerUser,
+  resendEmailVerification,
+  requestPasswordReset,
+  resetPassword,
   unlikeEvent,
   updateUserEmail,
   updateUserSettings,
+  verifyEmail,
 } from "./api";
 import { Logo } from "./components/Logo";
 import {
@@ -53,6 +58,8 @@ import {
 import type { AuthResponse, EventItem as ApiEventItem, Participation, ServiceItem, UserProfile, UserSettings } from "./types";
 
 const SESSION_STORAGE_KEY = "link-town-session";
+const DUMMY_EVENT_IMAGE_URL = "/dummy-event-image.svg";
+const DUMMY_PRODUCT_IMAGE_URL = "/dummy-product-image.svg";
 
 type AppLanguage = "ja" | "en";
 
@@ -248,6 +255,7 @@ function mapEvent(event: ApiEventItem, displayDate: string, language: AppLanguag
     points: event.grant_points,
     location,
     time: parts.time,
+    imageUrl: event.image_url || DUMMY_EVENT_IMAGE_URL,
     rawEventId: event.event_id,
     liked: toBoolean(event.liked),
     likeCount: event.like_count,
@@ -264,6 +272,7 @@ function mapParticipation(participation: Participation, displayDate: string, lan
     points: participation.granted_points,
     location,
     time: parts.time,
+    imageUrl: participation.image_url || DUMMY_EVENT_IMAGE_URL,
     rawEventId: participation.event_id,
   };
 }
@@ -282,6 +291,7 @@ function mapServices(services: ServiceItem[], language: AppLanguage): ProductCat
       storeAddress,
       mapQuery: `${storeName} ${storeAddress}`.trim(),
       requiredPoints: service.required_points,
+      imageUrl: service.image_url || DUMMY_PRODUCT_IMAGE_URL,
     };
     const existing = grouped.get(service.store_id);
 
@@ -614,6 +624,66 @@ function toBoolean(value: boolean | number | undefined | null) {
   return value === true || value === 1;
 }
 
+type LoginReason = "session-expired" | null;
+type AuthView = "login" | "register" | "register-confirm" | "register-sent" | "email-verified" | "reset-request" | "reset-password" | "reset-sent";
+type VerificationStatus = "verifying" | "success" | "error";
+type LoginMessageKind = "failed" | "session-expired" | null;
+
+type RegistrationDraft = {
+  lastName: string;
+  firstName: string;
+  ageGroup: string;
+  email: string;
+  password: string;
+  passwordConfirm: string;
+  townAssociationId: string;
+};
+
+type RegistrationErrors = Partial<Record<"name" | "email" | "password" | "passwordConfirm" | "townAssociationId", string>>;
+
+type RegistrationResult = {
+  userId: string;
+  name: string;
+  ageGroup: string;
+  email: string;
+  maskedPassword: string;
+  townAssociationId: string;
+};
+
+const PASSWORD_RULE_MESSAGE = "パスワードは、半角英字・半角数字・記号を組み合わせた8文字以上で入力してください。";
+
+const INITIAL_REGISTRATION_DRAFT: RegistrationDraft = {
+  lastName: "",
+  firstName: "",
+  ageGroup: "",
+  email: "",
+  password: "",
+  passwordConfirm: "",
+  townAssociationId: "",
+};
+
+const AGE_GROUP_OPTIONS = ["", "10代", "20代", "30代", "40代", "50代", "60代", "70代以上"];
+
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function isValidPassword(value: string) {
+  return /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/.test(value);
+}
+
+function isValidTownAssociationId(value: string) {
+  return value.trim() === "" || /^[A-Za-z0-9_-]{3,32}$/.test(value.trim());
+}
+
+function getRegistrationName(draft: RegistrationDraft) {
+  return `${draft.lastName.trim()} ${draft.firstName.trim()}`.trim();
+}
+
+function maskPassword(password: string) {
+  return "●".repeat(Math.max(8, password.length));
+}
+
 export function App() {
   const initialSession = readStoredSession();
   const [eventDisplayDate] = useState(getEventDisplayDate);
@@ -640,6 +710,7 @@ export function App() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [accountMessage, setAccountMessage] = useState("");
+  const [loginReason, setLoginReason] = useState<LoginReason>(null);
 
   useEffect(() => {
     if (session) {
@@ -685,6 +756,7 @@ export function App() {
       if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
         setSession(null);
         writeStoredSession(null);
+        setLoginReason("session-expired");
         setScreen("login");
         return;
       }
@@ -699,20 +771,18 @@ export function App() {
   }
 
   async function handleLogin(email: string, password: string) {
-    try {
-      const response = await login(email || "demo@example.com", password || "password123");
-      const nextSession = { token: response.token, user: response.user };
-      handleSession(nextSession);
-      setScreen("home");
-      await loadApplicationData(nextSession);
-    } catch (error) {
-      window.alert(getErrorMessage(error));
-    }
+    const response = await login(email, password);
+    const nextSession = { token: response.token, user: response.user };
+    setLoginReason(null);
+    handleSession(nextSession);
+    setScreen("home");
+    await loadApplicationData(nextSession);
   }
 
   function handleLogout() {
     handleSession(null);
     setProfile(null);
+    setLoginReason(null);
     setScreen("login");
   }
 
@@ -904,7 +974,7 @@ export function App() {
     <main className="app-viewport">
       <section className="phone-shell">
         <div className={`phone-scroll ${screen !== "login" ? "phone-scroll--nav" : ""}`}>
-          {screen === "login" ? <LoginScreen onLogin={handleLogin} /> : null}
+          {screen === "login" ? <LoginScreen loginReason={loginReason} onLogin={handleLogin} /> : null}
           {screen === "home" ? (
             <HomeScreen
               user={displayUser}
@@ -1010,36 +1080,641 @@ function Header({
   );
 }
 
-function LoginScreen({ onLogin }: { onLogin: (email: string, password: string) => void }) {
-  const emailRef = useRef<HTMLInputElement | null>(null);
-  const passwordRef = useRef<HTMLInputElement | null>(null);
+function LoginScreen({
+  loginReason,
+  onLogin,
+}: {
+  loginReason: LoginReason;
+  onLogin: (email: string, password: string) => Promise<void>;
+}) {
+  const [view, setView] = useState<AuthView>("login");
+  const [loginId, setLoginId] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginMessageKind, setLoginMessageKind] = useState<LoginMessageKind>(loginReason === "session-expired" ? "session-expired" : null);
+  const [loginPlainError, setLoginPlainError] = useState("");
+  const [registration, setRegistration] = useState<RegistrationDraft>(INITIAL_REGISTRATION_DRAFT);
+  const [registrationErrors, setRegistrationErrors] = useState<RegistrationErrors>({});
+  const [registrationResult, setRegistrationResult] = useState<RegistrationResult | null>(null);
+  const [registrationMessage, setRegistrationMessage] = useState("");
+  const [noticeEmail, setNoticeEmail] = useState("");
+  const [verificationToken, setVerificationToken] = useState("");
+  const [verificationUrl, setVerificationUrl] = useState("");
+  const [verificationMessage, setVerificationMessage] = useState("");
+  const [verificationStatus, setVerificationStatus] = useState<VerificationStatus>("verifying");
+  const emailVerificationStartedRef = useRef(false);
+  const passwordResetLinkHandledRef = useRef(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetToken, setResetToken] = useState("");
+  const [nextPassword, setNextPassword] = useState("");
+  const [nextPasswordConfirm, setNextPasswordConfirm] = useState("");
+  const [resetMessage, setResetMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (loginReason === "session-expired") {
+      setView("login");
+      setLoginMessageKind("session-expired");
+    }
+  }, [loginReason]);
+
+  useEffect(() => {
+    if (emailVerificationStartedRef.current) {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("email_verification_token");
+
+    if (!token) {
+      return;
+    }
+
+    emailVerificationStartedRef.current = true;
+    setView("email-verified");
+    setVerificationStatus("verifying");
+    setVerificationMessage("メール認証を確認しています。");
+
+    void verifyEmail(token)
+      .then(() => {
+        setVerificationToken("");
+        setVerificationUrl("");
+        setVerificationStatus("success");
+        setVerificationMessage("メール認証が完了しました。ログインしてください。");
+      })
+      .catch((error) => {
+        setVerificationStatus("error");
+        setVerificationMessage(getErrorMessage(error));
+      });
+
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.hash}`);
+  }, []);
+
+  useEffect(() => {
+    if (passwordResetLinkHandledRef.current) {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("password_reset_token");
+
+    if (!token) {
+      return;
+    }
+
+    passwordResetLinkHandledRef.current = true;
+    setResetToken(token);
+    setResetMessage("");
+    setNextPassword("");
+    setNextPasswordConfirm("");
+    setView("reset-password");
+
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.hash}`);
+  }, []);
+
+  function returnToLogin() {
+    setView("login");
+    setLoginMessageKind(null);
+    setLoginPlainError("");
+    setRegistrationErrors({});
+    setRegistrationMessage("");
+    setVerificationMessage("");
+    setResetMessage("");
+    setNextPassword("");
+    setNextPasswordConfirm("");
+  }
+
+  function openPasswordReset() {
+    setLoginMessageKind(null);
+    setLoginPlainError("");
+    setResetEmail(loginId.includes("@") ? loginId : "");
+    setResetMessage("");
+    setView("reset-request");
+  }
+
+  function updateRegistrationField(field: keyof RegistrationDraft, value: string) {
+    setRegistration((current) => ({ ...current, [field]: value }));
+    setRegistrationErrors((current) => {
+      const next = { ...current };
+
+      if (field === "lastName" || field === "firstName") {
+        delete next.name;
+      } else if (field === "email") {
+        delete next.email;
+      } else if (field === "password") {
+        delete next.password;
+      } else if (field === "passwordConfirm") {
+        delete next.passwordConfirm;
+      } else if (field === "townAssociationId") {
+        delete next.townAssociationId;
+      }
+
+      return next;
+    });
+  }
+
+  function validateRegistration() {
+    const nextErrors: RegistrationErrors = {};
+
+    if (!registration.lastName.trim() || !registration.firstName.trim()) {
+      nextErrors.name = "氏名を入力してください。";
+    }
+
+    if (!isValidEmail(registration.email.trim())) {
+      nextErrors.email = "正しいメールアドレスを入力してください。";
+    }
+
+    if (!isValidPassword(registration.password)) {
+      nextErrors.password = PASSWORD_RULE_MESSAGE;
+    }
+
+    if (!registration.passwordConfirm || registration.password !== registration.passwordConfirm) {
+      nextErrors.passwordConfirm = "パスワードが一致しません。";
+    }
+
+    if (!isValidTownAssociationId(registration.townAssociationId)) {
+      nextErrors.townAssociationId = "正しい町会IDを入力してください。";
+    }
+
+    return nextErrors;
+  }
+
+  async function handleLoginSubmit(event: FormEvent) {
+    event.preventDefault();
+    setLoginMessageKind(null);
+    setLoginPlainError("");
+    setIsSubmitting(true);
+
+    try {
+      await onLogin(loginId.trim(), loginPassword);
+    } catch (error) {
+      const message = getErrorMessage(error);
+      if (message.includes("not verified")) {
+        setLoginPlainError("メール認証が完了していません。登録確認メールのURLから認証してください。");
+      } else {
+        setLoginMessageKind("failed");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleRegistrationSubmit(event: FormEvent) {
+    event.preventDefault();
+    const nextErrors = validateRegistration();
+    setRegistrationErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length > 0) {
+      return;
+    }
+
+    setRegistrationMessage("");
+    setIsSubmitting(true);
+
+    try {
+      const response = await registerUser({
+        name: getRegistrationName(registration),
+        email: registration.email.trim(),
+        password: registration.password,
+        age_group: registration.ageGroup || undefined,
+        user_type: "resident",
+      });
+      setRegistrationResult({
+        userId: String(response.user_id),
+        name: getRegistrationName(registration),
+        ageGroup: registration.ageGroup || "(未設定)",
+        email: registration.email.trim(),
+        maskedPassword: maskPassword(registration.password),
+        townAssociationId: registration.townAssociationId.trim() || "(未入力)",
+      });
+      setLoginId(registration.email.trim());
+      setNoticeEmail(registration.email.trim());
+      setVerificationToken(response.verification_token ?? "");
+      setVerificationUrl(response.verification_url ?? "");
+      setVerificationMessage(
+        response.verification_token
+          ? "開発環境では下のボタンからメール認証を完了できます。"
+          : "登録確認メールを送信しました。メール内のURLから認証を完了してください。",
+      );
+      setView("register-sent");
+    } catch (error) {
+      setRegistrationMessage(getErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleVerifyEmail() {
+    if (!verificationToken) {
+      return;
+    }
+
+    setVerificationMessage("");
+    setIsSubmitting(true);
+
+    try {
+      await verifyEmail(verificationToken);
+      setVerificationToken("");
+      setVerificationUrl("");
+      setVerificationMessage("メール認証が完了しました。ログインしてください。");
+    } catch (error) {
+      setVerificationMessage(getErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleResendVerificationEmail() {
+    const email = noticeEmail || registration.email.trim() || loginId.trim();
+
+    if (!isValidEmail(email)) {
+      setVerificationMessage("正しいメールアドレスを入力してください。");
+      return;
+    }
+
+    setVerificationMessage("");
+    setIsSubmitting(true);
+
+    try {
+      const response = await resendEmailVerification(email);
+      setNoticeEmail(email);
+      setVerificationToken(response.verification_token ?? "");
+      setVerificationUrl(response.verification_url ?? "");
+      setVerificationMessage(
+        response.verification_token
+          ? "認証メールを再送信しました。開発環境では下のボタンから認証を完了できます。"
+          : "認証メールを再送信しました。メール内のURLから認証を完了してください。",
+      );
+    } catch (error) {
+      setVerificationMessage(getErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleResetRequestSubmit(event: FormEvent) {
+    event.preventDefault();
+
+    if (!isValidEmail(resetEmail.trim())) {
+      setResetMessage("正しいメールアドレスを入力してください。");
+      return;
+    }
+
+    setResetMessage("");
+    setIsSubmitting(true);
+
+    try {
+      const response = await requestPasswordReset(resetEmail.trim());
+      setNoticeEmail(resetEmail.trim());
+
+      if (response.reset_token) {
+        setResetToken(response.reset_token);
+        setView("reset-password");
+      } else {
+        setView("reset-sent");
+      }
+    } catch (error) {
+      setResetMessage(getErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleResetPasswordSubmit(event: FormEvent) {
+    event.preventDefault();
+
+    if (!isValidPassword(nextPassword)) {
+      setResetMessage(PASSWORD_RULE_MESSAGE);
+      return;
+    }
+
+    if (nextPassword !== nextPasswordConfirm) {
+      setResetMessage("パスワードが一致しません。");
+      return;
+    }
+
+    if (!resetToken) {
+      setResetMessage("再設定用トークンが取得できませんでした。再設定メールを再送信してください。");
+      setView("reset-request");
+      return;
+    }
+
+    setResetMessage("");
+    setIsSubmitting(true);
+
+    try {
+      await resetPassword(resetToken, nextPassword);
+      setLoginId(resetEmail.trim());
+      returnToLogin();
+    } catch (error) {
+      setResetMessage(getErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  if (view === "register") {
+    return (
+      <section className="login-screen login-screen--form">
+        <div className="auth-page">
+          <Logo />
+          <button className="auth-back-link" type="button" onClick={returnToLogin}>
+            ＞ ログイン画面に戻る
+          </button>
+          <h1 className="auth-page-title">アカウント新規登録</h1>
+          <form className="auth-form" onSubmit={handleRegistrationSubmit}>
+            <div className="auth-field-group">
+              <AuthFieldLabel badge="required">氏名</AuthFieldLabel>
+              <div className="auth-two-column">
+                <input className="auth-input auth-input--filled" value={registration.lastName} onChange={(event) => updateRegistrationField("lastName", event.target.value)} placeholder="姓" />
+                <input className="auth-input auth-input--filled" value={registration.firstName} onChange={(event) => updateRegistrationField("firstName", event.target.value)} placeholder="名" />
+              </div>
+              <AuthFieldError message={registrationErrors.name} />
+            </div>
+            <div className="auth-field-group">
+              <AuthFieldLabel badge="optional">年代</AuthFieldLabel>
+              <select className="auth-input auth-input--filled" value={registration.ageGroup} onChange={(event) => updateRegistrationField("ageGroup", event.target.value)}>
+                {AGE_GROUP_OPTIONS.map((option) => (
+                  <option key={option || "unset"} value={option}>
+                    {option || "(未設定)"}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="auth-field-group">
+              <AuthFieldLabel badge="required">メールアドレス</AuthFieldLabel>
+              <input className="auth-input auth-input--filled" value={registration.email} onChange={(event) => updateRegistrationField("email", event.target.value)} inputMode="email" autoComplete="email" />
+              <AuthFieldError message={registrationErrors.email} />
+            </div>
+            <div className="auth-field-group">
+              <AuthFieldLabel badge="required">パスワード</AuthFieldLabel>
+              <input className="auth-input auth-input--filled" value={registration.password} onChange={(event) => updateRegistrationField("password", event.target.value)} type="password" autoComplete="new-password" />
+              <AuthFieldError message={registrationErrors.password} />
+            </div>
+            <div className="auth-field-group">
+              <AuthFieldLabel badge="required">パスワード(確認用)</AuthFieldLabel>
+              <input className="auth-input auth-input--filled" value={registration.passwordConfirm} onChange={(event) => updateRegistrationField("passwordConfirm", event.target.value)} type="password" autoComplete="new-password" />
+              <AuthFieldError message={registrationErrors.passwordConfirm} />
+            </div>
+            <div className="auth-field-group">
+              <AuthFieldLabel badge="optional">町会ID</AuthFieldLabel>
+              <input className="auth-input auth-input--filled" value={registration.townAssociationId} onChange={(event) => updateRegistrationField("townAssociationId", event.target.value)} />
+              <AuthFieldError message={registrationErrors.townAssociationId} />
+            </div>
+            <AuthFieldError message={registrationMessage} />
+            <button className="auth-submit auth-submit--primary" type="submit" disabled={isSubmitting}>
+              アカウント登録
+            </button>
+          </form>
+        </div>
+      </section>
+    );
+  }
+
+  if (view === "register-confirm") {
+    const result =
+      registrationResult ??
+      ({
+        userId: "sample_local_user",
+        name: "山田 太郎",
+        ageGroup: "(未設定)",
+        email: "user@example.com",
+        maskedPassword: "●●●●●●●●",
+        townAssociationId: "(未入力)",
+      } satisfies RegistrationResult);
+
+    return (
+      <section className="login-screen login-screen--form">
+        <div className="auth-page">
+          <Logo />
+          <h1 className="auth-page-title">アカウント情報確認画面</h1>
+          <dl className="auth-confirm-list">
+            <AuthConfirmRow label="ユーザーID" value={result.userId} />
+            <AuthConfirmRow label="氏名" value={result.name} />
+            <AuthConfirmRow label="年代" value={result.ageGroup} />
+            <AuthConfirmRow label="メールアドレス" value={result.email} />
+            <AuthConfirmRow label="パスワード(セキュリティ保護のため非表示にしています)" value={result.maskedPassword} />
+            <AuthConfirmRow label="町会ID" value={result.townAssociationId} />
+          </dl>
+          <button className="auth-submit auth-submit--primary" type="button" onClick={returnToLogin}>
+            ログイン画面に戻る
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  if (view === "register-sent") {
+    return (
+      <section className="login-screen login-screen--form">
+        <div className="auth-page auth-page--notice">
+          <Logo />
+          <p className="auth-notice-text">
+            ご入力いただいたメールアドレス宛に、登録確認メールを送信しました。メール内に記載されているURLをクリックして、登録を完了してください。
+          </p>
+          <p className="auth-notice-email">送信先: {noticeEmail || registrationResult?.email || "user@example.com"}</p>
+          {verificationMessage ? <p className="auth-verification-message">{verificationMessage}</p> : null}
+          {verificationUrl ? (
+            <p className="auth-dev-note">
+              開発用URL: <span>{verificationUrl}</span>
+            </p>
+          ) : null}
+          <div className="auth-notice-actions">
+            {verificationToken ? (
+              <button className="auth-submit auth-submit--primary" type="button" onClick={handleVerifyEmail} disabled={isSubmitting}>
+                開発用: メール認証を完了する
+              </button>
+            ) : null}
+            <button className="auth-submit auth-submit--secondary" type="button" onClick={handleResendVerificationEmail} disabled={isSubmitting}>
+              認証メールを再送信する
+            </button>
+          </div>
+          <button className="auth-submit auth-submit--primary" type="button" onClick={returnToLogin}>
+            ログイン画面に戻る
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  if (view === "email-verified") {
+    return (
+      <section className="login-screen login-screen--form">
+        <div className="auth-page auth-page--notice">
+          <Logo />
+          {verificationStatus === "verifying" ? (
+            <>
+              <h1 className="auth-page-title">メール認証を確認中</h1>
+              <p className="auth-notice-text">
+                メールアドレスの認証を確認しています。しばらくお待ちください。
+              </p>
+            </>
+          ) : null}
+          {verificationStatus === "success" ? (
+            <>
+              <h1 className="auth-page-title">メール認証が完了しました</h1>
+              <p className="auth-notice-text">
+                ご登録ありがとうございます。下のボタンからログインしてLink Townをご利用ください。
+              </p>
+              <p className="auth-verification-message">{verificationMessage}</p>
+            </>
+          ) : null}
+          {verificationStatus === "error" ? (
+            <>
+              <h1 className="auth-page-title">メール認証に失敗しました</h1>
+              <p className="auth-notice-text">
+                認証リンクが無効か、有効期限が切れている可能性があります。
+                ログイン画面から「認証メールを再送信する」をご利用ください。
+              </p>
+              <p className="auth-verification-message auth-verification-message--error">{verificationMessage}</p>
+            </>
+          ) : null}
+          {verificationStatus !== "verifying" ? (
+            <button className="auth-submit auth-submit--primary" type="button" onClick={returnToLogin}>
+              ログイン画面へ
+            </button>
+          ) : null}
+        </div>
+      </section>
+    );
+  }
+
+  if (view === "reset-request") {
+    return (
+      <section className="login-screen login-screen--form">
+        <div className="auth-page">
+          <Logo />
+          <button className="auth-back-link" type="button" onClick={returnToLogin}>
+            ＞ ログイン画面に戻る
+          </button>
+          <h1 className="auth-page-title">パスワードの再設定</h1>
+          <p className="auth-description">ご登録いただいているメールアドレスを入力してください。パスワード再設定用のURLをお送りします。</p>
+          <form className="auth-form" onSubmit={handleResetRequestSubmit}>
+            <div className="auth-field-group">
+              <input className="auth-input auth-input--outline" value={resetEmail} onChange={(event) => setResetEmail(event.target.value)} placeholder="メールアドレス" inputMode="email" autoComplete="email" />
+            </div>
+            <AuthFieldError message={resetMessage} />
+            <button className="auth-submit auth-submit--primary" type="submit" disabled={isSubmitting}>
+              再設定メールを送信する
+            </button>
+          </form>
+        </div>
+      </section>
+    );
+  }
+
+  if (view === "reset-sent") {
+    return (
+      <section className="login-screen login-screen--form">
+        <div className="auth-page auth-page--notice">
+          <Logo />
+          <p className="auth-notice-text">パスワード再設定用のURLをメールで送信しました。メール内に記載されているURLからパスワードを再設定してください。</p>
+          <p className="auth-notice-email">送信先: {noticeEmail || resetEmail || "user@example.com"}</p>
+          <button className="auth-submit auth-submit--primary" type="button" onClick={returnToLogin}>
+            ログイン画面に戻る
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  if (view === "reset-password") {
+    return (
+      <section className="login-screen login-screen--form">
+        <div className="auth-page">
+          <Logo />
+          <h1 className="auth-page-title">パスワードの再設定</h1>
+          <form className="auth-form" onSubmit={handleResetPasswordSubmit}>
+            <div className="auth-field-group">
+              <input className="auth-input auth-input--outline" value={nextPassword} onChange={(event) => setNextPassword(event.target.value)} placeholder="パスワード" type="password" autoComplete="new-password" />
+            </div>
+            <div className="auth-field-group">
+              <input className="auth-input auth-input--outline" value={nextPasswordConfirm} onChange={(event) => setNextPasswordConfirm(event.target.value)} placeholder="パスワード(確認用)" type="password" autoComplete="new-password" />
+            </div>
+            <AuthFieldError message={resetMessage} />
+            <button className="auth-submit auth-submit--primary" type="submit" disabled={isSubmitting}>
+              パスワードを変更する
+            </button>
+          </form>
+        </div>
+      </section>
+    );
+  }
 
   return (
-    <section className="login-screen">
-      <form
-        className="login-card"
-        onSubmit={(event) => {
-          event.preventDefault();
-          onLogin(emailRef.current?.value.trim() ?? "", passwordRef.current?.value ?? "");
-        }}
-      >
-        <Logo small />
-        <h1>ログイン</h1>
-        <input ref={emailRef} aria-label="IDまたはメールアドレス" />
-        <input ref={passwordRef} aria-label="パスワード" type="password" placeholder="パスワード" />
-        <button className="text-link" type="button">
-          パスワードを忘れた場合
-        </button>
-        <button className="primary-button" type="submit">
-          続ける
-        </button>
-      </form>
-      <footer className="login-footer">
-        <a href="#">プライバシーポリシー</a>
-        <a href="#">利用規約</a>
-        <a href="#">会員規約</a>
-      </footer>
+    <section className={`login-screen${loginMessageKind || loginPlainError ? " login-screen--alert" : ""}`}>
+      <div className="auth-login-layout">
+        <form className="login-card" onSubmit={handleLoginSubmit}>
+          <Logo small />
+          <h1>ログイン</h1>
+          <input className="auth-input auth-input--outline" value={loginId} onChange={(event) => setLoginId(event.target.value)} aria-label="ユーザーID または メールアドレス" placeholder="ユーザーID または メールアドレス" autoComplete="username" />
+          <input className="auth-input auth-input--outline" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} aria-label="パスワード" type="password" placeholder="パスワード" autoComplete="current-password" />
+          {loginMessageKind ? <LoginErrorMessage kind={loginMessageKind} onReset={openPasswordReset} /> : null}
+          <AuthFieldError message={loginPlainError} />
+          <button className="auth-text-link" type="button" onClick={openPasswordReset}>
+            パスワードを忘れた場合
+          </button>
+          <button className="auth-submit auth-submit--primary" type="submit" disabled={isSubmitting}>
+            続ける
+          </button>
+          <div className="auth-divider">
+            <span>アカウント未登録の方はこちらから</span>
+          </div>
+          <button className="auth-submit auth-submit--secondary" type="button" onClick={() => setView("register")}>
+            新規登録
+          </button>
+        </form>
+        <AuthFooter />
+      </div>
     </section>
+  );
+}
+
+function AuthFooter() {
+  return (
+    <footer className="login-footer">
+      <a href="#">プライバシーポリシー</a>
+      <a href="#">利用規約</a>
+      <a href="#">会員規約</a>
+    </footer>
+  );
+}
+
+function AuthFieldLabel({ badge, children }: { badge: "required" | "optional"; children: string }) {
+  return (
+    <label className="auth-field-label">
+      <span>{children}</span>
+      <span className={`auth-badge auth-badge--${badge}`}>{badge === "required" ? "必須" : "任意"}</span>
+    </label>
+  );
+}
+
+function AuthFieldError({ message }: { message?: string }) {
+  return message ? <p className="auth-field-error">{message}</p> : null;
+}
+
+function AuthConfirmRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="auth-confirm-row">
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
+  );
+}
+
+function LoginErrorMessage({ kind, onReset }: { kind: Exclude<LoginMessageKind, null>; onReset: () => void }) {
+  const prefix =
+    kind === "session-expired"
+      ? "あなたのセッションがタイムアウトしました。再度ログインしてください。パスワードをお忘れの場合は、"
+      : "ログインに失敗しました。入力された情報に誤りがあるか、アカウントが登録されていません。パスワードをお忘れの場合は、";
+
+  return (
+    <p className="auth-login-error" aria-live="polite">
+      {prefix}
+      <button type="button" onClick={onReset}>
+        こちら
+      </button>
+      から再設定してください。
+    </p>
   );
 }
 
@@ -1208,7 +1883,9 @@ function WalletScreen({
               <div className="product-rail">
                 {category.products.map((product) => (
                   <button className="product-card product-card--button" type="button" key={product.id} onClick={() => onProductSelect(product)}>
-                    <div />
+                    <div>
+                      <img src={product.imageUrl || DUMMY_PRODUCT_IMAGE_URL} alt={`${product.name}の画像`} loading="lazy" />
+                    </div>
                     <span>{product.name}</span>
                     <small>{product.storeName}</small>
                   </button>
@@ -1521,6 +2198,7 @@ function EventDetailScreen({
   onClose: () => void;
 }) {
   const swipeDismiss = useSwipeDownDismiss<HTMLElement>(onClose);
+  const imageUrl = event.imageUrl || DUMMY_EVENT_IMAGE_URL;
 
   return (
     <div className="event-detail-modal" role="presentation" onClick={onClose}>
@@ -1536,7 +2214,9 @@ function EventDetailScreen({
       >
         <Header language={language} onLanguageToggle={onLanguageToggle} />
         <p className="event-detail__date">{event.date}</p>
-        <div className="event-detail__photo">写真</div>
+        <div className="event-detail__photo">
+          <img src={imageUrl} alt={`${event.title}の画像`} loading="lazy" />
+        </div>
         <article className="event-detail__body">
           <h1>{event.title}</h1>
           <p className="event-detail__meta">活動時間：{event.time}　　集合場所：{event.location}　　△△係前</p>
@@ -1592,6 +2272,8 @@ function EventCard({
   compact?: boolean;
   onSelect?: (event: DisplayEvent) => void;
 }) {
+  const imageUrl = event.imageUrl || DUMMY_EVENT_IMAGE_URL;
+
   function handleKeyDown(keyboardEvent: KeyboardEvent<HTMLElement>) {
     if (!onSelect) {
       return;
@@ -1612,7 +2294,9 @@ function EventCard({
       onKeyDown={handleKeyDown}
     >
       <p className="event-card__date">{event.date}</p>
-      <div className="event-card__image" />
+      <div className="event-card__image">
+        <img src={imageUrl} alt={`${event.title}の画像`} loading="lazy" />
+      </div>
       <div>
         <h3>{event.title}</h3>
         <strong>{event.points}pt</strong>

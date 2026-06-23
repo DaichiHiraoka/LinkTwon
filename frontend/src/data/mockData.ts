@@ -7,6 +7,7 @@ export type EventItem = {
   points: number;
   location: string;
   time: string;
+  imageUrl?: string;
 };
 
 export type ProductCategory = {
@@ -22,6 +23,7 @@ export type ProductItem = {
   storeAddress: string;
   mapQuery: string;
   requiredPoints?: number;
+  imageUrl?: string;
 };
 
 export const user = {
