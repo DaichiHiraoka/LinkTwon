@@ -11,6 +11,7 @@ import {
   type TouchEvent as ReactTouchEvent,
 } from "react";
 import QRCode from "qrcode";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   ApiError,
   cancelEventParticipation,
@@ -55,6 +56,63 @@ import type { AuthResponse, EventItem as ApiEventItem, Participation, ServiceIte
 const SESSION_STORAGE_KEY = "link-town-session";
 const DUMMY_EVENT_IMAGE_URL = "/dummy-event-image.svg";
 const DUMMY_PRODUCT_IMAGE_URL = "/dummy-product-image.svg";
+
+const SCREEN_ROUTES: Record<Screen, string> = {
+  login: "/login",
+  home: "/app",
+  events: "/app/events",
+  scan: "/app/scan",
+  wallet: "/app/wallet",
+  purchase: "/app/wallet/purchase",
+  account: "/app/account",
+};
+
+function getScreenFromPath(pathname: string, hasSession: boolean): Screen {
+  if (!hasSession) {
+    return "login";
+  }
+
+  switch (pathname) {
+    case "/":
+    case "/home":
+    case "/app":
+      return "home";
+    case "/events":
+    case "/app/events":
+      return "events";
+    case "/scan":
+    case "/app/scan":
+      return "scan";
+    case "/wallet":
+    case "/app/wallet":
+      return "wallet";
+    case "/wallet/purchase":
+    case "/purchase":
+    case "/app/wallet/purchase":
+      return "purchase";
+    case "/account":
+    case "/app/account":
+      return "account";
+    case "/login":
+      return "login";
+    default:
+      return "home";
+  }
+}
+
+function isKnownAppPath(pathname: string) {
+  return (
+    pathname === "/" ||
+    pathname === "/home" ||
+    pathname === "/events" ||
+    pathname === "/scan" ||
+    pathname === "/wallet" ||
+    pathname === "/purchase" ||
+    pathname === "/wallet/purchase" ||
+    pathname === "/account" ||
+    Object.values(SCREEN_ROUTES).includes(pathname)
+  );
+}
 
 type AppLanguage = "ja" | "en";
 
@@ -620,10 +678,11 @@ function toBoolean(value: boolean | number | undefined | null) {
 }
 
 export function App() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const initialSession = readStoredSession();
   const [eventDisplayDate] = useState(getEventDisplayDate);
   const [appLanguage, setAppLanguage] = useState<AppLanguage>("ja");
-  const [screen, setScreen] = useState<Screen>(initialSession ? "home" : "login");
   const [eventTab, setEventTab] = useState<"recommended" | "liked" | "participated">("recommended");
   const [exchangeTab, setExchangeTab] = useState<"recommended" | "favorite">("recommended");
   const [session, setSession] = useState<Session | null>(initialSession);
@@ -645,6 +704,27 @@ export function App() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [accountMessage, setAccountMessage] = useState("");
+  const screen = getScreenFromPath(location.pathname, Boolean(session));
+
+  const navigateToScreen = useCallback(
+    (nextScreen: Screen, options?: { replace?: boolean }) => {
+      navigate(SCREEN_ROUTES[nextScreen], { replace: options?.replace ?? false });
+    },
+    [navigate],
+  );
+
+  useEffect(() => {
+    if (!session) {
+      if (location.pathname !== SCREEN_ROUTES.login) {
+        navigateToScreen("login", { replace: true });
+      }
+      return;
+    }
+
+    if (location.pathname === SCREEN_ROUTES.login || !isKnownAppPath(location.pathname)) {
+      navigateToScreen("home", { replace: true });
+    }
+  }, [location.pathname, navigateToScreen, session]);
 
   useEffect(() => {
     if (session) {
@@ -690,7 +770,7 @@ export function App() {
       if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
         setSession(null);
         writeStoredSession(null);
-        setScreen("login");
+        navigateToScreen("login", { replace: true });
         return;
       }
 
@@ -708,7 +788,7 @@ export function App() {
       const response = await login(email || "demo@example.com", password || "password123");
       const nextSession = { token: response.token, user: response.user };
       handleSession(nextSession);
-      setScreen("home");
+      navigateToScreen("home", { replace: true });
       await loadApplicationData(nextSession);
     } catch (error) {
       window.alert(getErrorMessage(error));
@@ -718,7 +798,7 @@ export function App() {
   function handleLogout() {
     handleSession(null);
     setProfile(null);
-    setScreen("login");
+    navigateToScreen("login", { replace: true });
   }
 
   function openEventDetail(event: DisplayEvent) {
@@ -917,7 +997,7 @@ export function App() {
               scheduledEvent={scheduledEvent}
               language={appLanguage}
               onLanguageToggle={handleToggleLanguage}
-              onNavigate={setScreen}
+              onNavigate={navigateToScreen}
               onEventSelect={openEventDetail}
             />
           ) : null}
@@ -934,7 +1014,7 @@ export function App() {
               onCancelParticipation={handleCancelParticipation}
             />
           ) : null}
-          {screen === "scan" ? <ScanScreen language={appLanguage} user={displayUser} onLanguageToggle={handleToggleLanguage} onHome={() => setScreen("home")} /> : null}
+          {screen === "scan" ? <ScanScreen language={appLanguage} user={displayUser} onLanguageToggle={handleToggleLanguage} onHome={() => navigateToScreen("home")} /> : null}
           {screen === "wallet" ? (
             <WalletScreen
               tab={exchangeTab}
@@ -943,7 +1023,7 @@ export function App() {
               language={appLanguage}
               onLanguageToggle={handleToggleLanguage}
               onTabChange={setExchangeTab}
-              onPurchase={() => setScreen("purchase")}
+              onPurchase={() => navigateToScreen("purchase")}
               onProductSelect={setSelectedProduct}
             />
           ) : null}
@@ -969,7 +1049,7 @@ export function App() {
             />
           ) : null}
         </div>
-        {screen !== "login" ? <BottomNav current={screen} language={appLanguage} onNavigate={setScreen} /> : null}
+        {screen !== "login" ? <BottomNav current={screen} language={appLanguage} onNavigate={navigateToScreen} /> : null}
         {selectedEvent ? (
           <EventDetailScreen
             event={selectedEvent}
