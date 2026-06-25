@@ -200,14 +200,14 @@ export function requestPasswordReset(email: string) {
   return request<PasswordResetRequestResponse>("/auth/password/reset-request", {
     method: "POST",
     body: JSON.stringify({ email }),
-  });
+  , undefined, { retryOnNetworkError: true });
 }
 
 export function resetPassword(resetToken: string, newPassword: string) {
   return request<{ message: string }>("/auth/password/reset", {
     method: "POST",
     body: JSON.stringify({ reset_token: resetToken, new_password: newPassword }),
-  });
+  , undefined, { retryOnNetworkError: true });
 }
 
 export function changePassword(currentPassword: string, newPassword: string, token: string) {
