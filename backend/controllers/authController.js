@@ -2,18 +2,122 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const pool = require('../config/db');
 const { generateToken } = require('../utils/jwt');
+const { sendEmailVerificationMail, sendPasswordResetMail } = require('../services/mailService');
 
 function validatePassword(password) {
   return typeof password === 'string' && password.length >= 8;
+}
+
+function shouldExposeVerificationToken() {
+  return process.env.MAIL_EXPOSE_VERIFICATION_TOKEN === 'true';
 }
 
 function toSqlDate(date) {
   return date.toISOString().slice(0, 19).replace('T', ' ');
 }
 
+function getEmailVerificationExpiresAt() {
+  const expiresMinutes = Number(process.env.EMAIL_VERIFICATION_EXPIRES_MINUTES || 24 * 60);
+  return toSqlDate(new Date(Date.now() + expiresMinutes * 60 * 1000));
+}
+
+function getPublicFrontendBaseUrl() {
+  const firstCorsOrigin = (process.env.FRONTEND_ORIGIN || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean)[0];
+
+  return process.env.FRONTEND_BASE_URL || firstCorsOrigin || process.env.APP_BASE_URL || 'http://localhost:5173';
+}
+
+function buildEmailVerificationUrl(token) {
+  const baseUrl = getPublicFrontendBaseUrl();
+  const url = new URL(baseUrl);
+  url.searchParams.set('email_verification_token', token);
+  return url.toString();
+}
+
+function buildPasswordResetUrl(token) {
+  const baseUrl = getPublicFrontendBaseUrl();
+  const url = new URL(baseUrl);
+  url.searchParams.set('password_reset_token', token);
+  return url.toString();
+}
+
+function getPasswordResetExpiresAt() {
+  const expiresMinutes = Number(process.env.PASSWORD_RESET_EXPIRES_MINUTES || 30);
+  return toSqlDate(new Date(Date.now() + expiresMinutes * 60 * 1000));
+}
+
+function shouldExposeResetToken() {
+  return process.env.MAIL_EXPOSE_RESET_TOKEN === 'true';
+}
+
+async function issueEmailVerificationToken(queryable, userId) {
+  const verificationToken = crypto.randomBytes(24).toString('hex');
+  const expiresAt = getEmailVerificationExpiresAt();
+
+  await queryable.query(
+    `UPDATE email_verification_tokens
+     SET used_at = CURRENT_TIMESTAMP
+     WHERE user_id = ? AND used_at IS NULL`,
+    [userId]
+  );
+
+  await queryable.query(
+    `INSERT INTO email_verification_tokens (user_id, verification_token, expires_at)
+     VALUES (?, ?, ?)`,
+    [userId, verificationToken, expiresAt]
+  );
+
+  return {
+    token: verificationToken,
+    expiresAt,
+    verificationUrl: buildEmailVerificationUrl(verificationToken)
+  };
+}
+
+function buildEmailVerificationResponse(message, verification) {
+  const response = {
+    message,
+    requires_email_verification: true,
+    verification_expires_at: verification.expiresAt
+  };
+
+  if (shouldExposeVerificationToken()) {
+    response.verification_token = verification.token;
+    response.verification_url = verification.verificationUrl;
+  }
+
+  return response;
+}
+
+async function createVerificationNotification(queryable, userId) {
+  await queryable.query(
+    `INSERT INTO notifications (user_id, title, body)
+     VALUES (?, ?, ?)`,
+    [
+      userId,
+      'メールアドレス認証を完了してください',
+      '登録確認メールのURLから認証を完了してください。'
+    ]
+  );
+}
+
+async function sendVerificationEmail(email, verification) {
+  await sendEmailVerificationMail({
+    to: email,
+    verificationUrl: verification.verificationUrl,
+    expiresAt: verification.expiresAt
+  });
+}
+
 async function register(req, res, next) {
+  const connection = await pool.getConnection();
+
   try {
-    const { name, email, password, age_group, user_type } = req.body;
+    const { name, email: rawEmail, password, age_group, user_type } = req.body;
+    const email = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : rawEmail;
 
     if (!name || !email || !password) {
       return res.status(400).json({ message: 'Name, email, and password are required.' });
@@ -23,53 +127,53 @@ async function register(req, res, next) {
       return res.status(400).json({ message: 'Password must be at least 8 characters.' });
     }
 
-    const [existingUsers] = await pool.query(
+    await connection.beginTransaction();
+
+    const [existingUsers] = await connection.query(
       'SELECT user_id FROM users WHERE email = ?',
       [email]
     );
 
     if (existingUsers.length > 0) {
+      await connection.rollback();
       return res.status(400).json({ message: 'Email is already registered.' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const [result] = await pool.query(
+    const [result] = await connection.query(
       `INSERT INTO users (name, email, password, age_group, user_type, points)
        VALUES (?, ?, ?, ?, ?, 0)`,
       [name, email, hashedPassword, age_group || null, user_type || 'general']
     );
 
-    await pool.query(
+    await connection.query(
       `INSERT INTO user_settings (user_id, notification_enabled, language, font_size)
        VALUES (?, 1, 'ja', 'medium')`,
       [result.insertId]
     );
 
-    await pool.query(
-      `INSERT INTO notifications (user_id, title, body)
-       VALUES (?, ?, ?)`,
-      [result.insertId, 'Link Townへようこそ', '登録が完了しました。仮実装UIから各機能を検証できます。']
-    );
-
-    const token = generateToken({
-      id: result.insertId,
-      role: 'user'
-    });
+    const verification = await issueEmailVerificationToken(connection, result.insertId);
+    await createVerificationNotification(connection, result.insertId);
+    await sendVerificationEmail(email, verification);
+    await connection.commit();
 
     res.status(201).json({
-      message: 'User registered successfully.',
+      ...buildEmailVerificationResponse('User registered successfully. Please verify your email address before logging in.', verification),
       user_id: result.insertId,
-      token
     });
   } catch (error) {
+    await connection.rollback();
     next(error);
+  } finally {
+    connection.release();
   }
 }
 
 async function login(req, res, next) {
   try {
-    const { email, password } = req.body;
+    const { email: rawEmail, password } = req.body;
+    const email = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : rawEmail;
 
     if (!email || !password) {
       return res.status(400).json({ message: 'Email and password are required.' });
@@ -85,6 +189,11 @@ async function login(req, res, next) {
     }
 
     const user = users[0];
+
+    if (!user.email_verified_at) {
+      return res.status(403).json({ message: 'Email address is not verified. Please verify your email before logging in.' });
+    }
+
     const passwordMatch = await bcrypt.compare(password, user.password);
 
     if (!passwordMatch) {
@@ -104,6 +213,7 @@ async function login(req, res, next) {
         name: user.name,
         email: user.email,
         points: user.points,
+        email_verified_at: user.email_verified_at,
         role: 'user'
       }
     });
@@ -154,22 +264,129 @@ async function adminLogin(req, res, next) {
   }
 }
 
-async function requestPasswordReset(req, res, next) {
+async function verifyEmail(req, res, next) {
+  const connection = await pool.getConnection();
+
   try {
-    const { email } = req.body;
+    const { verification_token } = req.body;
+
+    if (!verification_token) {
+      return res.status(400).json({ message: 'Verification token is required.' });
+    }
+
+    await connection.beginTransaction();
+
+    const [tokens] = await connection.query(
+      `SELECT token_id, user_id
+       FROM email_verification_tokens
+       WHERE verification_token = ? AND used_at IS NULL AND expires_at >= CURRENT_TIMESTAMP`,
+      [verification_token]
+    );
+
+    if (tokens.length === 0) {
+      await connection.rollback();
+      return res.status(400).json({ message: 'Invalid or expired verification token.' });
+    }
+
+    await connection.query(
+      `UPDATE users
+       SET email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP)
+       WHERE user_id = ?`,
+      [tokens[0].user_id]
+    );
+
+    await connection.query(
+      `UPDATE email_verification_tokens
+       SET used_at = CURRENT_TIMESTAMP
+       WHERE token_id = ?`,
+      [tokens[0].token_id]
+    );
+
+    await connection.query(
+      `INSERT INTO notifications (user_id, title, body)
+       VALUES (?, ?, ?)`,
+      [tokens[0].user_id, 'メールアドレス認証が完了しました', 'ログインしてLink Townを利用できます。']
+    );
+
+    await connection.commit();
+
+    res.json({
+      message: 'Email verified successfully.',
+      user_id: tokens[0].user_id
+    });
+  } catch (error) {
+    await connection.rollback();
+    next(error);
+  } finally {
+    connection.release();
+  }
+}
+
+async function resendEmailVerification(req, res, next) {
+  const connection = await pool.getConnection();
+
+  try {
+    const { email: rawEmail } = req.body;
+    const email = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : rawEmail;
 
     if (!email) {
       return res.status(400).json({ message: 'Email is required.' });
     }
 
+    const genericMessage = 'If the email exists and is not verified, a verification email has been issued.';
+
+    await connection.beginTransaction();
+
+    const [users] = await connection.query(
+      'SELECT user_id, email_verified_at FROM users WHERE email = ?',
+      [email]
+    );
+
+    if (users.length === 0 || users[0].email_verified_at) {
+      await connection.commit();
+      return res.json({ message: genericMessage });
+    }
+
+    const verification = await issueEmailVerificationToken(connection, users[0].user_id);
+    await createVerificationNotification(connection, users[0].user_id);
+    await sendVerificationEmail(email, verification);
+    await connection.commit();
+
+    res.json(buildEmailVerificationResponse(genericMessage, verification));
+  } catch (error) {
+    await connection.rollback();
+    next(error);
+  } finally {
+    connection.release();
+  }
+}
+
+async function requestPasswordReset(req, res, next) {
+  try {
+    const { email: rawEmail } = req.body;
+    const email = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : rawEmail;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required.' });
+    }
+
+    const genericMessage = 'If the email exists, a reset token has been issued.';
     const [users] = await pool.query('SELECT user_id FROM users WHERE email = ?', [email]);
 
     if (users.length === 0) {
-      return res.json({ message: 'If the email exists, a reset token has been issued.' });
+      return res.json({ message: genericMessage });
     }
 
+    await pool.query(
+      `UPDATE password_reset_tokens
+       SET used_at = CURRENT_TIMESTAMP
+       WHERE user_id = ? AND used_at IS NULL`,
+      [users[0].user_id]
+    );
+
     const resetToken = crypto.randomBytes(24).toString('hex');
-    const expiresAt = toSqlDate(new Date(Date.now() + 30 * 60 * 1000));
+    const expiresAt = getPasswordResetExpiresAt();
+    const resetUrl = buildPasswordResetUrl(resetToken);
 
     await pool.query(
       `INSERT INTO password_reset_tokens (user_id, reset_token, expires_at)
@@ -177,9 +394,12 @@ async function requestPasswordReset(req, res, next) {
       [users[0].user_id, resetToken, expiresAt]
     );
 
-    const response = { message: 'If the email exists, a reset token has been issued.' };
-    if (process.env.NODE_ENV !== 'production') {
+    await sendPasswordResetMail({ to: email, resetUrl, expiresAt });
+
+    const response = { message: genericMessage, reset_expires_at: expiresAt };
+    if (shouldExposeResetToken()) {
       response.reset_token = resetToken;
+      response.reset_url = resetUrl;
     }
 
     res.json(response);
@@ -258,6 +478,8 @@ module.exports = {
   register,
   login,
   adminLogin,
+  verifyEmail,
+  resendEmailVerification,
   requestPasswordReset,
   resetPassword,
   changePassword

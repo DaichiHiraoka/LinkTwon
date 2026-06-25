@@ -19,6 +19,7 @@ export type AuthUser = {
   name: string;
   email: string;
   points: number;
+  email_verified_at?: string | null;
   role: "user";
 };
 
@@ -42,7 +43,19 @@ export type AdminAuthResponse = {
 export type RegisterResponse = {
   message: string;
   user_id: number;
-  token: string;
+  requires_email_verification: boolean;
+  verification_expires_at: string;
+  verification_token?: string;
+  verification_url?: string;
+};
+
+export type EmailVerificationResponse = {
+  message: string;
+  user_id?: number;
+  requires_email_verification?: boolean;
+  verification_expires_at?: string;
+  verification_token?: string;
+  verification_url?: string;
 };
 
 export type PasswordResetRequestResponse = {
@@ -57,6 +70,7 @@ export type UserProfile = {
   points: number;
   age_group: string | null;
   user_type: string | null;
+  email_verified_at?: string | null;
 };
 
 export type EventItem = {
@@ -212,6 +226,7 @@ export type ManagedUser = {
   points: number;
   age_group: string | null;
   user_type: string | null;
+  email_verified_at?: string | null;
   created_at: string;
 };
 

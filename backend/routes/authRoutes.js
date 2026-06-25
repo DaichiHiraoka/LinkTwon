@@ -4,6 +4,8 @@ const {
   register,
   login,
   adminLogin,
+  verifyEmail,
+  resendEmailVerification,
   requestPasswordReset,
   resetPassword,
   changePassword
@@ -16,6 +18,8 @@ const authLimiter = rateLimit({ windowMs: 60 * 1000, max: 30 });
 router.post('/register', authLimiter, register);
 router.post('/login', authLimiter, login);
 router.post('/admin/login', authLimiter, adminLogin);
+router.post('/email/verify', authLimiter, verifyEmail);
+router.post('/email/resend', authLimiter, resendEmailVerification);
 router.post('/password/reset-request', authLimiter, requestPasswordReset);
 router.post('/password/reset', authLimiter, resetPassword);
 router.put('/password', authenticateToken, changePassword);

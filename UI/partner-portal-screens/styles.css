@@ -1,0 +1,713 @@
+/* LinkTwon パートナーポータル デザインモック共通CSS
+ * 赤基調（イベント受付: 鮮赤 / 商品交換: ローズ赤）
+ * エンドユーザー UI (緑基調) と視覚的に明確に区別する
+ * 形状・余白・タッチサイズはエンドユーザー UI と同等の consumer-friendly
+ * 端末前提: タブレット横向き 2100×1300
+ */
+
+:root {
+  /* === Brand: Red === */
+  --primary: #dc2626;        /* primary red — event organizer */
+  --primary-dark: #7f1d1d;
+  --primary-soft: rgba(220, 38, 38, 0.12);
+  --primary-mid: rgba(220, 38, 38, 0.25);
+
+  --accent: #e11d48;         /* rose red — store theme */
+  --accent-dark: #9f1239;
+  --accent-soft: rgba(225, 29, 72, 0.14);
+
+  /* === Surfaces === */
+  --bg: #fff1f2;             /* very light pink */
+  --card: #ffffff;
+  --card-soft: #fff7f7;
+
+  /* === Ink === */
+  --ink: #1a1a1a;
+  --ink-strong: #000000;
+  --ink-muted: #5a5959;
+  --ink-soft: rgba(0, 0, 0, 0.6);
+  --ink-faint: rgba(0, 0, 0, 0.4);
+  --line: rgba(0, 0, 0, 0.1);
+
+  /* === Semantic feedback (intentionally not red, to differentiate from brand) === */
+  --success: #2e7d32;        /* green check — universal positive feedback */
+  --success-soft: rgba(46, 125, 50, 0.12);
+  --warn: #a16207;           /* dark yellow — warnings/recoverable errors */
+  --warn-soft: rgba(161, 98, 7, 0.14);
+  --error: #b91c1c;           /* deep red — critical errors only */
+  --error-soft: rgba(185, 28, 28, 0.1);
+
+  --shadow-card: 0 4px 24px rgba(127, 29, 29, 0.06);
+  --shadow-elev: 0 8px 32px rgba(127, 29, 29, 0.14);
+
+  --font-jp: "Noto Sans JP", "Yu Gothic", "Hiragino Sans", system-ui, sans-serif;
+  --font-en: "Inter", system-ui, sans-serif;
+
+  --r-button: 20px;
+  --r-input: 16px;
+  --r-card: 32px;
+  --r-hero: 40px;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  font-family: var(--font-jp);
+  color: var(--ink);
+  background: #d9d9d9;
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; cursor: pointer; border: 0; background: none; padding: 0; color: inherit; }
+input, textarea { font: inherit; }
+img { display: block; max-width: 100%; }
+h1, h2, h3, h4, p, ul { margin: 0; padding: 0; }
+ul { list-style: none; }
+
+/* ---------- タブレット枠 (2100×1300, 60% 縮小) ---------- */
+.tablet-frame {
+  width: 2100px;
+  height: 1300px;
+  margin: 40px auto;
+  padding: 60px 80px;
+  background: var(--bg);
+  border-radius: 32px;
+  position: relative;
+  overflow: hidden;
+  transform-origin: top center;
+  transform: scale(0.6);
+  margin-bottom: -520px;
+}
+
+/* ---------- 共通ヘッダー ---------- */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 56px;
+}
+.app-header .brand {
+  display: flex; align-items: center; gap: 18px;
+}
+.app-header .brand-mark {
+  width: 60px; height: 60px;
+  background: var(--primary);
+  border-radius: 18px;
+  display: grid; place-items: center;
+  color: var(--card);
+  font-weight: 800; font-size: 28px;
+  font-family: var(--font-en);
+}
+body.theme-store .app-header .brand-mark { background: var(--accent); }
+
+.app-header .brand-name {
+  font-size: 36px; font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.app-header .brand-sub {
+  font-size: 18px; color: var(--ink-soft);
+  margin-top: 2px;
+}
+.app-header .context { text-align: right; }
+.app-header .context-name { font-size: 22px; font-weight: 700; }
+.app-header .context-meta {
+  font-size: 16px; color: var(--ink-soft); margin-top: 4px;
+}
+.app-header .header-actions {
+  display: flex; gap: 16px; align-items: center;
+}
+.icon-btn {
+  width: 64px; height: 64px;
+  border-radius: 20px;
+  background: var(--card);
+  display: grid; place-items: center;
+  font-size: 26px;
+  box-shadow: var(--shadow-card);
+}
+
+/* ---------- ボタン ---------- */
+.btn {
+  height: 88px;
+  border-radius: var(--r-button);
+  padding: 0 36px;
+  font-weight: 700;
+  font-size: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  transition: transform 0.06s;
+}
+.btn:active { transform: translateY(1px); }
+.btn-primary {
+  background: var(--primary);
+  color: var(--card);
+}
+body.theme-store .btn-primary { background: var(--accent); }
+
+.btn-outline {
+  background: var(--card);
+  color: var(--ink);
+  border: 2px solid var(--line);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: 18px;
+  height: 64px;
+}
+.btn-block { width: 100%; }
+.btn-xl { height: 112px; font-size: 28px; }
+
+/* ---------- 入力 ---------- */
+.input {
+  height: 80px;
+  background: var(--card);
+  border: 2px solid var(--line);
+  border-radius: var(--r-input);
+  padding: 0 24px;
+  font-size: 22px;
+  color: var(--ink);
+  width: 100%;
+}
+.input::placeholder { color: var(--ink-faint); }
+.input:focus { outline: none; border-color: var(--primary); }
+body.theme-store .input:focus { border-color: var(--accent); }
+.input.error { border-color: var(--error); background: var(--error-soft); }
+
+textarea.input { height: auto; padding: 20px 24px; min-height: 180px; resize: vertical; line-height: 1.6; }
+
+/* ---------- カード ---------- */
+.card {
+  background: var(--card);
+  border-radius: var(--r-card);
+  padding: 40px;
+  box-shadow: var(--shadow-card);
+}
+.card-hero {
+  background: var(--card);
+  border-radius: var(--r-hero);
+  padding: 56px;
+  box-shadow: var(--shadow-elev);
+}
+
+/* ---------- 中央集中レイアウト (アクセスコード等) ---------- */
+.center-stage {
+  display: grid;
+  place-items: center;
+  min-height: 920px;
+}
+.center-stage-inner { width: 880px; }
+
+/* ---------- ロゴ大型表示 ---------- */
+.hero-brand {
+  text-align: center;
+  margin-bottom: 56px;
+}
+.hero-brand .mark {
+  width: 132px; height: 132px;
+  background: var(--primary);
+  border-radius: 40px;
+  display: inline-grid; place-items: center;
+  color: var(--card);
+  font-size: 60px; font-weight: 800;
+  font-family: var(--font-en);
+  margin-bottom: 24px;
+  box-shadow: 0 12px 32px rgba(220, 38, 38, 0.3);
+}
+body.theme-store .hero-brand .mark {
+  background: var(--accent);
+  box-shadow: 0 12px 32px rgba(225, 29, 72, 0.3);
+}
+.hero-brand .name {
+  font-size: 56px; font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.hero-brand .sub {
+  font-size: 24px; color: var(--ink-soft);
+  margin-top: 12px;
+}
+
+/* ---------- イベント / 商品 一覧グリッド ---------- */
+.item-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+}
+.item-card {
+  background: var(--card);
+  border-radius: var(--r-card);
+  padding: 0;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  cursor: pointer;
+  display: grid;
+  grid-template-rows: 280px 1fr;
+}
+.item-card .thumb {
+  background: var(--primary-soft);
+  display: grid; place-items: center;
+  color: var(--primary);
+  font-size: 80px;
+}
+.item-card.is-store .thumb,
+body.theme-store .item-card .thumb {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.item-card .body {
+  padding: 28px 32px;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+.item-card .title {
+  font-size: 26px; font-weight: 700;
+  line-height: 1.35;
+}
+.item-card .meta {
+  font-size: 18px; color: var(--ink-soft);
+  display: flex; gap: 18px; flex-wrap: wrap;
+}
+.item-card .points-pill {
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+  font-weight: 700;
+  font-size: 20px;
+  padding: 6px 16px;
+  border-radius: 999px;
+  display: inline-block;
+  width: fit-content;
+}
+.item-card.is-store .points-pill,
+body.theme-store .item-card .points-pill {
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+
+/* ---------- スキャン主役画面 ---------- */
+.scan-stage {
+  display: grid;
+  grid-template-columns: 1fr 720px;
+  gap: 48px;
+  align-items: center;
+}
+.scan-info {
+  display: grid; gap: 28px;
+  padding: 32px 8px;
+}
+.scan-info .label {
+  font-size: 20px; color: var(--ink-soft);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.scan-info .target-title {
+  font-size: 52px; font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+.scan-info .target-meta {
+  display: grid; gap: 12px;
+  font-size: 22px; color: var(--ink-muted);
+}
+.scan-info .target-meta .row {
+  display: flex; align-items: center; gap: 16px;
+}
+.scan-info .target-meta .icon {
+  width: 40px; height: 40px;
+  display: grid; place-items: center;
+  background: var(--primary-soft);
+  border-radius: 12px;
+  color: var(--primary);
+  font-size: 20px;
+}
+body.theme-store .scan-info .target-meta .icon {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.scan-info .points-large {
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+  font-size: 56px; font-weight: 800;
+  padding: 20px 32px;
+  border-radius: 28px;
+  width: fit-content;
+}
+body.theme-store .scan-info .points-large {
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+
+.scan-target {
+  background: var(--card);
+  border-radius: var(--r-hero);
+  padding: 48px;
+  box-shadow: var(--shadow-elev);
+  display: grid;
+  gap: 32px;
+  justify-items: center;
+}
+.qr-frame {
+  width: 480px; height: 480px;
+  background: var(--bg);
+  border-radius: 36px;
+  position: relative;
+  display: grid; place-items: center;
+}
+.qr-frame .corners {
+  position: absolute; inset: 24px;
+  border: 6px solid var(--primary);
+  border-radius: 28px;
+  background: repeating-linear-gradient(
+    45deg, transparent 0 14px, rgba(220,38,38,0.04) 14px 28px
+  );
+}
+.qr-frame .qr-icon {
+  position: relative;
+  font-size: 180px;
+  color: var(--primary);
+  line-height: 1;
+}
+body.theme-store .qr-frame .corners {
+  border-color: var(--accent);
+  background: repeating-linear-gradient(
+    45deg, transparent 0 14px, rgba(225,29,72,0.04) 14px 28px
+  );
+}
+body.theme-store .qr-frame .qr-icon { color: var(--accent); }
+
+.scan-target .prompt {
+  font-size: 32px; font-weight: 700;
+  text-align: center;
+}
+.scan-target .sub {
+  font-size: 20px; color: var(--ink-soft);
+  text-align: center;
+}
+
+/* ---------- カメラオーバーレイ ---------- */
+.camera-overlay {
+  position: absolute; inset: 0;
+  background: rgba(0, 0, 0, 0.92);
+  display: grid; place-items: center;
+  border-radius: 32px;
+  z-index: 10;
+}
+.camera-viewfinder {
+  width: 720px; height: 720px;
+  background: #0a0a0a;
+  border-radius: 36px;
+  position: relative;
+  overflow: hidden;
+}
+.camera-viewfinder .corner {
+  position: absolute;
+  width: 64px; height: 64px;
+  border: 6px solid var(--primary);
+}
+body.theme-store .camera-viewfinder .corner { border-color: var(--accent); }
+.camera-viewfinder .corner.tl { top: 60px; left: 60px; border-right: 0; border-bottom: 0; border-top-left-radius: 16px; }
+.camera-viewfinder .corner.tr { top: 60px; right: 60px; border-left: 0; border-bottom: 0; border-top-right-radius: 16px; }
+.camera-viewfinder .corner.bl { bottom: 60px; left: 60px; border-right: 0; border-top: 0; border-bottom-left-radius: 16px; }
+.camera-viewfinder .corner.br { bottom: 60px; right: 60px; border-left: 0; border-top: 0; border-bottom-right-radius: 16px; }
+
+.camera-scan-line {
+  position: absolute; left: 60px; right: 60px; top: 50%;
+  height: 4px; background: var(--primary);
+  box-shadow: 0 0 24px var(--primary);
+}
+body.theme-store .camera-scan-line {
+  background: var(--accent);
+  box-shadow: 0 0 24px var(--accent);
+}
+
+.camera-prompt {
+  color: var(--card);
+  font-size: 32px; font-weight: 700;
+  text-align: center;
+  margin-top: 36px;
+}
+.camera-close {
+  position: absolute; top: 60px; right: 60px;
+  width: 80px; height: 80px;
+  background: rgba(255,255,255,0.12);
+  color: var(--card);
+  border-radius: 24px;
+  font-size: 32px;
+}
+
+/* ---------- モーダル ---------- */
+.modal-overlay {
+  position: absolute; inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: grid; place-items: center;
+  z-index: 10;
+  border-radius: 32px;
+}
+.modal {
+  width: 880px;
+  background: var(--card);
+  border-radius: var(--r-hero);
+  padding: 56px;
+  box-shadow: var(--shadow-elev);
+}
+.modal h2 {
+  font-size: 36px; font-weight: 700;
+  text-align: center;
+  margin-bottom: 32px;
+}
+.modal .recipient {
+  text-align: center;
+  margin-bottom: 32px;
+}
+.modal .recipient .name {
+  font-size: 48px; font-weight: 700;
+  margin-bottom: 8px;
+}
+.modal .recipient .id {
+  font-size: 18px; color: var(--ink-soft);
+  font-family: var(--font-en);
+}
+.modal .delta {
+  text-align: center;
+  background: var(--primary-soft);
+  padding: 32px;
+  border-radius: var(--r-card);
+  margin-bottom: 24px;
+}
+body.theme-store .modal .delta { background: var(--accent-soft); }
+.modal .delta .label {
+  font-size: 18px; color: var(--ink-soft);
+  margin-bottom: 8px;
+}
+.modal .delta .value {
+  font-size: 64px; font-weight: 800;
+  color: var(--primary-dark);
+  line-height: 1;
+}
+body.theme-store .modal .delta .value { color: var(--accent-dark); }
+.modal .delta .for {
+  font-size: 20px; color: var(--ink-muted);
+  margin-top: 16px;
+}
+.modal .actions {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 20px;
+  margin-top: 8px;
+}
+
+/* ---------- 大きな成功画面 ---------- */
+/* 成功チェックは赤ブランド (primary/accent) で塗る — ブランドに一貫させる
+ * 緑は使わない（赤基調の世界観を維持） */
+.success-stage {
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 80px 0;
+}
+.success-stage .check {
+  width: 220px; height: 220px;
+  background: var(--primary);
+  border-radius: 50%;
+  display: grid; place-items: center;
+  color: var(--card);
+  font-size: 140px;
+  line-height: 1;
+  margin-bottom: 40px;
+  box-shadow: 0 16px 48px rgba(220, 38, 38, 0.32);
+}
+body.theme-store .success-stage .check {
+  background: var(--accent);
+  box-shadow: 0 16px 48px rgba(225, 29, 72, 0.32);
+}
+.success-stage .msg {
+  font-size: 56px; font-weight: 700;
+  margin-bottom: 24px;
+}
+.success-stage .name-line {
+  font-size: 32px;
+  margin-bottom: 16px;
+}
+.success-stage .name-line strong { font-weight: 700; }
+.success-stage .delta {
+  font-size: 28px;
+  color: var(--primary-dark);
+  font-weight: 700;
+  padding: 12px 32px;
+  background: var(--primary-soft);
+  border-radius: 24px;
+  margin-bottom: 56px;
+}
+body.theme-store .success-stage .delta {
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+.success-stage .next {
+  display: flex; gap: 20px;
+}
+
+/* ---------- 失敗 / 警告画面 ---------- */
+/* エラー/警告は dark yellow (warn) を default にして、赤ブランドに埋もれず白地でも見やすくする */
+.alert-stage {
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 80px 0;
+}
+.alert-stage .mark {
+  width: 200px; height: 200px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 120px;
+  margin-bottom: 40px;
+}
+.alert-stage.error .mark {
+  background: var(--error-soft);
+  color: var(--error);
+}
+.alert-stage .msg {
+  font-size: 48px; font-weight: 700;
+  margin-bottom: 16px;
+}
+.alert-stage .hint {
+  font-size: 24px;
+  color: var(--ink-soft);
+  margin-bottom: 48px;
+  max-width: 720px;
+}
+.alert-stage .next {
+  display: flex; gap: 20px;
+}
+
+/* ---------- アクセスコード フォーム ---------- */
+.code-form {
+  display: grid;
+  gap: 24px;
+}
+.code-form label {
+  font-size: 22px; font-weight: 700;
+  color: var(--ink);
+  text-align: center;
+}
+.code-form .input {
+  text-align: center;
+  font-size: 28px;
+  font-family: var(--font-en);
+  letter-spacing: 0.08em;
+}
+.code-form .submit-row { margin-top: 8px; }
+.code-form .help {
+  text-align: center;
+  margin-top: 12px;
+}
+.code-form .help a {
+  color: var(--ink-soft);
+  font-size: 18px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.code-form .error-msg {
+  background: var(--error-soft);
+  color: var(--error);
+  border-radius: var(--r-input);
+  padding: 16px 24px;
+  text-align: center;
+  font-size: 18px; font-weight: 700;
+}
+
+/* ---------- カウンタ ---------- */
+.counter {
+  background: var(--card);
+  border-radius: 24px;
+  padding: 20px 28px;
+  box-shadow: var(--shadow-card);
+  display: flex; align-items: center; gap: 16px;
+}
+.counter .num {
+  font-size: 40px; font-weight: 800;
+  color: var(--primary-dark);
+  font-family: var(--font-en);
+}
+body.theme-store .counter .num { color: var(--accent-dark); }
+.counter .lbl {
+  font-size: 16px; color: var(--ink-soft);
+  font-weight: 700;
+}
+
+/* ---------- 画面 ID ---------- */
+.frame-id {
+  position: absolute;
+  bottom: 28px; right: 36px;
+  font-size: 14px;
+  color: var(--ink-faint);
+  font-family: var(--font-en);
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+/* ---------- カタログ用 ---------- */
+.catalog {
+  max-width: 1280px;
+  margin: 40px auto;
+  background: #fff;
+  border-radius: 24px;
+  padding: 48px;
+  box-shadow: var(--shadow-card);
+}
+.catalog h1 {
+  font-size: 36px; font-weight: 700;
+  margin-bottom: 12px;
+}
+.catalog p.lead {
+  font-size: 18px; color: var(--ink-soft);
+  margin-bottom: 40px;
+  line-height: 1.7;
+}
+.catalog-section { margin-bottom: 56px; }
+.catalog-section h2 {
+  font-size: 24px; font-weight: 700;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--line);
+}
+.catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+.catalog-card {
+  display: block;
+  background: var(--card);
+  border: 2px solid var(--line);
+  border-radius: 20px;
+  padding: 24px;
+  text-decoration: none;
+  color: var(--ink);
+  transition: all 0.12s;
+}
+.catalog-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--primary);
+  box-shadow: var(--shadow-card);
+}
+.catalog-card.is-store:hover { border-color: var(--accent); }
+.catalog-card .id {
+  font-size: 13px; font-weight: 800;
+  color: var(--primary);
+  font-family: var(--font-en);
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+.catalog-card.is-store .id { color: var(--accent); }
+.catalog-card .name {
+  font-size: 18px; font-weight: 700;
+  margin-bottom: 6px;
+}
+.catalog-card .desc {
+  font-size: 14px; color: var(--ink-soft);
+  line-height: 1.5;
+}

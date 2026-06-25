@@ -17,4 +17,5 @@
 - `linktown-event-organizer-wireframe.png`: 横2100px × 縦1300pxタブレット前提の赤基調イベント主催者向けアプリワイヤーフレーム
 - `linktown-store-portal-wireframe.png`: 横2100px × 縦1300pxタブレット前提の赤基調商店向けアプリワイヤーフレーム
 - `TRANSITION_MAP_NOTES.md`: 全UI遷移図の補足メモ
+- `partner-portal-screens/`: パートナーポータル 全 16 画面 HTML デザインモック（イベント主催者 8 + 商店 8、各 8 状態）。`partner-portal-screens/index.html` がカタログ入口。
 

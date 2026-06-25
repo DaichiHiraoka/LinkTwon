@@ -22,9 +22,14 @@
 | POST | `/auth/register` | 不要 | 一般ユーザー登録 |
 | POST | `/auth/login` | 不要 | 一般ユーザーログイン |
 | POST | `/auth/admin/login` | 不要 | 管理者ログイン |
+| POST | `/auth/email/verify` | 不要 | 登録確認メール token によるメール認証完了 |
+| POST | `/auth/email/resend` | 不要 | 未認証ユーザーへの登録確認メール token 再発行 |
 | POST | `/auth/password/reset-request` | 不要 | パスワード再発行 token 発行。開発時は response に `reset_token` を含む |
 | POST | `/auth/password/reset` | 不要 | reset token によるパスワード再設定 |
 | PUT | `/auth/password` | user | 現在パスワード確認付きのパスワード変更 |
+
+登録確認メールは既定で `MAIL_DRIVER=smtp` として実SMTP配送します。`SMTP_HOST`、`SMTP_FROM`、必要に応じて `SMTP_USER` / `SMTP_PASSWORD` を設定してください。  
+自動テストや明示的なローカル確認のみ `MAIL_DRIVER=outbox` と `MAIL_EXPOSE_VERIFICATION_TOKEN=true` を使用できます。
 
 ## Users
 

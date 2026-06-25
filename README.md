@@ -2,6 +2,15 @@
 
 Link Town is a local event and point platform with a Node.js/Express backend and a React/Vite frontend.
 
+## デプロイ済み環境
+
+| | URL |
+|---|---|
+| **フロントエンド** | https://link-twon.vercel.app/ |
+| **バックエンド** | https://linktwon-backend.onrender.com |
+
+詳細は [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) を参照。
+
 ## Development Flow
 
 Use `dev` as the development integration branch. Do not change `main` directly for system changes.

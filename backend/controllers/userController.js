@@ -33,7 +33,7 @@ async function getUserPoints(req, res, next) {
     }
 
     const [users] = await pool.query(
-      `SELECT user_id, name, email, points, age_group, user_type
+      `SELECT user_id, name, email, points, age_group, user_type, email_verified_at
        FROM users
        WHERE user_id = ?`,
       [id]
