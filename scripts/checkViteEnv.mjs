@@ -64,6 +64,10 @@ function validateUrl(name, value, errors, required) {
   }
 }
 
+function isExplicitlyPublicBrowserKey(key) {
+  return /_(PUBLISHABLE|PUBLIC|ANON)_KEY$/i.test(key);
+}
+
 const cwd = process.cwd();
 const env = loadEnv(cwd, mode);
 const errors = [];
@@ -76,7 +80,11 @@ for (const [key, value] of Object.entries(env)) {
   if (!key.startsWith("VITE_")) {
     continue;
   }
-  if (/DATABASE|PASSWORD|SECRET|TOKEN|PRIVATE|KEY/i.test(key)) {
+  const exposesLikelyCredential =
+    /DATABASE|PASSWORD|SECRET|TOKEN|PRIVATE/i.test(key) ||
+    (/KEY/i.test(key) && !isExplicitlyPublicBrowserKey(key));
+
+  if (exposesLikelyCredential) {
     errors.push(`${key} must not be exposed to browser code through a VITE_ variable.`);
   }
   if (/mysql:\/\/|postgres:\/\/|jwt|secret/i.test(String(value))) {

@@ -117,6 +117,7 @@ Do not expose backend secrets through any `VITE_` variable.
 - `VITE_PROXY_TARGET`: local Vite proxy target. Development and test default to `http://127.0.0.1:3000`.
 
 Only public values may use the `VITE_` prefix. Do not put database URLs, JWT secrets, API tokens, or SMTP credentials in Vite variables.
+Browser-publishable provider keys may be exposed only when their variable names make that explicit, for example `VITE_*_PUBLISHABLE_KEY`, `VITE_*_PUBLIC_KEY`, or `VITE_*_ANON_KEY`.
 
 ## Partner Portal Variables
 
