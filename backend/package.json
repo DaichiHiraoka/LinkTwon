@@ -4,8 +4,10 @@
   "main": "server.js",
   "scripts": {
     "db:report": "node scripts/dbReport.js",
+    "db:migrate:mysql": "node scripts/migrateMysql.js",
     "db:reset": "node scripts/resetDb.js",
     "db:seed:demo": "node scripts/seedDemoData.js",
+    "env:check": "node scripts/checkEnv.js",
     "test": "npm run test:smoke",
     "test:smoke": "node scripts/smokeTest.js",
     "start": "node server.js",

@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const pool = require('../config/db');
+const { env } = require('../config/env');
 const { generateToken } = require('../utils/jwt');
 const { sendEmailVerificationMail, sendPasswordResetMail } = require('../services/mailService');
 
@@ -9,7 +10,7 @@ function validatePassword(password) {
 }
 
 function shouldExposeVerificationToken() {
-  return process.env.MAIL_EXPOSE_VERIFICATION_TOKEN === 'true';
+  return env.MAIL_EXPOSE_VERIFICATION_TOKEN;
 }
 
 function toSqlDate(date) {
@@ -17,17 +18,11 @@ function toSqlDate(date) {
 }
 
 function getEmailVerificationExpiresAt() {
-  const expiresMinutes = Number(process.env.EMAIL_VERIFICATION_EXPIRES_MINUTES || 24 * 60);
-  return toSqlDate(new Date(Date.now() + expiresMinutes * 60 * 1000));
+  return toSqlDate(new Date(Date.now() + env.EMAIL_VERIFICATION_EXPIRES_MINUTES * 60 * 1000));
 }
 
 function getPublicFrontendBaseUrl() {
-  const firstCorsOrigin = (process.env.FRONTEND_ORIGIN || '')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean)[0];
-
-  return process.env.FRONTEND_BASE_URL || firstCorsOrigin || process.env.APP_BASE_URL || 'http://localhost:5173';
+  return env.FRONTEND_BASE_URL;
 }
 
 function buildEmailVerificationUrl(token) {
@@ -45,12 +40,11 @@ function buildPasswordResetUrl(token) {
 }
 
 function getPasswordResetExpiresAt() {
-  const expiresMinutes = Number(process.env.PASSWORD_RESET_EXPIRES_MINUTES || 30);
-  return toSqlDate(new Date(Date.now() + expiresMinutes * 60 * 1000));
+  return toSqlDate(new Date(Date.now() + env.PASSWORD_RESET_EXPIRES_MINUTES * 60 * 1000));
 }
 
 function shouldExposeResetToken() {
-  return process.env.MAIL_EXPOSE_RESET_TOKEN === 'true';
+  return env.MAIL_EXPOSE_RESET_TOKEN;
 }
 
 async function issueEmailVerificationToken(queryable, userId) {

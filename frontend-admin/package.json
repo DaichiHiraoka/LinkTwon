@@ -1,0 +1,26 @@
+{
+  "name": "link-town-frontend-admin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5174",
+    "build": "node ../scripts/checkViteEnv.mjs frontend-admin production && tsc --noEmit && vite build",
+    "build:staging": "node ../scripts/checkViteEnv.mjs frontend-admin staging && tsc --noEmit && vite build --mode staging",
+    "build:test": "node ../scripts/checkViteEnv.mjs frontend-admin test && tsc --noEmit && vite build --mode test",
+    "env:check": "node ../scripts/checkViteEnv.mjs frontend-admin production",
+    "preview": "vite preview --host 0.0.0.0 --port 5174"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^5.0.4",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.2",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2"
+  }
+}

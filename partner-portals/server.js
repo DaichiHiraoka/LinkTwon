@@ -7,15 +7,19 @@ const {
   loadTranslationCache,
   refreshTranslationCache
 } = require('./lib/translationCache');
+const {
+  readPartnerData,
+  recordEventCheckIn,
+  recordStoreExchange
+} = require('./lib/partnerRepository');
+const { env } = require('./config/env');
 
-const APP_ROLE = process.env.PARTNER_APP_ROLE === 'store' ? 'store' : 'event';
-const PORT = Number(process.env.PORT || (APP_ROLE === 'store' ? 5182 : 5181));
+const APP_ROLE = env.PARTNER_APP_ROLE;
+const PORT = env.PORT;
 const ROOT_DIR = __dirname;
 const PUBLIC_DIR = path.join(ROOT_DIR, APP_ROLE === 'store' ? 'store-app' : 'event-organizer-app');
-const DATA_PATH = path.join(ROOT_DIR, 'data', 'partner-data.json');
 const CACHE_PATH = path.join(ROOT_DIR, 'data', 'translation-cache.json');
 const DAY_MS = 24 * 60 * 60 * 1000;
-const processedScans = new Set();
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -25,11 +29,6 @@ const MIME_TYPES = {
   '.png': 'image/png',
   '.svg': 'image/svg+xml'
 };
-
-async function readPartnerData(dataPath = DATA_PATH) {
-  const raw = await fs.readFile(dataPath, 'utf8');
-  return JSON.parse(raw);
-}
 
 function sendJson(response, statusCode, body) {
   response.writeHead(statusCode, {
@@ -140,7 +139,7 @@ function translateService(service, category, cache, locale) {
 }
 
 async function buildEventPayload(code, locale, options = {}) {
-  const data = await readPartnerData(options.dataPath || DATA_PATH);
+  const data = await readPartnerData(options);
   const organizer = data.eventOrganizers.find((item) => item.login_code === code);
 
   if (!organizer) {
@@ -166,7 +165,7 @@ async function buildEventPayload(code, locale, options = {}) {
 }
 
 async function buildStorePayload(code, locale, options = {}) {
-  const data = await readPartnerData(options.dataPath || DATA_PATH);
+  const data = await readPartnerData(options);
   const store = data.stores.find((item) => item.login_code === code);
 
   if (!store) {
@@ -194,8 +193,8 @@ async function buildStorePayload(code, locale, options = {}) {
   };
 }
 
-async function processEventCheckIn(body, locale) {
-  const data = await readPartnerData();
+async function processEventCheckIn(body, locale, options = {}) {
+  const data = await readPartnerData(options);
   const organizer = data.eventOrganizers.find((item) => item.login_code === body.code);
 
   if (!organizer) {
@@ -209,15 +208,13 @@ async function processEventCheckIn(body, locale) {
   }
 
   const user = parseUserQrPayload(body.user_qr_payload);
-  const scanKey = `event:${event.event_id}:${user.user_id}:${user.nonce}`;
+  const writeResult = await recordEventCheckIn({ organizer, event, user }, options);
 
-  if (processedScans.has(scanKey)) {
+  if (writeResult.duplicate) {
     return { status: 409, body: { message: 'This user QR has already been used for this event.', user, event_id: event.event_id } };
   }
 
-  processedScans.add(scanKey);
-
-  const cache = await loadTranslationCache(CACHE_PATH);
+  const cache = await loadTranslationCache(options.cachePath || CACHE_PATH);
   const translatedEvent = translateEvent(event, cache, locale);
 
   return {
@@ -232,8 +229,8 @@ async function processEventCheckIn(body, locale) {
   };
 }
 
-async function processStoreExchange(body, locale) {
-  const data = await readPartnerData();
+async function processStoreExchange(body, locale, options = {}) {
+  const data = await readPartnerData(options);
   const store = data.stores.find((item) => item.login_code === body.code);
 
   if (!store) {
@@ -247,15 +244,13 @@ async function processStoreExchange(body, locale) {
   }
 
   const user = parseUserQrPayload(body.user_qr_payload);
-  const scanKey = `store:${service.service_id}:${user.user_id}:${user.nonce}`;
+  const writeResult = await recordStoreExchange({ store, service, user }, options);
 
-  if (processedScans.has(scanKey)) {
+  if (writeResult.duplicate) {
     return { status: 409, body: { message: 'This user QR has already been used for this service.', user, service_id: service.service_id } };
   }
 
-  processedScans.add(scanKey);
-
-  const cache = await loadTranslationCache(CACHE_PATH);
+  const cache = await loadTranslationCache(options.cachePath || CACHE_PATH);
   const category = data.serviceCategories.find((item) => item.category_id === service.category_id);
   const translatedService = translateService(service, category, cache, locale);
 
@@ -324,7 +319,7 @@ async function handleApi(request, response, requestUrl) {
   }
 
   if (request.method === 'POST' && requestUrl.pathname === '/api/translations/refresh') {
-    const refreshKey = process.env.PARTNER_REFRESH_KEY;
+    const refreshKey = env.PARTNER_REFRESH_KEY;
 
     if (refreshKey && request.headers['x-refresh-key'] !== refreshKey) {
       return sendError(response, 403, 'Invalid refresh key.');
@@ -424,6 +419,7 @@ module.exports = {
   parseUserQrPayload,
   processEventCheckIn,
   processStoreExchange,
+  readPartnerData,
   refreshTranslationsOnSchedule,
   startServer
 };

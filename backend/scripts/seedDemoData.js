@@ -1,12 +1,11 @@
-require('../config/loadEnv');
-
 const bcrypt = require('bcryptjs');
 const pool = require('../config/db');
+const { env } = require('../config/env');
 
-const demoEmail = process.env.DEMO_USER_EMAIL || 'demo@example.com';
-const demoPassword = process.env.DEMO_USER_PASSWORD || 'password123';
-const adminId = process.env.DEFAULT_ADMIN_ID || 'admin';
-const adminPassword = process.env.DEFAULT_ADMIN_PASSWORD || 'admin123';
+const demoEmail = env.DEMO_USER_EMAIL;
+const demoPassword = env.DEMO_USER_PASSWORD;
+const adminId = env.DEFAULT_ADMIN_ID;
+const adminPassword = env.DEFAULT_ADMIN_PASSWORD;
 
 const demoEvents = [
   {

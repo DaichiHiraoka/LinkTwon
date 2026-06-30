@@ -1,8 +1,7 @@
-require('./loadEnv');
-
 const fs = require('fs');
 const mysql = require('mysql2/promise');
 const { getSqlitePool } = require('../database/sqlite');
+const { env } = require('./env');
 
 function safeDecode(value) {
   try {
@@ -12,14 +11,10 @@ function safeDecode(value) {
   }
 }
 
-function boolFromEnv(value) {
-  return value === 'true' || value === '1';
-}
-
 function getSslOptions(searchParams = new URLSearchParams()) {
   const sslMode = (searchParams.get('ssl-mode') || searchParams.get('sslmode') || '').toUpperCase();
   const sslRequested =
-    boolFromEnv(process.env.MYSQL_SSL) ||
+    env.MYSQL_SSL ||
     sslMode === 'REQUIRED' ||
     sslMode === 'VERIFY_CA' ||
     sslMode === 'VERIFY_IDENTITY';
@@ -29,26 +24,18 @@ function getSslOptions(searchParams = new URLSearchParams()) {
   }
 
   const ssl = {
-    rejectUnauthorized: process.env.MYSQL_SSL_REJECT_UNAUTHORIZED !== 'false'
+    rejectUnauthorized: env.MYSQL_SSL_REJECT_UNAUTHORIZED
   };
 
-  if (process.env.MYSQL_SSL_CA) {
-    ssl.ca = fs.readFileSync(process.env.MYSQL_SSL_CA, 'utf8');
+  if (env.MYSQL_SSL_CA) {
+    ssl.ca = fs.readFileSync(env.MYSQL_SSL_CA, 'utf8');
   }
 
   return ssl;
 }
 
 function getDbClient() {
-  if (process.env.DB_CLIENT) {
-    return process.env.DB_CLIENT.toLowerCase();
-  }
-
-  if (process.env.DATABASE_URL?.startsWith('mysql://') || process.env.DATABASE_URL?.startsWith('mysql2://')) {
-    return 'mysql';
-  }
-
-  return 'sqlite';
+  return env.DB_CLIENT;
 }
 
 function getMysqlConfigFromUrl(databaseUrl) {
@@ -63,29 +50,29 @@ function getMysqlConfigFromUrl(databaseUrl) {
     port: Number(parsed.port || 3306),
     user: safeDecode(parsed.username || ''),
     password: safeDecode(parsed.password || ''),
-    database: safeDecode(parsed.pathname.replace(/^\//, '')) || process.env.DB_NAME || 'linktown',
+    database: safeDecode(parsed.pathname.replace(/^\//, '')) || env.DB_NAME,
     ssl: getSslOptions(parsed.searchParams)
   };
 }
 
 function getMysqlConfigFromEnv() {
   return {
-    host: process.env.DB_HOST || '127.0.0.1',
-    port: Number(process.env.DB_PORT || 3306),
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'linktown',
+    host: env.DB_HOST,
+    port: env.DB_PORT,
+    user: env.DB_USER,
+    password: env.DB_PASSWORD,
+    database: env.DB_NAME,
     ssl: getSslOptions()
   };
 }
 
 function createMysqlPool() {
-  const config = process.env.DATABASE_URL ? getMysqlConfigFromUrl(process.env.DATABASE_URL) : getMysqlConfigFromEnv();
+  const config = env.DATABASE_URL ? getMysqlConfigFromUrl(env.DATABASE_URL) : getMysqlConfigFromEnv();
 
   return mysql.createPool({
     ...config,
     waitForConnections: true,
-    connectionLimit: Number(process.env.DB_CONNECTION_LIMIT || 10),
+    connectionLimit: env.DB_CONNECTION_LIMIT,
     queueLimit: 0
   });
 }
@@ -95,5 +82,5 @@ const dbClient = getDbClient();
 if (dbClient === 'mysql') {
   module.exports = createMysqlPool();
 } else {
-  module.exports = getSqlitePool();
+  module.exports = getSqlitePool(env.SQLITE_PATH);
 }

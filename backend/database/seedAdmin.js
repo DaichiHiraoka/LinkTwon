@@ -1,11 +1,11 @@
-require('../config/loadEnv');
 const bcrypt = require('bcryptjs');
 const pool = require('../config/db');
+const { env } = require('../config/env');
 
 async function seedAdmin() {
   try {
-    const adminId = process.env.DEFAULT_ADMIN_ID || 'admin';
-    const adminPassword = process.env.DEFAULT_ADMIN_PASSWORD || 'admin123';
+    const adminId = env.DEFAULT_ADMIN_ID;
+    const adminPassword = env.DEFAULT_ADMIN_PASSWORD;
 
     const hashedPassword = await bcrypt.hash(adminPassword, 10);
 

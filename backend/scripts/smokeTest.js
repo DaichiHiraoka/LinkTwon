@@ -2,6 +2,8 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 
+process.env.APP_ENV = 'test';
+process.env.NODE_ENV = 'test';
 process.env.DB_CLIENT = 'sqlite';
 process.env.SQLITE_PATH = path.resolve(__dirname, '../database/test.sqlite');
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'link-town-test-secret';

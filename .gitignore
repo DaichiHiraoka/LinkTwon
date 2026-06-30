@@ -69,8 +69,14 @@ web_modules/
 
 # dotenv environment variable files
 .env
-.env.*
+.env.local
+.env.*.local
+.env.production
+.env.staging
 !.env.example
+!.env.*.example
+!.env.development
+!.env.test
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
@@ -143,6 +149,8 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+.vercel/
+**/.vercel/
 
 # Local database
 backend/database/*.sqlite
@@ -161,6 +169,8 @@ local-notes/
 
 # Partner portal runtime cache
 partner-portals/data/translation-cache.json
+partner-portals/data/*.sqlite
+partner-portals/data/*.sqlite-*
 
 # MCP server config (contains API tokens)
 .mcp.json

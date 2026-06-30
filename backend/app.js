@@ -8,52 +8,27 @@ const adminRoutes = require('./routes/adminRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const supportRoutes = require('./routes/supportRoutes');
 const { errorHandler } = require('./middlewares/errorMiddleware');
+const { env } = require('./config/env');
 
 const app = express();
 
-function normalizeOrigin(origin) {
-  try {
-    return new URL(origin).origin;
-  } catch (error) {
-    return origin.replace(/\/$/, '');
-  }
-}
-
-function compileOriginPattern(pattern) {
-  try {
-    return new RegExp(pattern);
-  } catch (error) {
-    console.warn(`Ignoring invalid FRONTEND_ORIGIN_PATTERNS entry: ${pattern}`);
-    return null;
-  }
-}
-
-const allowedOrigins = (process.env.FRONTEND_ORIGIN || '')
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean)
-  .map(normalizeOrigin);
-
-const allowedOriginPatterns = (process.env.FRONTEND_ORIGIN_PATTERNS || '')
-  .split(',')
-  .map((pattern) => pattern.trim())
-  .filter(Boolean)
-  .map(compileOriginPattern)
-  .filter(Boolean);
-
 function isAllowedOrigin(origin) {
-  const normalizedOrigin = normalizeOrigin(origin);
-  return allowedOrigins.includes(normalizedOrigin) || allowedOriginPatterns.some((pattern) => pattern.test(normalizedOrigin));
+  const normalizedOrigin = new URL(origin).origin;
+  return env.FRONTEND_ORIGINS.includes(normalizedOrigin) || env.FRONTEND_ORIGIN_PATTERNS.some((pattern) => pattern.test(normalizedOrigin));
 }
 
 const corsOptions = {
   origin(origin, callback) {
-    if (!origin || (allowedOrigins.length === 0 && allowedOriginPatterns.length === 0) || isAllowedOrigin(origin)) {
+    if (!origin) {
       callback(null, true);
       return;
     }
 
-    callback(null, false);
+    try {
+      callback(null, isAllowedOrigin(origin));
+    } catch (error) {
+      callback(null, false);
+    }
   },
   credentials: true
 };

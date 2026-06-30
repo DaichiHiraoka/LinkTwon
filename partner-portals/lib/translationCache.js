@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const fs = require('fs/promises');
 const path = require('path');
+const { env } = require('../config/env');
 
 const DEFAULT_SOURCE_LOCALE = 'ja';
 const DEFAULT_TARGET_LOCALES = ['en'];
@@ -110,7 +111,7 @@ function isEntryCurrent(entry, sourceText) {
 }
 
 async function translateWithConfiguredApi(record, targetLocale) {
-  const apiUrl = process.env.TRANSLATION_API_URL;
+  const apiUrl = env.TRANSLATION_API_URL;
 
   if (!apiUrl) {
     return null;
@@ -120,8 +121,8 @@ async function translateWithConfiguredApi(record, targetLocale) {
     'content-type': 'application/json'
   };
 
-  if (process.env.TRANSLATION_API_TOKEN) {
-    headers.authorization = `Bearer ${process.env.TRANSLATION_API_TOKEN}`;
+  if (env.TRANSLATION_API_TOKEN) {
+    headers.authorization = `Bearer ${env.TRANSLATION_API_TOKEN}`;
   }
 
   const response = await fetch(apiUrl, {
@@ -150,7 +151,7 @@ async function translateWithConfiguredApi(record, targetLocale) {
 
   return {
     translatedText,
-    provider: process.env.TRANSLATION_PROVIDER || 'translation-api'
+    provider: env.TRANSLATION_PROVIDER
   };
 }
 
@@ -235,7 +236,7 @@ async function refreshTranslationCache(data, options = {}) {
           source_text_hash: sourceTextHash,
           translated_text: existing?.translated_text || record.sourceText,
           translated_at: existing?.translated_at || null,
-          translation_provider: process.env.TRANSLATION_PROVIDER || 'translation-api',
+          translation_provider: env.TRANSLATION_PROVIDER,
           translation_status: 'failed',
           error_message: error.message
         };

@@ -11,9 +11,11 @@
     "start:event": "node scripts/startPortal.js event 5181",
     "start:store": "node scripts/startPortal.js store 5182",
     "start": "npm run dev",
+    "env:check": "node scripts/checkEnv.js",
     "test": "node test/smoke-test.js"
   },
   "dependencies": {
+    "better-sqlite3": "^12.11.1",
     "concurrently": "^9.2.1"
   }
 }

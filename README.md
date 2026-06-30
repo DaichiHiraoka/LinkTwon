@@ -36,10 +36,34 @@ npm run dev
 
 Frontend: http://localhost:5173/
 
+Admin frontend: http://localhost:5174/
+
 Backend: http://localhost:3000/
+
+Event organizer portal: http://localhost:5181/
+
+Store portal: http://localhost:5182/
+
+## Deployment
+
+- Backend: Render web service from `backend/`, start command `npm start`, health check `/health`.
+- Admin frontend: Vercel project from `frontend-admin/`, output `dist`.
+- Database: Aiven MySQL. Set `DB_CLIENT=mysql` and `DATABASE_URL` on Render, then run `npm --prefix backend run db:migrate:mysql`.
+- Environment files are service-scoped. Local development uses committed `.env.development` defaults, tests use `.env.test`, and staging/production receive values from the deployment platform. See [Environment Management](docs/environment.md).
+
+Required production environment variables:
+
+- Render backend: `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_ORIGIN`, `FRONTEND_ORIGIN_PATTERNS`, `FRONTEND_BASE_URL`, SMTP settings.
+- Vercel admin frontend: `VITE_API_BASE_URL=<Render backend public URL>`.
 
 ## Test
 
 ```powershell
 npm test
+```
+
+Check environment configuration without starting services:
+
+```powershell
+npm run env:check
 ```

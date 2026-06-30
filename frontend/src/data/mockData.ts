@@ -1,4 +1,15 @@
-export type Screen = "login" | "home" | "events" | "scan" | "wallet" | "purchase" | "account";
+export type Screen =
+  | "login"
+  | "home"
+  | "events"
+  | "scan"
+  | "wallet"
+  | "purchase"
+  | "account"
+  | "notifications"
+  | "support"
+  | "payment-methods"
+  | "history";
 
 export type EventItem = {
   id: string;
@@ -72,11 +83,11 @@ export const events: EventItem[] = [
 
 export const productCategories: ProductCategory[] = [
   {
-    id: "popular",
+    id: "1",
     name: "商店街の人気商品",
     products: [
       {
-        id: "popular-a",
+        id: "1001",
         name: "人気商品A",
         storeName: "Link Cafe",
         storeAddress: "東京都千代田区丸の内1丁目",
@@ -84,7 +95,7 @@ export const productCategories: ProductCategory[] = [
         requiredPoints: 120,
       },
       {
-        id: "popular-b",
+        id: "1002",
         name: "人気商品B",
         storeName: "まちのパン屋",
         storeAddress: "東京都千代田区有楽町1丁目",
@@ -92,7 +103,7 @@ export const productCategories: ProductCategory[] = [
         requiredPoints: 180,
       },
       {
-        id: "popular-c",
+        id: "1003",
         name: "人気商品C",
         storeName: "地域マルシェ",
         storeAddress: "東京都千代田区日比谷公園",
@@ -100,7 +111,7 @@ export const productCategories: ProductCategory[] = [
         requiredPoints: 220,
       },
       {
-        id: "popular-d",
+        id: "1004",
         name: "人気商品D",
         storeName: "Link Cafe",
         storeAddress: "東京都千代田区丸の内1丁目",
@@ -110,11 +121,11 @@ export const productCategories: ProductCategory[] = [
     ],
   },
   {
-    id: "souvenir",
+    id: "2",
     name: "おみやげ",
     products: [
       {
-        id: "souvenir-a",
+        id: "2001",
         name: "おみやげA",
         storeName: "地域マルシェ",
         storeAddress: "東京都千代田区日比谷公園",
@@ -122,7 +133,7 @@ export const productCategories: ProductCategory[] = [
         requiredPoints: 220,
       },
       {
-        id: "souvenir-b",
+        id: "2002",
         name: "おみやげB",
         storeName: "まちのパン屋",
         storeAddress: "東京都千代田区有楽町1丁目",
@@ -130,7 +141,7 @@ export const productCategories: ProductCategory[] = [
         requiredPoints: 150,
       },
       {
-        id: "souvenir-c",
+        id: "2003",
         name: "おみやげC",
         storeName: "Link Cafe",
         storeAddress: "東京都千代田区丸の内1丁目",
@@ -140,11 +151,11 @@ export const productCategories: ProductCategory[] = [
     ],
   },
   {
-    id: "life",
+    id: "3",
     name: "生活応援商品",
     products: [
       {
-        id: "life-a",
+        id: "3001",
         name: "生活用品A",
         storeName: "地域マルシェ",
         storeAddress: "東京都千代田区日比谷公園",
@@ -152,7 +163,7 @@ export const productCategories: ProductCategory[] = [
         requiredPoints: 220,
       },
       {
-        id: "life-b",
+        id: "3002",
         name: "生活用品B",
         storeName: "Link Cafe",
         storeAddress: "東京都千代田区丸の内1丁目",
@@ -160,7 +171,7 @@ export const productCategories: ProductCategory[] = [
         requiredPoints: 120,
       },
       {
-        id: "life-c",
+        id: "3003",
         name: "生活用品C",
         storeName: "まちのパン屋",
         storeAddress: "東京都千代田区有楽町1丁目",

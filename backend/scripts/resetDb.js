@@ -1,8 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 const { DEFAULT_DB_PATH } = require('../database/sqlite');
+const { env } = require('../config/env');
 
-const dbPath = path.resolve(process.env.SQLITE_PATH || DEFAULT_DB_PATH);
+const dbPath = path.resolve(env.SQLITE_PATH || DEFAULT_DB_PATH);
 
 if (fs.existsSync(dbPath)) {
   fs.unlinkSync(dbPath);

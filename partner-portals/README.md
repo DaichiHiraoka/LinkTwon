@@ -26,6 +26,22 @@ npm --prefix partner-portals run dev:store
 - イベント主催者: `event-demo`
 - 商店: `store-demo`
 
+## ローカルDB
+
+partner-portals はローカル実行時に SQLite DB を使う。初回起動時に `data/partner-data.json` のモックデータを `data/partner-portal.sqlite` へ投入し、以後はAPIがSQLiteから読み出す。
+
+- 読み出し: 主催者、商店、イベント、商品、カテゴリ
+- 書き込み: イベント受付結果、商品交換結果、QRで提示された利用者情報
+
+DBの場所は環境変数で変更できる。
+
+```powershell
+$env:PARTNER_SQLITE_PATH="C:\tmp\partner-portal.sqlite"
+npm --prefix partner-portals run dev:event
+```
+
+将来 Aiven MySQL に置き換える場合は、`lib/partnerRepository.js` のリポジトリ境界をMySQL実装に差し替える想定。アプリ/API側は `readPartnerData`、`recordEventCheckIn`、`recordStoreExchange` を呼ぶだけにしている。
+
 ## 実装範囲
 
 - イベント主催者アプリでのアクセスコード入力
@@ -40,11 +56,13 @@ npm --prefix partner-portals run dev:store
 ## 主要ファイル
 
 - `server.js`: 専用画面配信、ユーザーQR検証、受付/交換API、翻訳キャッシュ更新API
+- `lib/partnerRepository.js`: SQLite schema、モックデータseed、主催者/商店データ読み出し、受付/交換結果の書き込み
 - `lib/translationCache.js`: 翻訳対象抽出、翻訳API呼び出し、キャッシュ保存、キャッシュ参照
 - `event-organizer-app/`: イベント主催者側の画面
 - `store-app/`: 商店側の画面
 - `shared.css`: 2つのアプリで共有する見た目
-- `data/partner-data.json`: 主催者、商店、イベント、商品のデモデータ
+- `data/partner-data.json`: SQLite初期投入用のモックデータ
+- `data/partner-portal.sqlite`: ローカル実行時に生成されるSQLite DB。実行時生成のため `.gitignore` 対象
 - `data/translation-cache.json`: 翻訳キャッシュ保存先。実行時生成のため `.gitignore` 対象
 - `data/translation-cache.example.json`: キャッシュ構造の例
 

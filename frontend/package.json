@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "tsc --noEmit && vite build",
+    "build": "node ../scripts/checkViteEnv.mjs frontend production && tsc --noEmit && vite build",
+    "build:staging": "node ../scripts/checkViteEnv.mjs frontend staging && tsc --noEmit && vite build --mode staging",
+    "build:test": "node ../scripts/checkViteEnv.mjs frontend test && tsc --noEmit && vite build --mode test",
+    "env:check": "node ../scripts/checkViteEnv.mjs frontend production",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {

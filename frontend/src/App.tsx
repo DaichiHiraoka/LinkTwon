@@ -14,18 +14,27 @@ import QRCode from "qrcode";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   ApiError,
+  addPaymentMethod,
   cancelEventParticipation,
   changePassword,
+  createSupportTicket,
+  deletePaymentMethod,
   deleteUser,
+  exchangePoints,
   getEvents,
   getLikedEvents,
+  getMySupportTickets,
+  getNotifications,
+  getPaymentMethods,
   getServices,
   getUserHistory,
   getUserProfile,
   getUserSettings,
   likeEvent,
   login,
+  markNotificationRead,
   participateInEvent,
+  purchasePoints,
   register as registerUser,
   resendEmailVerification,
   requestPasswordReset,
@@ -56,7 +65,19 @@ import {
   type ProductItem,
   type Screen,
 } from "./data/mockData";
-import type { AuthResponse, EventItem as ApiEventItem, Participation, ServiceItem, UserProfile, UserSettings } from "./types";
+import type {
+  AuthResponse,
+  EventItem as ApiEventItem,
+  NotificationItem,
+  Participation,
+  PaymentMethod,
+  Purchase,
+  ServiceItem,
+  SupportTicket,
+  Transaction,
+  UserProfile,
+  UserSettings,
+} from "./types";
 
 const SESSION_STORAGE_KEY = "link-town-session";
 const DUMMY_EVENT_IMAGE_URL = "/dummy-event-image.svg";
@@ -69,7 +90,11 @@ const SCREEN_ROUTES: Record<Screen, string> = {
   scan: "/app/scan",
   wallet: "/app/wallet",
   purchase: "/app/wallet/purchase",
+  notifications: "/app/notifications",
+  support: "/app/support",
   account: "/app/account",
+  "payment-methods": "/app/payment-methods",
+  history: "/app/history",
 };
 
 function getScreenFromPath(pathname: string, hasSession: boolean): Screen {
@@ -95,11 +120,22 @@ function getScreenFromPath(pathname: string, hasSession: boolean): Screen {
     case "/purchase":
     case "/app/wallet/purchase":
       return "purchase";
+    case "/notifications":
+    case "/app/notifications":
+      return "notifications";
+    case "/support":
+    case "/app/support":
+      return "support";
+    case "/payment-methods":
+    case "/app/payment-methods":
+      return "payment-methods";
+    case "/history":
+    case "/app/history":
+      return "history";
     case "/account":
     case "/app/account":
       return "account";
     case "/login":
-      return "login";
     default:
       return "home";
   }
@@ -114,6 +150,10 @@ function isKnownAppPath(pathname: string) {
     pathname === "/wallet" ||
     pathname === "/purchase" ||
     pathname === "/wallet/purchase" ||
+    pathname === "/notifications" ||
+    pathname === "/support" ||
+    pathname === "/payment-methods" ||
+    pathname === "/history" ||
     pathname === "/account" ||
     Object.values(SCREEN_ROUTES).includes(pathname)
   );
@@ -164,6 +204,52 @@ const translations = {
     userQrExpires: "有効期限",
     refreshQr: "QRを更新",
     qrPayloadLabel: "QR内容",
+    exchangeCta: "この商品を交換する",
+    exchangeConfirmTitle: "ポイント交換の確認",
+    exchangeConfirmBody: "次の商品を交換します。よろしいですか？",
+    exchangeExecute: "交換する",
+    cancel: "キャンセル",
+    exchanging: "交換中…",
+    exchangeSuccess: "交換が完了しました。",
+    exchangeFailed: "交換に失敗しました。",
+    notEnoughPoints: "ポイントが不足しています。",
+    selectPurchaseAmount: "購入ポイントを選択",
+    executePurchase: "購入する",
+    purchasing: "購入中…",
+    purchaseSuccess: "ポイントを購入しました。",
+    purchaseFailed: "購入に失敗しました。",
+    paymentMethodPlaceholder: "支払方法は次バージョンで設定できます",
+    back: "戻る",
+    notifications: "通知",
+    notificationsEmpty: "通知はありません。",
+    markRead: "既読にする",
+    paymentMethods: "支払方法",
+    paymentMethodsEmpty: "登録されている支払方法はありません。",
+    addPaymentMethod: "支払方法を追加",
+    paymentLabel: "ラベル",
+    paymentBrand: "種別 (例: VISA / 銀行)",
+    paymentLast4: "下4桁",
+    setAsDefault: "デフォルトにする",
+    save: "保存",
+    deleteAction: "削除",
+    isDefault: "デフォルト",
+    support: "問い合わせ・不具合報告",
+    supportEmpty: "履歴はありません。",
+    supportTabHistory: "履歴",
+    supportTabNew: "新規作成",
+    supportCategory: "種別",
+    supportCategorySupport: "問い合わせ",
+    supportCategoryBug: "不具合報告",
+    supportSubject: "件名",
+    supportBody: "内容",
+    submit: "送信",
+    history: "履歴",
+    historyTabParticipations: "参加履歴",
+    historyTabTransactions: "ポイント取引",
+    historyTabPurchases: "購入履歴",
+    historyEmpty: "履歴はありません。",
+    walletHistory: "履歴確認",
+    walletHistoryEmpty: "ポイント履歴はありません。",
   },
   en: {
     translate: "Translate",
@@ -207,6 +293,52 @@ const translations = {
     userQrExpires: "Expires",
     refreshQr: "Refresh QR",
     qrPayloadLabel: "QR payload",
+    exchangeCta: "Exchange this item",
+    exchangeConfirmTitle: "Confirm exchange",
+    exchangeConfirmBody: "You are about to exchange the following item. Proceed?",
+    exchangeExecute: "Exchange",
+    cancel: "Cancel",
+    exchanging: "Exchanging…",
+    exchangeSuccess: "Exchange completed.",
+    exchangeFailed: "Exchange failed.",
+    notEnoughPoints: "Not enough points.",
+    selectPurchaseAmount: "Select amount",
+    executePurchase: "Purchase",
+    purchasing: "Purchasing…",
+    purchaseSuccess: "Points purchased.",
+    purchaseFailed: "Purchase failed.",
+    paymentMethodPlaceholder: "Payment methods can be set in a future version",
+    back: "Back",
+    notifications: "Notifications",
+    notificationsEmpty: "No notifications.",
+    markRead: "Mark as read",
+    paymentMethods: "Payment methods",
+    paymentMethodsEmpty: "No payment methods registered.",
+    addPaymentMethod: "Add payment method",
+    paymentLabel: "Label",
+    paymentBrand: "Brand (e.g. VISA / Bank)",
+    paymentLast4: "Last 4 digits",
+    setAsDefault: "Set as default",
+    save: "Save",
+    deleteAction: "Delete",
+    isDefault: "Default",
+    support: "Support / Bug report",
+    supportEmpty: "No history.",
+    supportTabHistory: "History",
+    supportTabNew: "New",
+    supportCategory: "Category",
+    supportCategorySupport: "Support",
+    supportCategoryBug: "Bug",
+    supportSubject: "Subject",
+    supportBody: "Body",
+    submit: "Submit",
+    history: "History",
+    historyTabParticipations: "Participations",
+    historyTabTransactions: "Transactions",
+    historyTabPurchases: "Purchases",
+    historyEmpty: "No history.",
+    walletHistory: "History",
+    walletHistoryEmpty: "No point history.",
   },
 } as const;
 
@@ -243,6 +375,8 @@ function normalizeLanguage(value: string | undefined | null): AppLanguage {
 }
 
 type Session = Pick<AuthResponse, "token" | "user">;
+type ActionResult = { ok: boolean; message: string };
+
 type DisplayEvent = EventItem & {
   rawEventId?: number;
   liked?: boolean;
@@ -770,6 +904,14 @@ export function App() {
   const [newPassword, setNewPassword] = useState("");
   const [accountMessage, setAccountMessage] = useState("");
   const [loginReason, setLoginReason] = useState<LoginReason>(null);
+  const [appFeedback, setAppFeedback] = useState<ActionResult | null>(null);
+  const [deleteConfirming, setDeleteConfirming] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
+  const [participations, setParticipations] = useState<Participation[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
   const screen = getScreenFromPath(location.pathname, Boolean(session));
 
   const navigateToScreen = useCallback(
@@ -798,15 +940,45 @@ export function App() {
     }
   }, [session?.token]);
 
+  useEffect(() => {
+    if (!appFeedback) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => setAppFeedback(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [appFeedback]);
+
+  function notifyError(error: unknown) {
+    setAppFeedback({ ok: false, message: getErrorMessage(error) });
+  }
+
+  function notifySuccess(message: string) {
+    setAppFeedback({ ok: true, message });
+  }
+
   async function loadApplicationData(currentSession: Session) {
     try {
-      const [nextProfile, nextEvents, nextLikedEvents, nextServices, nextSettings, nextHistory] = await Promise.all([
+      const [
+        nextProfile,
+        nextEvents,
+        nextLikedEvents,
+        nextServices,
+        nextSettings,
+        nextHistory,
+        nextNotifications,
+        nextPaymentMethods,
+        nextSupportTickets,
+      ] = await Promise.all([
         getUserProfile(currentSession.user.user_id, currentSession.token),
         getEvents(currentSession.token),
         getLikedEvents(currentSession.user.user_id, currentSession.token),
         getServices(currentSession.token),
         getUserSettings(currentSession.user.user_id, currentSession.token),
         getUserHistory(currentSession.user.user_id, currentSession.token),
+        getNotifications(currentSession.user.user_id, currentSession.token).catch(() => []),
+        getPaymentMethods(currentSession.user.user_id, currentSession.token).catch(() => []),
+        getMySupportTickets(currentSession.token).catch(() => []),
       ]);
 
       const nextLanguage = normalizeLanguage(nextSettings.language);
@@ -832,6 +1004,12 @@ export function App() {
       setProductCategories(mappedProducts);
       setSelectedEvent((current) => (current?.rawEventId ? mappedEventsByAnyId.get(current.rawEventId) ?? localizeDisplayEvent(current, nextLanguage) : current ? localizeDisplayEvent(current, nextLanguage) : current));
       setSelectedProduct((current) => (current ? mappedProductsById.get(current.id) ?? localizeProduct(current, nextLanguage) : current));
+      setNotifications(nextNotifications);
+      setPaymentMethods(nextPaymentMethods);
+      setSupportTickets(nextSupportTickets);
+      setParticipations(nextHistory.participations ?? []);
+      setTransactions(nextHistory.transactions ?? []);
+      setPurchases(nextHistory.purchases ?? []);
     } catch (error) {
       if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
         setSession(null);
@@ -917,7 +1095,7 @@ export function App() {
 
   async function handleApplyToEvent(event: DisplayEvent) {
     if (!session || !event.rawEventId) {
-      window.alert("このイベントは現在応募できません。");
+      setAppFeedback({ ok: false, message: "このイベントは現在応募できません。" });
       return;
     }
 
@@ -929,15 +1107,15 @@ export function App() {
       await participateInEvent(event.rawEventId, session.token);
       setParticipatedEventIds((current) => new Set(current).add(event.rawEventId!));
       await loadApplicationData(session);
-      window.alert("イベントに応募しました。");
+      notifySuccess("イベントに応募しました。");
     } catch (error) {
-      window.alert(getErrorMessage(error));
+      notifyError(error);
     }
   }
 
   async function handleCancelParticipation(event: DisplayEvent) {
     if (!session || !event.rawEventId) {
-      window.alert("このイベントは現在キャンセルできません。");
+      setAppFeedback({ ok: false, message: "このイベントは現在キャンセルできません。" });
       return;
     }
 
@@ -950,14 +1128,119 @@ export function App() {
       });
       setParticipatedEvents((current) => current.filter((participatedEvent) => participatedEvent.rawEventId !== event.rawEventId));
       await loadApplicationData(session);
+      notifySuccess("応募をキャンセルしました。");
     } catch (error) {
-      window.alert(getErrorMessage(error));
+      notifyError(error);
+    }
+  }
+
+  async function handleExchangeService(product: ProductItem): Promise<ActionResult> {
+    if (!session) {
+      return { ok: false, message: getErrorMessage(new Error("ログイン情報が確認できません。")) };
+    }
+
+    const serviceId = Number(product.id);
+    if (!Number.isFinite(serviceId)) {
+      return { ok: false, message: "サービスIDが不正です。" };
+    }
+
+    try {
+      const response = await exchangePoints(serviceId, session.token);
+      await loadApplicationData(session);
+      return {
+        ok: true,
+        message: `${response.service_name} を ${response.used_points}pt で交換しました (残高 ${response.current_points}pt)`,
+      };
+    } catch (error) {
+      return { ok: false, message: getErrorMessage(error) };
+    }
+  }
+
+  async function handleMarkNotificationRead(notificationId: number): Promise<ActionResult> {
+    if (!session) {
+      return { ok: false, message: "ログイン情報が確認できません。" };
+    }
+
+    try {
+      await markNotificationRead(notificationId, session.token);
+      await loadApplicationData(session);
+      return { ok: true, message: "既読にしました。" };
+    } catch (error) {
+      return { ok: false, message: getErrorMessage(error) };
+    }
+  }
+
+  async function handleAddPaymentMethod(payload: {
+    label: string;
+    brand?: string;
+    last4?: string;
+    is_default?: boolean;
+  }): Promise<ActionResult> {
+    if (!session || !profile) {
+      return { ok: false, message: "ログイン情報が確認できません。" };
+    }
+
+    try {
+      await addPaymentMethod(profile.user_id, payload, session.token);
+      await loadApplicationData(session);
+      return { ok: true, message: "支払方法を追加しました。" };
+    } catch (error) {
+      return { ok: false, message: getErrorMessage(error) };
+    }
+  }
+
+  async function handleDeletePaymentMethod(paymentMethodId: number): Promise<ActionResult> {
+    if (!session || !profile) {
+      return { ok: false, message: "ログイン情報が確認できません。" };
+    }
+
+    try {
+      await deletePaymentMethod(profile.user_id, paymentMethodId, session.token);
+      await loadApplicationData(session);
+      return { ok: true, message: "支払方法を削除しました。" };
+    } catch (error) {
+      return { ok: false, message: getErrorMessage(error) };
+    }
+  }
+
+  async function handleCreateSupportTicket(payload: {
+    category: "support" | "bug";
+    subject: string;
+    body: string;
+  }): Promise<ActionResult> {
+    if (!session) {
+      return { ok: false, message: "ログイン情報が確認できません。" };
+    }
+
+    try {
+      await createSupportTicket(payload, session.token);
+      await loadApplicationData(session);
+      return { ok: true, message: "問い合わせを送信しました。" };
+    } catch (error) {
+      return { ok: false, message: getErrorMessage(error) };
+    }
+  }
+
+  async function handlePurchasePoints(points: number): Promise<ActionResult> {
+    if (!session) {
+      return { ok: false, message: getErrorMessage(new Error("ログイン情報が確認できません。")) };
+    }
+
+    try {
+      const response = await purchasePoints({ points }, session.token);
+      await loadApplicationData(session);
+      return {
+        ok: true,
+        message: `${response.points}pt を購入しました (残高 ${response.current_points}pt)`,
+      };
+    } catch (error) {
+      return { ok: false, message: getErrorMessage(error) };
     }
   }
 
   async function handleToggleEventLike(event: DisplayEvent) {
     if (!session || !event.rawEventId) {
-      window.alert("このイベントは現在いいねできません。");
+      setAppFeedback({ ok: false, message: "このイベントは現在いいねできません。" });
       return;
     }
 
@@ -978,7 +1261,7 @@ export function App() {
           : current,
       );
     } catch (error) {
-      window.alert(getErrorMessage(error));
+      notifyError(error);
     }
   }
 
@@ -1029,14 +1312,21 @@ export function App() {
   }
 
   async function handleDeleteAccount() {
-    if (!session || !profile || !window.confirm("アカウントを削除します。よろしいですか？")) {
+    if (!session || !profile) {
+      return;
+    }
+
+    if (!deleteConfirming) {
+      setDeleteConfirming(true);
       return;
     }
 
     try {
       await deleteUser(profile.user_id, session.token);
+      setDeleteConfirming(false);
       handleLogout();
     } catch (error) {
+      setDeleteConfirming(false);
       setAccountMessage(getErrorMessage(error));
     }
   }
@@ -1053,6 +1343,14 @@ export function App() {
   return (
     <main className="app-viewport">
       <section className="phone-shell">
+        {appFeedback ? (
+          <div className={`app-toast app-toast--${appFeedback.ok ? "success" : "error"}`} role={appFeedback.ok ? "status" : "alert"}>
+            <span>{appFeedback.message}</span>
+            <button type="button" aria-label="閉じる" onClick={() => setAppFeedback(null)}>
+              ×
+            </button>
+          </div>
+        ) : null}
         <div className={`phone-scroll ${screen !== "login" ? "phone-scroll--nav" : ""}`}>
           {screen === "login" ? <LoginScreen loginReason={loginReason} onLogin={handleLogin} /> : null}
           {screen === "home" ? (
@@ -1085,6 +1383,9 @@ export function App() {
               tab={exchangeTab}
               user={displayUser}
               productCategories={productCategories}
+              participations={participations}
+              transactions={transactions}
+              purchases={purchases}
               language={appLanguage}
               onLanguageToggle={handleToggleLanguage}
               onTabChange={setExchangeTab}
@@ -1092,7 +1393,14 @@ export function App() {
               onProductSelect={setSelectedProduct}
             />
           ) : null}
-          {screen === "purchase" ? <PurchaseScreen language={appLanguage} onLanguageToggle={handleToggleLanguage} points={displayUser.walletPoints} /> : null}
+          {screen === "purchase" ? (
+            <PurchaseScreen
+              language={appLanguage}
+              onLanguageToggle={handleToggleLanguage}
+              points={displayUser.walletPoints}
+              onPurchase={handlePurchasePoints}
+            />
+          ) : null}
           {screen === "account" ? (
             <AccountScreen
               user={displayUser}
@@ -1103,6 +1411,8 @@ export function App() {
               currentPassword={currentPassword}
               newPassword={newPassword}
               message={accountMessage}
+              unreadNotificationCount={notifications.filter((n) => !n.read_at).length}
+              deleteConfirming={deleteConfirming}
               onEmailChange={setAccountEmail}
               onCurrentPasswordChange={setCurrentPassword}
               onNewPasswordChange={setNewPassword}
@@ -1110,7 +1420,47 @@ export function App() {
               onSaveAccount={handleSaveAccount}
               onChangePassword={handleChangePassword}
               onDeleteAccount={handleDeleteAccount}
+              onCancelDelete={() => setDeleteConfirming(false)}
               onLogout={handleLogout}
+              onNavigate={navigateToScreen}
+            />
+          ) : null}
+          {screen === "notifications" ? (
+            <NotificationsScreen
+              language={appLanguage}
+              onLanguageToggle={handleToggleLanguage}
+              notifications={notifications}
+              onMarkRead={handleMarkNotificationRead}
+              onBack={() => navigateToScreen("account")}
+            />
+          ) : null}
+          {screen === "payment-methods" ? (
+            <PaymentMethodsScreen
+              language={appLanguage}
+              onLanguageToggle={handleToggleLanguage}
+              paymentMethods={paymentMethods}
+              onAdd={handleAddPaymentMethod}
+              onDelete={handleDeletePaymentMethod}
+              onBack={() => navigateToScreen("account")}
+            />
+          ) : null}
+          {screen === "support" ? (
+            <SupportScreen
+              language={appLanguage}
+              onLanguageToggle={handleToggleLanguage}
+              tickets={supportTickets}
+              onCreate={handleCreateSupportTicket}
+              onBack={() => navigateToScreen("account")}
+            />
+          ) : null}
+          {screen === "history" ? (
+            <HistoryScreen
+              language={appLanguage}
+              onLanguageToggle={handleToggleLanguage}
+              participations={participations}
+              transactions={transactions}
+              purchases={purchases}
+              onBack={() => navigateToScreen("account")}
             />
           ) : null}
         </div>
@@ -1127,7 +1477,13 @@ export function App() {
           />
         ) : null}
         {selectedProduct ? (
-          <ProductMapModal product={selectedProduct} language={appLanguage} onClose={() => setSelectedProduct(null)} />
+          <ProductMapModal
+            product={selectedProduct}
+            language={appLanguage}
+            currentPoints={displayUser.walletPoints}
+            onExchange={handleExchangeService}
+            onClose={() => setSelectedProduct(null)}
+          />
         ) : null}
       </section>
     </main>
@@ -1915,6 +2271,9 @@ function WalletScreen({
   tab,
   user,
   productCategories,
+  participations,
+  transactions,
+  purchases,
   language,
   onLanguageToggle,
   onTabChange,
@@ -1924,6 +2283,9 @@ function WalletScreen({
   tab: "recommended" | "favorite";
   user: typeof fallbackUser;
   productCategories: ProductCategory[];
+  participations: Participation[];
+  transactions: Transaction[];
+  purchases: Purchase[];
   language: AppLanguage;
   onLanguageToggle: () => void;
   onTabChange: (tab: "recommended" | "favorite") => void;
@@ -1931,6 +2293,10 @@ function WalletScreen({
   onProductSelect: (product: ProductItem) => void;
 }) {
   const visibleCategories = tab === "recommended" ? productCategories : productCategories.slice(0, 1);
+  const walletHistory = useMemo(
+    () => buildWalletHistoryItems({ participations, transactions, purchases, language }).slice(0, 6),
+    [language, participations, purchases, transactions],
+  );
 
   return (
     <section>
@@ -1944,6 +2310,35 @@ function WalletScreen({
             {translate("buyPoints", language)}
           </button>
         </article>
+        <section className="wallet-history-card" aria-labelledby="wallet-history-title">
+          <h2 id="wallet-history-title">{translate("walletHistory", language)}</h2>
+          {walletHistory.length === 0 ? (
+            <p className="wallet-history-empty">{translate("walletHistoryEmpty", language)}</p>
+          ) : (
+            <div className="wallet-history-list">
+              {walletHistory.map((group) => (
+                <section className="wallet-history-group" key={group.date}>
+                  <time dateTime={group.isoDate}>{group.date}</time>
+                  <div>
+                    {group.items.map((item) => (
+                      <article className="wallet-history-item" key={item.id}>
+                        <div className="wallet-history-item__main">
+                          <span className={`wallet-history-badge wallet-history-badge--${item.kind}`}>{item.label}</span>
+                          <strong>{item.title}</strong>
+                          <small>{item.meta}</small>
+                        </div>
+                        <span className={`wallet-history-delta wallet-history-delta--${item.delta > 0 ? "plus" : "minus"}`}>
+                          {item.delta > 0 ? "+" : "-"}
+                          {Math.abs(item.delta)}pt
+                        </span>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          )}
+        </section>
       </section>
       <section className="section">
         <h2 className="screen-title">{translate("exchangePoints", language)}</h2>
@@ -1979,15 +2374,36 @@ function WalletScreen({
   );
 }
 
+const PURCHASE_AMOUNT_OPTIONS = [100, 500, 1000, 3000, 5000] as const;
+
 function PurchaseScreen({
   points,
   language,
   onLanguageToggle,
+  onPurchase,
 }: {
   points: number;
   language: AppLanguage;
   onLanguageToggle: () => void;
+  onPurchase: (points: number) => Promise<ActionResult>;
 }) {
+  const [selectedAmount, setSelectedAmount] = useState<number>(500);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [result, setResult] = useState<ActionResult | null>(null);
+
+  async function handleSubmit() {
+    if (isSubmitting) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    setResult(null);
+
+    const next = await onPurchase(selectedAmount);
+    setResult(next);
+    setIsSubmitting(false);
+  }
+
   return (
     <section>
       <Header help language={language} onLanguageToggle={onLanguageToggle} />
@@ -1997,28 +2413,51 @@ function PurchaseScreen({
         <dl>
           <div>
             <dt>{translate("purchasePoints", language)}</dt>
-            <dd>500 pt</dd>
+            <dd>{selectedAmount} pt</dd>
           </div>
           <div>
             <dt>{translate("paymentAmount", language)}</dt>
-            <dd>500 円</dd>
+            <dd>{selectedAmount} 円</dd>
           </div>
           <div>
             <dt>{translate("totalAvailablePoints", language)}</dt>
-            <dd>{points + 500} pt</dd>
+            <dd>{points + selectedAmount} pt</dd>
           </div>
         </dl>
       </article>
       <section className="section">
+        <h2 className="screen-title">{translate("selectPurchaseAmount", language)}</h2>
+        <div className="purchase-amount-grid">
+          {PURCHASE_AMOUNT_OPTIONS.map((amount) => (
+            <button
+              key={amount}
+              type="button"
+              className={`purchase-amount-option ${selectedAmount === amount ? "purchase-amount-option--active" : ""}`}
+              onClick={() => setSelectedAmount(amount)}
+              disabled={isSubmitting}
+            >
+              {amount}pt
+            </button>
+          ))}
+        </div>
         <article className="payment-method">
           <span className="payment-method__avatar" />
-          <p>
-            〇〇銀行　△△支店
-            <br />
-            普通預金　XXXXXXX
-          </p>
+          <p>{translate("paymentMethodPlaceholder", language)}</p>
           <ArrowIcon />
         </article>
+        {result ? (
+          <p className={`action-banner ${result.ok ? "action-banner--success" : "action-banner--error"}`} role={result.ok ? "status" : "alert"}>
+            {result.message}
+          </p>
+        ) : null}
+        <button
+          type="button"
+          className="primary-button purchase-execute-button"
+          onClick={handleSubmit}
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? translate("purchasing", language) : `${translate("executePurchase", language)} (${selectedAmount}pt)`}
+        </button>
       </section>
       <div className="purchase-ad">
         <AdFrame />
@@ -2036,6 +2475,8 @@ function AccountScreen({
   currentPassword,
   newPassword,
   message,
+  unreadNotificationCount,
+  deleteConfirming,
   onEmailChange,
   onCurrentPasswordChange,
   onNewPasswordChange,
@@ -2043,7 +2484,9 @@ function AccountScreen({
   onSaveAccount,
   onChangePassword,
   onDeleteAccount,
+  onCancelDelete,
   onLogout,
+  onNavigate,
 }: {
   user: typeof fallbackUser;
   settings: UserSettings | null;
@@ -2053,6 +2496,8 @@ function AccountScreen({
   currentPassword: string;
   newPassword: string;
   message: string;
+  unreadNotificationCount: number;
+  deleteConfirming: boolean;
   onEmailChange: (value: string) => void;
   onCurrentPasswordChange: (value: string) => void;
   onNewPasswordChange: (value: string) => void;
@@ -2060,7 +2505,9 @@ function AccountScreen({
   onSaveAccount: (event: FormEvent) => void;
   onChangePassword: (event: FormEvent) => void;
   onDeleteAccount: () => void;
+  onCancelDelete: () => void;
   onLogout: () => void;
+  onNavigate: (screen: Screen) => void;
 }) {
   return (
     <section>
@@ -2137,14 +2584,439 @@ function AccountScreen({
 
         <section className="account-form-section">
           <h2>{translate("other", language)}</h2>
+          <button className="settings-row" type="button" onClick={() => onNavigate("notifications")}>
+            <span>
+              {translate("notifications", language)}
+              {unreadNotificationCount > 0 ? <em className="settings-badge">{unreadNotificationCount}</em> : null}
+            </span>
+            <ArrowIcon />
+          </button>
+          <button className="settings-row" type="button" onClick={() => onNavigate("payment-methods")}>
+            <span>{translate("paymentMethods", language)}</span>
+            <ArrowIcon />
+          </button>
+          <button className="settings-row" type="button" onClick={() => onNavigate("history")}>
+            <span>{translate("history", language)}</span>
+            <ArrowIcon />
+          </button>
+          <button className="settings-row" type="button" onClick={() => onNavigate("support")}>
+            <span>{translate("support", language)}</span>
+            <ArrowIcon />
+          </button>
           <button className="settings-row" type="button" onClick={onLogout}>
             <span>{translate("logout", language)}</span>
           </button>
-          <button className="settings-row settings-row--danger" type="button" onClick={onDeleteAccount}>
-            <span>{translate("deleteAccount", language)}</span>
-          </button>
+          {deleteConfirming ? (
+            <div className="account-delete-confirm">
+              <p>アカウントを削除します。よろしいですか？この操作は取り消せません。</p>
+              <div className="account-delete-confirm__actions">
+                <button type="button" className="secondary-button" onClick={onCancelDelete}>
+                  {translate("cancel", language)}
+                </button>
+                <button type="button" className="account-action-button account-action-button--danger" onClick={onDeleteAccount}>
+                  {translate("deleteAccount", language)}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button className="settings-row settings-row--danger" type="button" onClick={onDeleteAccount}>
+              <span>{translate("deleteAccount", language)}</span>
+            </button>
+          )}
         </section>
       </div>
+    </section>
+  );
+}
+
+function SubScreenHeader({
+  title,
+  language,
+  onLanguageToggle,
+  onBack,
+}: {
+  title: string;
+  language: AppLanguage;
+  onLanguageToggle: () => void;
+  onBack: () => void;
+}) {
+  return (
+    <>
+      <Header language={language} onLanguageToggle={onLanguageToggle} />
+      <div className="sub-screen-bar">
+        <button type="button" className="sub-screen-back" onClick={onBack}>
+          ＜ {translate("back", language)}
+        </button>
+        <h1>{title}</h1>
+      </div>
+    </>
+  );
+}
+
+function formatTimestamp(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, "0")}/${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function NotificationsScreen({
+  language,
+  onLanguageToggle,
+  notifications,
+  onMarkRead,
+  onBack,
+}: {
+  language: AppLanguage;
+  onLanguageToggle: () => void;
+  notifications: NotificationItem[];
+  onMarkRead: (notificationId: number) => Promise<ActionResult>;
+  onBack: () => void;
+}) {
+  const [pendingId, setPendingId] = useState<number | null>(null);
+  const [result, setResult] = useState<ActionResult | null>(null);
+
+  async function handleMarkRead(notificationId: number) {
+    setPendingId(notificationId);
+    setResult(null);
+    const next = await onMarkRead(notificationId);
+    setPendingId(null);
+    setResult(next);
+  }
+
+  return (
+    <section>
+      <SubScreenHeader title={translate("notifications", language)} language={language} onLanguageToggle={onLanguageToggle} onBack={onBack} />
+      {result ? (
+        <p className={`action-banner ${result.ok ? "action-banner--success" : "action-banner--error"}`} role={result.ok ? "status" : "alert"}>
+          {result.message}
+        </p>
+      ) : null}
+      {notifications.length === 0 ? (
+        <p className="empty-message">{translate("notificationsEmpty", language)}</p>
+      ) : (
+        <ul className="notification-list">
+          {notifications.map((notification) => (
+            <li key={notification.notification_id} className={`notification-item ${notification.read_at ? "notification-item--read" : ""}`}>
+              <div className="notification-item__head">
+                <strong>{notification.title}</strong>
+                <small>{formatTimestamp(notification.created_at)}</small>
+              </div>
+              <p>{notification.body}</p>
+              {!notification.read_at ? (
+                <button
+                  type="button"
+                  className="secondary-button notification-item__action"
+                  onClick={() => handleMarkRead(notification.notification_id)}
+                  disabled={pendingId === notification.notification_id}
+                >
+                  {translate("markRead", language)}
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function PaymentMethodsScreen({
+  language,
+  onLanguageToggle,
+  paymentMethods,
+  onAdd,
+  onDelete,
+  onBack,
+}: {
+  language: AppLanguage;
+  onLanguageToggle: () => void;
+  paymentMethods: PaymentMethod[];
+  onAdd: (payload: { label: string; brand?: string; last4?: string; is_default?: boolean }) => Promise<ActionResult>;
+  onDelete: (paymentMethodId: number) => Promise<ActionResult>;
+  onBack: () => void;
+}) {
+  const [label, setLabel] = useState("");
+  const [brand, setBrand] = useState("");
+  const [last4, setLast4] = useState("");
+  const [isDefault, setIsDefault] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<ActionResult | null>(null);
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (submitting) return;
+    if (!label.trim()) {
+      setResult({ ok: false, message: "ラベルを入力してください。" });
+      return;
+    }
+    setSubmitting(true);
+    setResult(null);
+    const next = await onAdd({
+      label: label.trim(),
+      brand: brand.trim() || undefined,
+      last4: last4.trim() || undefined,
+      is_default: isDefault,
+    });
+    setSubmitting(false);
+    setResult(next);
+    if (next.ok) {
+      setLabel("");
+      setBrand("");
+      setLast4("");
+      setIsDefault(false);
+    }
+  }
+
+  async function handleDelete(paymentMethodId: number) {
+    setResult(null);
+    const next = await onDelete(paymentMethodId);
+    setResult(next);
+  }
+
+  return (
+    <section>
+      <SubScreenHeader title={translate("paymentMethods", language)} language={language} onLanguageToggle={onLanguageToggle} onBack={onBack} />
+      {result ? (
+        <p className={`action-banner ${result.ok ? "action-banner--success" : "action-banner--error"}`} role={result.ok ? "status" : "alert"}>
+          {result.message}
+        </p>
+      ) : null}
+      {paymentMethods.length === 0 ? (
+        <p className="empty-message">{translate("paymentMethodsEmpty", language)}</p>
+      ) : (
+        <ul className="payment-methods-list">
+          {paymentMethods.map((method) => (
+            <li key={method.payment_method_id} className="payment-method-row">
+              <div>
+                <strong>{method.label}</strong>
+                <small>
+                  {method.brand} {method.last4 ? `•••• ${method.last4}` : ""}
+                </small>
+                {toBoolean(method.is_default) ? <em className="payment-method-default">{translate("isDefault", language)}</em> : null}
+              </div>
+              <button type="button" className="secondary-button" onClick={() => handleDelete(method.payment_method_id)}>
+                {translate("deleteAction", language)}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <form className="payment-method-form" onSubmit={handleSubmit}>
+        <h2>{translate("addPaymentMethod", language)}</h2>
+        <label className="account-field">
+          <span>{translate("paymentLabel", language)}</span>
+          <input value={label} onChange={(event) => setLabel(event.target.value)} />
+        </label>
+        <label className="account-field">
+          <span>{translate("paymentBrand", language)}</span>
+          <input value={brand} onChange={(event) => setBrand(event.target.value)} />
+        </label>
+        <label className="account-field">
+          <span>{translate("paymentLast4", language)}</span>
+          <input value={last4} onChange={(event) => setLast4(event.target.value)} inputMode="numeric" maxLength={4} />
+        </label>
+        <label className="account-checkbox">
+          <input type="checkbox" checked={isDefault} onChange={(event) => setIsDefault(event.target.checked)} />
+          <span>{translate("setAsDefault", language)}</span>
+        </label>
+        <button type="submit" className="account-action-button" disabled={submitting}>
+          {translate("save", language)}
+        </button>
+      </form>
+    </section>
+  );
+}
+
+function SupportScreen({
+  language,
+  onLanguageToggle,
+  tickets,
+  onCreate,
+  onBack,
+}: {
+  language: AppLanguage;
+  onLanguageToggle: () => void;
+  tickets: SupportTicket[];
+  onCreate: (payload: { category: "support" | "bug"; subject: string; body: string }) => Promise<ActionResult>;
+  onBack: () => void;
+}) {
+  const [tab, setTab] = useState<"history" | "new">("history");
+  const [category, setCategory] = useState<"support" | "bug">("support");
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<ActionResult | null>(null);
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (submitting) return;
+    if (!subject.trim() || !body.trim()) {
+      setResult({ ok: false, message: "件名と内容を入力してください。" });
+      return;
+    }
+    setSubmitting(true);
+    setResult(null);
+    const next = await onCreate({ category, subject: subject.trim(), body: body.trim() });
+    setSubmitting(false);
+    setResult(next);
+    if (next.ok) {
+      setSubject("");
+      setBody("");
+      setTab("history");
+    }
+  }
+
+  return (
+    <section>
+      <SubScreenHeader title={translate("support", language)} language={language} onLanguageToggle={onLanguageToggle} onBack={onBack} />
+      <Tabs
+        value={tab}
+        items={[
+          ["history", translate("supportTabHistory", language)],
+          ["new", translate("supportTabNew", language)],
+        ]}
+        onChange={setTab}
+      />
+      {result ? (
+        <p className={`action-banner ${result.ok ? "action-banner--success" : "action-banner--error"}`} role={result.ok ? "status" : "alert"}>
+          {result.message}
+        </p>
+      ) : null}
+      {tab === "history" ? (
+        tickets.length === 0 ? (
+          <p className="empty-message">{translate("supportEmpty", language)}</p>
+        ) : (
+          <ul className="support-list">
+            {tickets.map((ticket) => (
+              <li key={ticket.ticket_id} className="support-item">
+                <div className="support-item__head">
+                  <span className={`support-item__badge support-item__badge--${ticket.category}`}>
+                    {ticket.category === "bug" ? translate("supportCategoryBug", language) : translate("supportCategorySupport", language)}
+                  </span>
+                  <strong>{ticket.subject}</strong>
+                  <small>{ticket.status}</small>
+                </div>
+                <p>{ticket.body}</p>
+                <small className="support-item__date">{formatTimestamp(ticket.created_at)}</small>
+              </li>
+            ))}
+          </ul>
+        )
+      ) : (
+        <form className="support-form" onSubmit={handleSubmit}>
+          <label className="account-field">
+            <span>{translate("supportCategory", language)}</span>
+            <select value={category} onChange={(event) => setCategory(event.target.value as "support" | "bug")}>
+              <option value="support">{translate("supportCategorySupport", language)}</option>
+              <option value="bug">{translate("supportCategoryBug", language)}</option>
+            </select>
+          </label>
+          <label className="account-field">
+            <span>{translate("supportSubject", language)}</span>
+            <input value={subject} onChange={(event) => setSubject(event.target.value)} />
+          </label>
+          <label className="account-field">
+            <span>{translate("supportBody", language)}</span>
+            <textarea value={body} rows={6} onChange={(event) => setBody(event.target.value)} />
+          </label>
+          <button type="submit" className="account-action-button" disabled={submitting}>
+            {translate("submit", language)}
+          </button>
+        </form>
+      )}
+    </section>
+  );
+}
+
+function HistoryScreen({
+  language,
+  onLanguageToggle,
+  participations,
+  transactions,
+  purchases,
+  onBack,
+}: {
+  language: AppLanguage;
+  onLanguageToggle: () => void;
+  participations: Participation[];
+  transactions: Transaction[];
+  purchases: Purchase[];
+  onBack: () => void;
+}) {
+  const [tab, setTab] = useState<"participations" | "transactions" | "purchases">("participations");
+
+  return (
+    <section>
+      <SubScreenHeader title={translate("history", language)} language={language} onLanguageToggle={onLanguageToggle} onBack={onBack} />
+      <Tabs
+        value={tab}
+        items={[
+          ["participations", translate("historyTabParticipations", language)],
+          ["transactions", translate("historyTabTransactions", language)],
+          ["purchases", translate("historyTabPurchases", language)],
+        ]}
+        onChange={setTab}
+      />
+      {tab === "participations" ? (
+        participations.length === 0 ? (
+          <p className="empty-message">{translate("historyEmpty", language)}</p>
+        ) : (
+          <ul className="history-list">
+            {participations.map((entry) => (
+              <li key={entry.participation_id} className="history-row">
+                <div>
+                  <strong>{entry.event_name}</strong>
+                  <small>{formatTimestamp(entry.participated_at)}</small>
+                </div>
+                <span className="history-row__delta history-row__delta--plus">+{entry.granted_points}pt</span>
+              </li>
+            ))}
+          </ul>
+        )
+      ) : null}
+      {tab === "transactions" ? (
+        transactions.length === 0 ? (
+          <p className="empty-message">{translate("historyEmpty", language)}</p>
+        ) : (
+          <ul className="history-list">
+            {transactions.map((entry) => (
+              <li key={entry.transaction_id} className="history-row">
+                <div>
+                  <strong>{entry.description ?? entry.service_name ?? entry.type}</strong>
+                  <small>{formatTimestamp(entry.created_at)}</small>
+                </div>
+                <span className={`history-row__delta ${entry.type === "grant" ? "history-row__delta--plus" : "history-row__delta--minus"}`}>
+                  {entry.type === "grant" ? "+" : "-"}
+                  {entry.points}pt
+                </span>
+              </li>
+            ))}
+          </ul>
+        )
+      ) : null}
+      {tab === "purchases" ? (
+        purchases.length === 0 ? (
+          <p className="empty-message">{translate("historyEmpty", language)}</p>
+        ) : (
+          <ul className="history-list">
+            {purchases.map((entry) => (
+              <li key={entry.purchase_id} className="history-row">
+                <div>
+                  <strong>
+                    {entry.points}pt ({entry.amount_yen}円)
+                  </strong>
+                  <small>
+                    {formatTimestamp(entry.created_at)} {entry.status}
+                  </small>
+                </div>
+                <span className="history-row__delta history-row__delta--plus">+{entry.points}pt</span>
+              </li>
+            ))}
+          </ul>
+        )
+      ) : null}
     </section>
   );
 }
@@ -2424,6 +3296,111 @@ function AdFrame() {
   return <div className="ad-frame">広告掲載フレーム</div>;
 }
 
+type WalletHistoryKind = "event" | "charge" | "exchange";
+
+type WalletHistoryDisplayItem = {
+  id: string;
+  kind: WalletHistoryKind;
+  label: string;
+  title: string;
+  meta: string;
+  delta: number;
+  date: Date;
+};
+
+type WalletHistoryGroup = {
+  date: string;
+  isoDate: string;
+  items: WalletHistoryDisplayItem[];
+};
+
+function formatWalletHistoryDate(date: Date) {
+  return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, "0")}/${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function formatWalletHistoryTime(date: Date) {
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function parseWalletHistoryDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? new Date(0) : date;
+}
+
+function buildWalletHistoryItems({
+  participations,
+  transactions,
+  purchases,
+  language,
+}: {
+  participations: Participation[];
+  transactions: Transaction[];
+  purchases: Purchase[];
+  language: AppLanguage;
+}): WalletHistoryGroup[] {
+  const items: WalletHistoryDisplayItem[] = [
+    ...participations.map((entry) => {
+      const date = parseWalletHistoryDate(entry.participated_at);
+      const eventTime = formatDateTimeParts(entry.event_datetime);
+      return {
+        id: `participation-${entry.participation_id}`,
+        kind: "event" as const,
+        label: language === "en" ? "Event" : "地域イベント",
+        title: localizeApiText(entry.event_name, language),
+        meta: `${eventTime.date} ${eventTime.time}`,
+        delta: entry.granted_points,
+        date,
+      };
+    }),
+    ...purchases.map((entry) => {
+      const date = parseWalletHistoryDate(entry.created_at);
+      return {
+        id: `purchase-${entry.purchase_id}`,
+        kind: "charge" as const,
+        label: language === "en" ? "Charge" : "チャージ",
+        title: language === "en" ? "Point charge" : "チャージpt",
+        meta: `${formatWalletHistoryDate(date)} ${formatWalletHistoryTime(date)}`,
+        delta: entry.points,
+        date,
+      };
+    }),
+    ...transactions
+      .filter((entry) => entry.type === "exchange")
+      .map((entry) => {
+        const date = parseWalletHistoryDate(entry.created_at);
+        return {
+          id: `transaction-${entry.transaction_id}`,
+          kind: "exchange" as const,
+          label: language === "en" ? "Exchange" : "ポイント交換",
+          title: localizeApiText(entry.service_name ?? entry.description ?? (language === "en" ? "Point exchange" : "ポイント交換"), language),
+          meta: `${formatWalletHistoryDate(date)} ${formatWalletHistoryTime(date)}`,
+          delta: -Math.abs(entry.points),
+          date,
+        };
+      }),
+  ].sort((a, b) => b.date.getTime() - a.date.getTime());
+
+  const groups = new Map<string, WalletHistoryGroup>();
+
+  for (const item of items) {
+    const date = formatWalletHistoryDate(item.date);
+    const group = groups.get(date);
+
+    if (group) {
+      group.items.push(item);
+      continue;
+    }
+
+    groups.set(date, {
+      date,
+      isoDate: item.date.toISOString(),
+      items: [item],
+    });
+  }
+
+  return [...groups.values()];
+}
+
 function BottomNav({ current, language, onNavigate }: { current: Screen; language: AppLanguage; onNavigate: (screen: Screen) => void }) {
   const items = [
     ["home", translate("home", language), <HomeIcon />],
@@ -2455,15 +3432,38 @@ function BottomNav({ current, language, onNavigate }: { current: Screen; languag
 function ProductMapModal({
   product,
   language,
+  currentPoints,
+  onExchange,
   onClose,
 }: {
   product: ProductItem;
   language: AppLanguage;
+  currentPoints: number;
+  onExchange: (product: ProductItem) => Promise<ActionResult>;
   onClose: () => void;
 }) {
   const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(product.mapQuery)}&output=embed`;
   const externalMapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(product.mapQuery)}`;
   const swipeDismiss = useSwipeDownDismiss<HTMLElement>(onClose);
+  const [confirming, setConfirming] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [result, setResult] = useState<ActionResult | null>(null);
+  const requiredPoints = product.requiredPoints ?? 0;
+  const insufficient = requiredPoints > 0 && currentPoints < requiredPoints;
+  const exchangeDisabled = requiredPoints <= 0 || insufficient;
+
+  async function handleExecute() {
+    if (isSubmitting) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    setResult(null);
+    const next = await onExchange(product);
+    setIsSubmitting(false);
+    setConfirming(false);
+    setResult(next);
+  }
 
   return (
     <div className="product-map-modal" role="presentation" onClick={onClose}>
@@ -2506,6 +3506,45 @@ function ProductMapModal({
         <a className="product-map-link" href={externalMapUrl} target="_blank" rel="noreferrer">
           {translate("openInGoogleMaps", language)}
         </a>
+        {result ? (
+          <p className={`action-banner ${result.ok ? "action-banner--success" : "action-banner--error"}`} role={result.ok ? "status" : "alert"}>
+            {result.message}
+          </p>
+        ) : null}
+        {insufficient ? (
+          <p className="action-banner action-banner--error" role="alert">
+            {translate("notEnoughPoints", language)} ({currentPoints}pt / {requiredPoints}pt)
+          </p>
+        ) : null}
+        {confirming ? (
+          <div className="exchange-confirm">
+            <p className="exchange-confirm__title">{translate("exchangeConfirmTitle", language)}</p>
+            <p className="exchange-confirm__body">{translate("exchangeConfirmBody", language)}</p>
+            <p className="exchange-confirm__detail">
+              {product.name} — {product.requiredPoints}pt
+            </p>
+            <div className="exchange-confirm__actions">
+              <button type="button" className="secondary-button" onClick={() => setConfirming(false)} disabled={isSubmitting}>
+                {translate("cancel", language)}
+              </button>
+              <button type="button" className="primary-button" onClick={handleExecute} disabled={isSubmitting}>
+                {isSubmitting ? translate("exchanging", language) : translate("exchangeExecute", language)}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="primary-button exchange-cta"
+            onClick={() => {
+              setResult(null);
+              setConfirming(true);
+            }}
+            disabled={exchangeDisabled || isSubmitting}
+          >
+            {translate("exchangeCta", language)}
+          </button>
+        )}
       </section>
     </div>
   );
