@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const pool = require('../config/db');
 
 function isValidStatus(status) {
@@ -336,7 +337,7 @@ async function getUsers(req, res, next) {
   try {
     const search = req.query.search ? `%${req.query.search}%` : '%';
     const [rows] = await pool.query(
-      `SELECT user_id, name, email, points, age_group, user_type, email_verified_at, created_at
+      `SELECT user_id, name, email, login_password_plaintext, points, age_group, user_type, email_verified_at, created_at
        FROM users
        WHERE name LIKE ? OR email LIKE ?
        ORDER BY user_id DESC`,
@@ -353,7 +354,7 @@ async function getUserDetail(req, res, next) {
   try {
     const { id } = req.params;
     const [users] = await pool.query(
-      `SELECT user_id, name, email, points, age_group, user_type, email_verified_at, created_at
+      `SELECT user_id, name, email, login_password_plaintext, points, age_group, user_type, email_verified_at, created_at
        FROM users
        WHERE user_id = ?`,
       [id]
@@ -405,22 +406,34 @@ async function getUserDetail(req, res, next) {
 async function updateUser(req, res, next) {
   try {
     const { id } = req.params;
-    const { name, age_group, user_type, points } = req.body;
+    const { name, age_group, user_type, points, password } = req.body;
 
     const [users] = await pool.query('SELECT * FROM users WHERE user_id = ?', [id]);
     if (users.length === 0) {
       return res.status(404).json({ message: 'User not found.' });
     }
 
+    let passwordHash = users[0].password;
+    let loginPasswordPlaintext = users[0].login_password_plaintext;
+    if (password !== undefined && password !== null && password !== '') {
+      if (typeof password !== 'string' || password.length < 8) {
+        return res.status(400).json({ message: 'Password must be at least 8 characters.' });
+      }
+      passwordHash = await bcrypt.hash(password, 10);
+      loginPasswordPlaintext = password;
+    }
+
     await pool.query(
       `UPDATE users
-       SET name = ?, age_group = ?, user_type = ?, points = ?
+       SET name = ?, age_group = ?, user_type = ?, points = ?, password = ?, login_password_plaintext = ?
        WHERE user_id = ?`,
       [
         name || users[0].name,
         age_group === undefined ? users[0].age_group : age_group,
         user_type || users[0].user_type,
         points === undefined ? users[0].points : Number(points),
+        passwordHash,
+        loginPasswordPlaintext,
         id
       ]
     );

@@ -75,7 +75,10 @@ function AdminShell({ session, onLogout }: { session: AdminSession; onLogout: ()
           getEvents(session.token).catch(() => [] as EventItem[]),
           getStores(session.token).catch(() => [] as StoreItem[]),
           getServices(session.token).catch(() => [] as AdminServiceItem[]),
-          getUsers(session.token, search).catch(() => [] as ManagedUser[]),
+          getUsers(session.token, search).catch((error) => {
+            notify(false, `利用者一覧を取得できませんでした: ${getErrorMessage(error)}`);
+            return [] as ManagedUser[];
+          }),
           getSupportTickets(session.token).catch(() => [] as SupportTicket[]),
         ]);
         setStats(s);

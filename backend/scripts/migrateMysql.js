@@ -134,6 +134,7 @@ async function migrate() {
         name VARCHAR(100) NOT NULL,
         email VARCHAR(255) NOT NULL UNIQUE,
         password VARCHAR(255) NOT NULL,
+        login_password_plaintext VARCHAR(255) NULL,
         points INT NOT NULL DEFAULT 0,
         age_group VARCHAR(50),
         user_type VARCHAR(50) DEFAULT 'general',
@@ -143,6 +144,12 @@ async function migrate() {
     );
 
     await ensureColumn(pool, 'users', 'points', 'ALTER TABLE users ADD COLUMN points INT NOT NULL DEFAULT 0 AFTER password');
+    await ensureColumn(
+      pool,
+      'users',
+      'login_password_plaintext',
+      'ALTER TABLE users ADD COLUMN login_password_plaintext VARCHAR(255) NULL AFTER password'
+    );
     await ensureColumn(pool, 'users', 'age_group', 'ALTER TABLE users ADD COLUMN age_group VARCHAR(50) NULL AFTER points');
     await ensureColumn(pool, 'users', 'user_type', "ALTER TABLE users ADD COLUMN user_type VARCHAR(50) DEFAULT 'general' AFTER age_group");
     const addedEmailVerifiedAt = await ensureColumn(

@@ -8,6 +8,8 @@ Link Town is a local event and point platform with a Node.js/Express backend and
 |---|---|
 | **フロントエンド** | https://link-twon.vercel.app/ |
 | **バックエンド** | https://linktwon-backend.onrender.com |
+| **イベント主催者アプリ** | https://linktown-event-portal.vercel.app/ |
+| **商店アプリ** | https://linktown-store-portal.vercel.app/ |
 
 詳細は [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) を参照。
 

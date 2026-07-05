@@ -522,11 +522,12 @@ a {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  overflow: hidden;
+  overflow-x: auto;
 }
 
 .datatable__table {
   width: 100%;
+  min-width: 980px;
   border-collapse: collapse;
   font-size: 13px;
 }
@@ -606,6 +607,27 @@ a {
 
 .row-action:hover:not(:disabled) {
   filter: brightness(0.95);
+}
+
+.secret-value {
+  min-width: 84px;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-alt);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  word-break: break-all;
+}
+
+.secret-value--empty {
+  display: inline-flex;
+  align-items: center;
+  cursor: default;
+  color: var(--ink-mute);
 }
 
 .datatable__add-row {

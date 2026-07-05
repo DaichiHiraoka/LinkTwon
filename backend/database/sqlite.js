@@ -26,6 +26,7 @@ const schemaStatements = [
     name TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
     password TEXT NOT NULL,
+    login_password_plaintext TEXT,
     points INTEGER NOT NULL DEFAULT 0,
     age_group TEXT,
     user_type TEXT DEFAULT 'general',
@@ -181,6 +182,7 @@ const schemaStatements = [
 ];
 
 const columnMigrations = [
+  ['users', 'login_password_plaintext', 'TEXT'],
   ['users', 'email_verified_at', 'TEXT'],
   ['events', 'status', "TEXT NOT NULL DEFAULT 'active'"],
   ['stores', 'status', "TEXT NOT NULL DEFAULT 'active'"],
@@ -236,11 +238,11 @@ function seedDatabase(db) {
   const userCount = db.prepare('SELECT COUNT(*) AS count FROM users').get().count;
   if (userCount === 0) {
     const insertUser = db.prepare(
-      `INSERT INTO users (name, email, password, points, age_group, user_type, email_verified_at)
-       VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+      `INSERT INTO users (name, email, password, login_password_plaintext, points, age_group, user_type, email_verified_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
     );
     const passwordHash = bcrypt.hashSync('password123', 10);
-    insertUser.run('Demo User', 'demo@example.com', passwordHash, 300, '30s', 'general');
+    insertUser.run('Demo User', 'demo@example.com', passwordHash, 'password123', 300, '30s', 'general');
   }
 
   const adminCount = db.prepare('SELECT COUNT(*) AS count FROM admins').get().count;
@@ -295,7 +297,12 @@ function seedDatabase(db) {
 
   const demoUser = db.prepare('SELECT user_id FROM users WHERE email = ?').get('demo@example.com');
   if (demoUser) {
-    db.prepare('UPDATE users SET email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP) WHERE user_id = ?').run(demoUser.user_id);
+    db.prepare(
+      `UPDATE users
+       SET email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP),
+           login_password_plaintext = COALESCE(login_password_plaintext, 'password123')
+       WHERE user_id = ?`
+    ).run(demoUser.user_id);
 
     const paymentCount = db.prepare('SELECT COUNT(*) AS count FROM payment_methods WHERE user_id = ?').get(demoUser.user_id).count;
     if (paymentCount === 0) {

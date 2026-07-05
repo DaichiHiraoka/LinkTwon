@@ -60,15 +60,15 @@ async function ensureDemoUser() {
     userId = users[0].user_id;
     await query(
       `UPDATE users
-       SET name = ?, password = ?, points = ?, age_group = ?, user_type = ?
+       SET name = ?, password = ?, login_password_plaintext = ?, points = ?, age_group = ?, user_type = ?
        WHERE user_id = ?`,
-      ['Demo User', passwordHash, 300, '30s', 'general', userId]
+      ['Demo User', passwordHash, demoPassword, 300, '30s', 'general', userId]
     );
   } else {
     const result = await query(
-      `INSERT INTO users (name, email, password, points, age_group, user_type)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      ['Demo User', demoEmail, passwordHash, 300, '30s', 'general']
+      `INSERT INTO users (name, email, password, login_password_plaintext, points, age_group, user_type)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ['Demo User', demoEmail, passwordHash, demoPassword, 300, '30s', 'general']
     );
     userId = result.insertId;
   }

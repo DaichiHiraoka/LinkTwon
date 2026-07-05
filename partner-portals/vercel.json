@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api/index.js"
+    }
+  ],
+  "functions": {
+    "api/index.js": {
+      "includeFiles": "{data/partner-data.json,data/translation-cache.json,event-organizer-app/**,store-app/**,shared.css}"
+    }
+  }
+}

@@ -50,6 +50,7 @@ export type ManagedUser = {
   user_id: number;
   name: string;
   email: string;
+  login_password_plaintext?: string | null;
   points: number;
   age_group: string | null;
   user_type: string | null;

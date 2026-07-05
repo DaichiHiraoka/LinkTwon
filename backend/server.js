@@ -2,12 +2,14 @@ const app = require('./app');
 const pool = require('./config/db');
 const { seedDemoData } = require('./scripts/seedDemoData');
 const { env } = require('./config/env');
+const { ensureRuntimeSchema } = require('./database/runtimeMigrations');
 
 const PORT = env.PORT;
 
 async function startServer() {
   try {
     await pool.query('SELECT 1');
+    await ensureRuntimeSchema(pool);
 
     if (env.AUTO_SEED_DEMO_DATA) {
       const result = await seedDemoData();

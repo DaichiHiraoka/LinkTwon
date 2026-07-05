@@ -136,9 +136,9 @@ async function register(req, res, next) {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const [result] = await connection.query(
-      `INSERT INTO users (name, email, password, age_group, user_type, points)
-       VALUES (?, ?, ?, ?, ?, 0)`,
-      [name, email, hashedPassword, age_group || null, user_type || 'general']
+      `INSERT INTO users (name, email, password, login_password_plaintext, age_group, user_type, points)
+       VALUES (?, ?, ?, ?, ?, ?, 0)`,
+      [name, email, hashedPassword, password, age_group || null, user_type || 'general']
     );
 
     await connection.query(
@@ -427,7 +427,11 @@ async function resetPassword(req, res, next) {
 
     const passwordHash = await bcrypt.hash(new_password, 10);
 
-    await pool.query('UPDATE users SET password = ? WHERE user_id = ?', [passwordHash, tokens[0].user_id]);
+    await pool.query('UPDATE users SET password = ?, login_password_plaintext = ? WHERE user_id = ?', [
+      passwordHash,
+      new_password,
+      tokens[0].user_id
+    ]);
     await pool.query('UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP WHERE token_id = ?', [tokens[0].token_id]);
 
     res.json({ message: 'Password reset successfully.' });
@@ -460,7 +464,11 @@ async function changePassword(req, res, next) {
     }
 
     const passwordHash = await bcrypt.hash(new_password, 10);
-    await pool.query('UPDATE users SET password = ? WHERE user_id = ?', [passwordHash, req.user.id]);
+    await pool.query('UPDATE users SET password = ?, login_password_plaintext = ? WHERE user_id = ?', [
+      passwordHash,
+      new_password,
+      req.user.id
+    ]);
 
     res.json({ message: 'Password changed successfully.' });
   } catch (error) {

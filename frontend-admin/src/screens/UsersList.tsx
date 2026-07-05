@@ -64,6 +64,13 @@ export function UsersList({
   const columns: Array<Column<ManagedUser>> = [
     { key: "id", label: "ID", render: (row) => padId(row.user_id), width: "80px" },
     { key: "name", label: "氏名", render: (row) => row.name },
+    { key: "email", label: "メールアドレス", render: (row) => row.email, width: "220px" },
+    {
+      key: "password",
+      label: "パスワード",
+      render: (row) => <SecretValue value={row.login_password_plaintext} />,
+      width: "160px",
+    },
     { key: "type", label: "ユーザー区分", render: (row) => row.user_type ?? "-", width: "140px" },
     {
       key: "email_verified",
@@ -105,6 +112,12 @@ export function UsersList({
               <div>
                 <dt>メール</dt>
                 <dd>{detail.user.email}</dd>
+              </div>
+              <div>
+                <dt>パスワード</dt>
+                <dd>
+                  <SecretValue value={detail.user.login_password_plaintext} />
+                </dd>
               </div>
               <div>
                 <dt>区分</dt>
@@ -194,23 +207,33 @@ function UserEditModal({
   open: boolean;
   initial: ManagedUser | null;
   onClose: () => void;
-  onSubmit: (payload: Partial<ManagedUser>, userId: number) => Promise<void>;
+  onSubmit: (payload: Partial<ManagedUser> & { password?: string }, userId: number) => Promise<void>;
   submitting: boolean;
 }) {
   const [name, setName] = useState(initial?.name ?? "");
   const [points, setPoints] = useState(initial?.points ?? 0);
   const [userType, setUserType] = useState(initial?.user_type ?? "");
+  const [password, setPassword] = useState("");
 
   useResetForm(initial?.user_id ?? "new", () => {
     setName(initial?.name ?? "");
     setPoints(initial?.points ?? 0);
     setUserType(initial?.user_type ?? "");
+    setPassword("");
   });
 
   async function handle(event: FormEvent) {
     event.preventDefault();
     if (!initial) return;
-    await onSubmit({ name: name.trim(), points: Number(points), user_type: userType.trim() || null }, initial.user_id);
+    await onSubmit(
+      {
+        name: name.trim(),
+        points: Number(points),
+        user_type: userType.trim() || null,
+        ...(password.trim() ? { password: password.trim() } : {}),
+      },
+      initial.user_id,
+    );
   }
 
   return (
@@ -227,6 +250,16 @@ function UserEditModal({
         <label className="form__field">
           <span>区分</span>
           <input value={userType} onChange={(event) => setUserType(event.target.value)} placeholder="general / resident / ..." />
+        </label>
+        <label className="form__field">
+          <span>ログインパスワード</span>
+          <input
+            type="text"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="変更時のみ入力"
+            minLength={8}
+          />
         </label>
         <div className="form__actions">
           <button type="button" className="btn btn--ghost" onClick={onClose}>
@@ -251,4 +284,18 @@ function useResetForm(key: string | number, reset: () => void) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
+}
+
+function SecretValue({ value }: { value?: string | null }) {
+  const [visible, setVisible] = useState(false);
+
+  if (!value) {
+    return <span className="secret-value secret-value--empty">未記録</span>;
+  }
+
+  return (
+    <button type="button" className="secret-value" onClick={() => setVisible((current) => !current)}>
+      {visible ? value : "••••••••"}
+    </button>
+  );
 }

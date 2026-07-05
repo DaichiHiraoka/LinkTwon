@@ -5,10 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 5174",
-    "build": "node ../scripts/checkViteEnv.mjs frontend-admin production && tsc --noEmit && vite build",
-    "build:staging": "node ../scripts/checkViteEnv.mjs frontend-admin staging && tsc --noEmit && vite build --mode staging",
-    "build:test": "node ../scripts/checkViteEnv.mjs frontend-admin test && tsc --noEmit && vite build --mode test",
-    "env:check": "node ../scripts/checkViteEnv.mjs frontend-admin production",
+    "build": "node scripts/checkViteEnv.mjs frontend-admin production && tsc --noEmit && vite build",
+    "build:staging": "node scripts/checkViteEnv.mjs frontend-admin staging && tsc --noEmit && vite build --mode staging",
+    "build:test": "node scripts/checkViteEnv.mjs frontend-admin test && tsc --noEmit && vite build --mode test",
+    "env:check": "node scripts/checkViteEnv.mjs frontend-admin production",
     "preview": "vite preview --host 0.0.0.0 --port 5174"
   },
   "dependencies": {

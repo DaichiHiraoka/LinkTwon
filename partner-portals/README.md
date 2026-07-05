@@ -42,6 +42,17 @@ npm --prefix partner-portals run dev:event
 
 将来 Aiven MySQL に置き換える場合は、`lib/partnerRepository.js` のリポジトリ境界をMySQL実装に差し替える想定。アプリ/API側は `readPartnerData`、`recordEventCheckIn`、`recordStoreExchange` を呼ぶだけにしている。
 
+## Vercelデプロイ
+
+`partner-portals` は1つのコードベースを `PARTNER_APP_ROLE` で切り替えているため、Vercelではイベント主催者用と商店用を別プロジェクトとしてGit連携する。
+
+| Project | URL | Root Directory | Production Branch | Environment |
+|---|---|---|---|---|
+| `linktown-event-portal` | https://linktown-event-portal.vercel.app/ | `partner-portals` | `main` | `PARTNER_APP_ROLE=event`, `PARTNER_SQLITE_PATH=/tmp/linktown-event-portal.sqlite` |
+| `linktown-store-portal` | https://linktown-store-portal.vercel.app/ | `partner-portals` | `main` | `PARTNER_APP_ROLE=store`, `PARTNER_SQLITE_PATH=/tmp/linktown-store-portal.sqlite` |
+
+Vercelのサーバーレス関数ではリポジトリ内にSQLiteを書き込めないため、未指定時の書き込み先は `/tmp` 配下になる。これはデモ・検証用の一時DBであり、受付/交換履歴の永続保存が必要な本番運用では、`lib/partnerRepository.js` をAiven MySQLなどの永続DB実装へ差し替える。
+
 ## 実装範囲
 
 - イベント主催者アプリでのアクセスコード入力

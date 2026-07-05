@@ -9,7 +9,9 @@ import type {
   SupportTicket,
 } from "./types";
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+const configuredApiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+const API_BASE_URL =
+  configuredApiBaseUrl || (import.meta.env.PROD ? "https://linktwon-backend.onrender.com" : "");
 
 export class ApiError extends Error {
   status: number;
