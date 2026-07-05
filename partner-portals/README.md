@@ -53,6 +53,13 @@ npm --prefix partner-portals run dev:event
 
 Vercelのサーバーレス関数ではリポジトリ内にSQLiteを書き込めないため、未指定時の書き込み先は `/tmp` 配下になる。これはデモ・検証用の一時DBであり、受付/交換履歴の永続保存が必要な本番運用では、`lib/partnerRepository.js` をAiven MySQLなどの永続DB実装へ差し替える。
 
+## デモログイン
+
+| アプリ | ID | パスワード |
+|---|---|---|
+| イベント主催者 | `event-demo` | `event-demo-pass` |
+| 商店 | `store-demo` | `store-demo-pass` |
+
 ## 実装範囲
 
 - イベント主催者アプリでのアクセスコード入力

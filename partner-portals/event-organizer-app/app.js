@@ -200,7 +200,9 @@ async function loadPortal(event) {
   state.error = '';
 
   try {
-    const response = await fetch(`/api/bootstrap?code=${encodeURIComponent(state.code)}&locale=${encodeURIComponent(state.locale)}`);
+    const response = await fetch(
+      `/api/bootstrap?code=${encodeURIComponent(state.code)}&password=${encodeURIComponent(state.password)}&locale=${encodeURIComponent(state.locale)}`
+    );
     const payload = await response.json();
 
     if (!response.ok) {
@@ -311,6 +313,7 @@ async function submitEventScan() {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         code: state.code,
+        password: state.password,
         event_id: eventItem.event_id,
         user_qr_payload: state.pendingPayload
       })

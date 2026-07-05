@@ -59,17 +59,19 @@ async function prepareTempPartnerDb() {
 }
 
 async function testPortalPayloads(cachePath, dbPath) {
-  const eventPayload = await buildEventPayload('event-demo', 'en', { cachePath, dbPath });
-  const storePayload = await buildStorePayload('store-demo', 'en', { cachePath, dbPath });
+  const eventPayload = await buildEventPayload('event-demo', 'event-demo-pass', 'en', { cachePath, dbPath });
+  const storePayload = await buildStorePayload('store-demo', 'store-demo-pass', 'en', { cachePath, dbPath });
 
   assert.equal(eventPayload.role, 'event');
   assert.equal(eventPayload.events.length, 2);
   assert.equal(eventPayload.events[0].event_name, 'Disaster Supply Check and Local Guidance');
+  assert.equal(await buildEventPayload('event-demo', 'wrong-password', 'en', { cachePath, dbPath }), null);
 
   assert.equal(storePayload.role, 'store');
   assert.equal(storePayload.services.length, 3);
   assert.equal(storePayload.account.name, '地域マルシェ');
   assert.equal(storePayload.services[0].service_name, 'Seasonal Vegetable Set');
+  assert.equal(await buildStorePayload('store-demo', 'wrong-password', 'en', { cachePath, dbPath }), null);
 }
 
 function createUserQrPayload(nonce) {
@@ -97,6 +99,7 @@ async function testUserQrProcessing(cachePath, dbPath) {
   const eventResult = await processEventCheckIn(
     {
       code: 'event-demo',
+      password: 'event-demo-pass',
       event_id: 'event-001',
       user_qr_payload: userQrPayload
     },
@@ -110,6 +113,7 @@ async function testUserQrProcessing(cachePath, dbPath) {
   const duplicateResult = await processEventCheckIn(
     {
       code: 'event-demo',
+      password: 'event-demo-pass',
       event_id: 'event-001',
       user_qr_payload: userQrPayload
     },
@@ -121,6 +125,7 @@ async function testUserQrProcessing(cachePath, dbPath) {
   const exchangeResult = await processStoreExchange(
     {
       code: 'store-demo',
+      password: 'store-demo-pass',
       service_id: 'service-001',
       user_qr_payload: createUserQrPayload(`smoke-store-${Date.now()}`)
     },

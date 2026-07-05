@@ -3,6 +3,7 @@
     {
       "organizer_id": "org-001",
       "login_code": "event-demo",
+      "login_password": "event-demo-pass",
       "organizer_name": "LinkTwon地域活動事務局",
       "contact_email": "event@example.com",
       "event_ids": ["event-001", "event-002"]
@@ -12,6 +13,7 @@
     {
       "store_id": "store-001",
       "login_code": "store-demo",
+      "login_password": "store-demo-pass",
       "store_name": "地域マルシェ",
       "store_address": "東京都千代田区日比谷公園",
       "map_query": "地域マルシェ 東京都千代田区日比谷公園",

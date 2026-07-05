@@ -1,6 +1,7 @@
 const state = {
   locale: localStorage.getItem('store-portal-locale') || 'ja',
-  code: localStorage.getItem('store-portal-code') || 'store-demo',
+  code: '',
+  password: '',
   payload: null,
   resultById: {},
   errorById: {},
@@ -11,7 +12,10 @@ const ui = {
   ja: {
     title: '商店ポータル',
     language: 'EN',
-    accessCode: '商店アクセスコード',
+    accessCode: '商店ID',
+    accessPlaceholder: '商店IDを入力',
+    password: 'パスワード',
+    passwordPlaceholder: 'パスワードを入力',
     signIn: '商品を表示',
     store: '店舗',
     contact: '連絡先',
@@ -28,13 +32,16 @@ const ui = {
     completed: '交換完了',
     user: '利用者',
     usedPoints: '利用ポイント',
-    invalidCode: '商店アクセスコードを確認してください。',
+    invalidCode: '商店IDまたはパスワードが違います。',
     cameraUnavailable: 'このブラウザではカメラQR読取を利用できません。QR内容を手入力してください。'
   },
   en: {
     title: 'Store Portal',
     language: 'JA',
-    accessCode: 'Store access code',
+    accessCode: 'Store ID',
+    accessPlaceholder: 'Enter store ID',
+    password: 'Password',
+    passwordPlaceholder: 'Enter password',
     signIn: 'Open services',
     store: 'Store',
     contact: 'Contact',
@@ -51,7 +58,7 @@ const ui = {
     completed: 'Exchange completed',
     user: 'Customer',
     usedPoints: 'Used points',
-    invalidCode: 'Check the store access code.',
+    invalidCode: 'Check the store ID and password.',
     cameraUnavailable: 'Camera QR scanning is unavailable in this browser. Enter the QR payload manually.'
   }
 };
@@ -65,7 +72,6 @@ function t(key) {
 function setState(nextState) {
   Object.assign(state, nextState);
   localStorage.setItem('store-portal-locale', state.locale);
-  localStorage.setItem('store-portal-code', state.code);
   render();
 }
 
@@ -86,7 +92,9 @@ async function loadPortal(event) {
   state.error = '';
 
   try {
-    const response = await fetch(`/api/bootstrap?code=${encodeURIComponent(state.code)}&locale=${encodeURIComponent(state.locale)}`);
+    const response = await fetch(
+      `/api/bootstrap?code=${encodeURIComponent(state.code)}&password=${encodeURIComponent(state.password)}&locale=${encodeURIComponent(state.locale)}`
+    );
     const payload = await response.json();
 
     if (!response.ok) {
@@ -168,6 +176,7 @@ async function submitExchange(serviceId, rawPayload) {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         code: state.code,
+        password: state.password,
         service_id: serviceId,
         user_qr_payload: payload
       })
@@ -205,7 +214,11 @@ function loginTemplate() {
       <form class="access-form">
         <label>
           <span>${escapeHtml(t('accessCode'))}</span>
-          <input name="code" value="${escapeHtml(state.code)}" autocomplete="off" />
+          <input name="code" value="${escapeHtml(state.code)}" placeholder="${escapeHtml(t('accessPlaceholder'))}" autocomplete="off" />
+        </label>
+        <label>
+          <span>${escapeHtml(t('password'))}</span>
+          <input name="password" value="${escapeHtml(state.password)}" placeholder="${escapeHtml(t('passwordPlaceholder'))}" type="password" autocomplete="current-password" />
         </label>
         <button class="primary-button" type="submit">${escapeHtml(t('signIn'))}</button>
       </form>
@@ -324,8 +337,16 @@ app.addEventListener('click', async (event) => {
 
 app.addEventListener('submit', (event) => {
   if (event.target.classList.contains('access-form')) {
+    event.preventDefault();
     const form = new FormData(event.target);
     state.code = String(form.get('code') || '').trim();
+    state.password = String(form.get('password') || '');
+
+    if (!state.code || !state.password) {
+      setState({ error: t('invalidCode'), payload: null });
+      return;
+    }
+
     loadPortal(event);
     return;
   }
@@ -338,4 +359,3 @@ app.addEventListener('submit', (event) => {
 });
 
 render();
-loadPortal();

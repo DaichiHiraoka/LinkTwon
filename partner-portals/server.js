@@ -138,9 +138,13 @@ function translateService(service, category, cache, locale) {
   };
 }
 
-async function buildEventPayload(code, locale, options = {}) {
+function matchesPartnerCredentials(item, code, password) {
+  return item.login_code === code && item.login_password === password;
+}
+
+async function buildEventPayload(code, password, locale, options = {}) {
   const data = await readPartnerData(options);
-  const organizer = data.eventOrganizers.find((item) => item.login_code === code);
+  const organizer = data.eventOrganizers.find((item) => matchesPartnerCredentials(item, code, password));
 
   if (!organizer) {
     return null;
@@ -164,9 +168,9 @@ async function buildEventPayload(code, locale, options = {}) {
   };
 }
 
-async function buildStorePayload(code, locale, options = {}) {
+async function buildStorePayload(code, password, locale, options = {}) {
   const data = await readPartnerData(options);
-  const store = data.stores.find((item) => item.login_code === code);
+  const store = data.stores.find((item) => matchesPartnerCredentials(item, code, password));
 
   if (!store) {
     return null;
@@ -195,10 +199,10 @@ async function buildStorePayload(code, locale, options = {}) {
 
 async function processEventCheckIn(body, locale, options = {}) {
   const data = await readPartnerData(options);
-  const organizer = data.eventOrganizers.find((item) => item.login_code === body.code);
+  const organizer = data.eventOrganizers.find((item) => matchesPartnerCredentials(item, body.code, body.password));
 
   if (!organizer) {
-    return { status: 401, body: { message: 'Invalid event organizer access code.' } };
+    return { status: 401, body: { message: 'Invalid event organizer credentials.' } };
   }
 
   const event = data.events.find((item) => item.event_id === body.event_id && organizer.event_ids.includes(item.event_id));
@@ -231,10 +235,10 @@ async function processEventCheckIn(body, locale, options = {}) {
 
 async function processStoreExchange(body, locale, options = {}) {
   const data = await readPartnerData(options);
-  const store = data.stores.find((item) => item.login_code === body.code);
+  const store = data.stores.find((item) => matchesPartnerCredentials(item, body.code, body.password));
 
   if (!store) {
-    return { status: 401, body: { message: 'Invalid store access code.' } };
+    return { status: 401, body: { message: 'Invalid store credentials.' } };
   }
 
   const service = data.services.find((item) => item.service_id === body.service_id && store.service_ids.includes(item.service_id));
@@ -269,22 +273,23 @@ async function processStoreExchange(body, locale, options = {}) {
 async function handleApi(request, response, requestUrl) {
   if (request.method === 'GET' && requestUrl.pathname === '/api/bootstrap') {
     const code = requestUrl.searchParams.get('code') || '';
+    const password = requestUrl.searchParams.get('password') || '';
     const locale = requestUrl.searchParams.get('locale') === 'en' ? 'en' : 'ja';
 
     if (APP_ROLE === 'event') {
-      const payload = await buildEventPayload(code, locale);
+      const payload = await buildEventPayload(code, password, locale);
 
       if (!payload) {
-        return sendError(response, 401, 'Invalid event organizer access code.');
+        return sendError(response, 401, 'Invalid event organizer credentials.');
       }
 
       return sendJson(response, 200, payload);
     }
 
-    const payload = await buildStorePayload(code, locale);
+    const payload = await buildStorePayload(code, password, locale);
 
     if (!payload) {
-      return sendError(response, 401, 'Invalid store access code.');
+      return sendError(response, 401, 'Invalid store credentials.');
     }
 
     return sendJson(response, 200, payload);

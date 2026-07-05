@@ -11,6 +11,7 @@ const schemaStatements = [
   `CREATE TABLE IF NOT EXISTS event_organizers (
     organizer_id TEXT PRIMARY KEY,
     login_code TEXT NOT NULL UNIQUE,
+    login_password TEXT NOT NULL DEFAULT '',
     organizer_name TEXT NOT NULL,
     contact_email TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -19,6 +20,7 @@ const schemaStatements = [
   `CREATE TABLE IF NOT EXISTS stores (
     store_id TEXT PRIMARY KEY,
     login_code TEXT NOT NULL UNIQUE,
+    login_password TEXT NOT NULL DEFAULT '',
     store_name TEXT NOT NULL,
     store_address TEXT NOT NULL,
     map_query TEXT NOT NULL,
@@ -110,6 +112,18 @@ function applySchema(db) {
   for (const statement of schemaStatements) {
     db.prepare(statement).run();
   }
+
+  const migrations = [
+    ['event_organizers', 'login_password', "TEXT NOT NULL DEFAULT ''"],
+    ['stores', 'login_password', "TEXT NOT NULL DEFAULT ''"]
+  ];
+
+  for (const [tableName, columnName, definition] of migrations) {
+    const columns = db.prepare(`PRAGMA table_info(${tableName})`).all();
+    if (!columns.some((column) => column.name === columnName)) {
+      db.prepare(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`).run();
+    }
+  }
 }
 
 function seedDatabase(db, seedPath) {
@@ -125,12 +139,12 @@ function seedDatabase(db, seedPath) {
   const data = readSeedData(seedPath);
 
   const insertOrganizer = db.prepare(
-    `INSERT INTO event_organizers (organizer_id, login_code, organizer_name, contact_email)
-     VALUES (@organizer_id, @login_code, @organizer_name, @contact_email)`
+    `INSERT INTO event_organizers (organizer_id, login_code, login_password, organizer_name, contact_email)
+     VALUES (@organizer_id, @login_code, @login_password, @organizer_name, @contact_email)`
   );
   const insertStore = db.prepare(
-    `INSERT INTO stores (store_id, login_code, store_name, store_address, map_query, contact_email)
-     VALUES (@store_id, @login_code, @store_name, @store_address, @map_query, @contact_email)`
+    `INSERT INTO stores (store_id, login_code, login_password, store_name, store_address, map_query, contact_email)
+     VALUES (@store_id, @login_code, @login_password, @store_name, @store_address, @map_query, @contact_email)`
   );
   const insertCategory = db.prepare(
     `INSERT INTO service_categories (category_id, category_name)
@@ -170,6 +184,7 @@ function mapOrganizer(row) {
   return {
     organizer_id: row.organizer_id,
     login_code: row.login_code,
+    login_password: row.login_password,
     organizer_name: row.organizer_name,
     contact_email: row.contact_email,
     event_ids: row.event_ids ? row.event_ids.split(',').filter(Boolean) : []
@@ -180,6 +195,7 @@ function mapStore(row) {
   return {
     store_id: row.store_id,
     login_code: row.login_code,
+    login_password: row.login_password,
     store_name: row.store_name,
     store_address: row.store_address,
     map_query: row.map_query,
