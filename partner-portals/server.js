@@ -20,6 +20,7 @@ const ROOT_DIR = __dirname;
 const PUBLIC_DIR = path.join(ROOT_DIR, APP_ROLE === 'store' ? 'store-app' : 'event-organizer-app');
 const CACHE_PATH = path.join(ROOT_DIR, 'data', 'translation-cache.json');
 const DAY_MS = 24 * 60 * 60 * 1000;
+const USER_QR_CLOCK_TOLERANCE_MS = 30 * 60 * 1000;
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -40,6 +41,14 @@ function sendJson(response, statusCode, body) {
 
 function sendError(response, statusCode, message) {
   sendJson(response, statusCode, { message });
+}
+
+function toSqlDateTime(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date.toISOString().slice(0, 19).replace('T', ' ');
 }
 
 async function readJsonBody(request) {
@@ -86,13 +95,23 @@ function parseUserQrPayload(rawPayload) {
   const userId = String(payload.user_id || '').trim();
   const name = String(payload.name || '').trim();
   const nonce = String(payload.nonce || '').trim();
+  const issuedAt = payload.issued_at ? new Date(payload.issued_at) : null;
   const expiresAt = new Date(payload.expires_at);
 
   if (!userId || !nonce || Number.isNaN(expiresAt.getTime())) {
     throw new Error('User QR is missing required fields.');
   }
 
-  if (expiresAt.getTime() < Date.now()) {
+  if (issuedAt && Number.isNaN(issuedAt.getTime())) {
+    throw new Error('User QR is missing required fields.');
+  }
+
+  const now = Date.now();
+  if (issuedAt && issuedAt.getTime() - USER_QR_CLOCK_TOLERANCE_MS > now) {
+    throw new Error('User QR is not valid yet.');
+  }
+
+  if (expiresAt.getTime() + USER_QR_CLOCK_TOLERANCE_MS < now) {
     throw new Error('User QR has expired.');
   }
 
@@ -100,8 +119,8 @@ function parseUserQrPayload(rawPayload) {
     user_id: userId,
     name: name || `User ${userId}`,
     nonce,
-    issued_at: payload.issued_at || null,
-    expires_at: expiresAt.toISOString()
+    issued_at: issuedAt ? toSqlDateTime(issuedAt) : null,
+    expires_at: toSqlDateTime(expiresAt)
   };
 }
 

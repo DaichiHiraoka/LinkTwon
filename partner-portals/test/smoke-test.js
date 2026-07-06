@@ -114,6 +114,65 @@ function createUserQrPayload(nonce) {
   return `linktown://user-present?${params.toString()}`;
 }
 
+function createUserQrPayloadWithDates(nonce, issuedAt, expiresAt) {
+  const params = new URLSearchParams({
+    v: '1',
+    type: 'user-present',
+    user_id: '1',
+    name: 'Demo User',
+    issued_at: issuedAt.toISOString(),
+    expires_at: expiresAt.toISOString(),
+    nonce
+  });
+
+  return `linktown://user-present?${params.toString()}`;
+}
+
+function testUserQrTimeTolerance() {
+  const now = Date.now();
+  const withinFutureTolerance = parseUserQrPayload(
+    createUserQrPayloadWithDates(
+      'future-within-tolerance',
+      new Date(now + 29 * 60 * 1000),
+      new Date(now + 35 * 60 * 1000)
+    )
+  );
+  assert.match(withinFutureTolerance.issued_at, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+  assert.match(withinFutureTolerance.expires_at, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+
+  const withinExpiredTolerance = parseUserQrPayload(
+    createUserQrPayloadWithDates(
+      'expired-within-tolerance',
+      new Date(now - 40 * 60 * 1000),
+      new Date(now - 29 * 60 * 1000)
+    )
+  );
+  assert.equal(withinExpiredTolerance.user_id, '1');
+
+  assert.throws(
+    () =>
+      parseUserQrPayload(
+        createUserQrPayloadWithDates(
+          'future-outside-tolerance',
+          new Date(now + 31 * 60 * 1000),
+          new Date(now + 40 * 60 * 1000)
+        )
+      ),
+    /not valid yet/
+  );
+  assert.throws(
+    () =>
+      parseUserQrPayload(
+        createUserQrPayloadWithDates(
+          'expired-outside-tolerance',
+          new Date(now - 45 * 60 * 1000),
+          new Date(now - 31 * 60 * 1000)
+        )
+      ),
+    /expired/
+  );
+}
+
 async function testUserQrProcessing(cachePath, dbPath, ids) {
   const userQrPayload = createUserQrPayload(`smoke-event-${Date.now()}`);
   const parsed = parseUserQrPayload(userQrPayload);
@@ -174,6 +233,7 @@ async function main() {
   const dbPath = await prepareTempPartnerDb();
   const cachePath = await prepareTempTranslationCache(dbPath);
   const ids = await testPortalPayloads(cachePath, dbPath);
+  testUserQrTimeTolerance();
   await testUserQrProcessing(cachePath, dbPath, ids);
   console.log('partner-portals smoke test passed');
 }
