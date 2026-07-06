@@ -212,11 +212,13 @@ async function main() {
       headers: adminAuth,
       body: JSON.stringify({ store_name: 'Smoke Store' })
     }, 201);
-    await request('/admin/services', {
+    const createdService = await request('/admin/services', {
       method: 'POST',
       headers: adminAuth,
       body: JSON.stringify({ store_id: store.store_id, service_name: 'Smoke Coupon', required_points: 10 })
     }, 201);
+    const servicesAfterAdminCreate = await request('/points/services', { headers: userAuth });
+    assert.ok(servicesAfterAdminCreate.some((service) => service.service_id === createdService.service_id));
 
     const users = await request('/admin/users?search=demo', { headers: adminAuth });
     assert.ok(users.length > 0);

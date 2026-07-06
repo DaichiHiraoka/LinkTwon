@@ -250,6 +250,8 @@ const translations = {
     historyEmpty: "履歴はありません。",
     walletHistory: "履歴確認",
     walletHistoryEmpty: "ポイント履歴はありません。",
+    exchangeServicesEmpty: "交換できる商品はありません。",
+    favoriteServicesEmpty: "お気に入りの商品はありません。",
     apiConnectionError: "APIサーバーに接続できません。しばらく待って再試行するか、公開URLとAPI URLの設定を確認してください。",
     genericError: "処理に失敗しました。",
     closeToast: "通知を閉じる",
@@ -414,6 +416,8 @@ const translations = {
     historyEmpty: "No history.",
     walletHistory: "History",
     walletHistoryEmpty: "No point history.",
+    exchangeServicesEmpty: "No exchange items available.",
+    favoriteServicesEmpty: "No favorite items.",
     apiConnectionError: "Could not connect to the API server. Try again later or check the public URL and API URL settings.",
     genericError: "The operation failed.",
     closeToast: "Close notification",
@@ -713,6 +717,7 @@ function mapServices(services: ServiceItem[], language: AppLanguage): ProductCat
       mapQuery: `${storeName} ${storeAddress}`.trim(),
       requiredPoints: service.required_points,
       imageUrl: service.image_url || DUMMY_PRODUCT_IMAGE_URL,
+      favorited: toBoolean(service.favorited),
     };
     const existing = grouped.get(service.store_id);
 
@@ -1127,7 +1132,7 @@ export function App() {
   const [selectedEvent, setSelectedEvent] = useState<DisplayEvent | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<ProductItem | null>(null);
   const [participatedEventIds, setParticipatedEventIds] = useState<Set<number>>(new Set());
-  const [productCategories, setProductCategories] = useState<ProductCategory[]>(fallbackProductCategories);
+  const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
   const [accountEmail, setAccountEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -1218,7 +1223,7 @@ export function App() {
       const mappedParticipatedEvents = nextHistory.participations.map((participation) => {
         return mappedEventsById.get(participation.event_id) ?? mappedLikedEventsById.get(participation.event_id) ?? mapParticipation(participation, eventDisplayDate, nextLanguage);
       });
-      const mappedProducts = nextServices.length > 0 ? mapServices(nextServices, nextLanguage) : localizeProductCategories(fallbackProductCategories, nextLanguage);
+      const mappedProducts = mapServices(nextServices, nextLanguage);
       const mappedEventsByAnyId = new Map([...mappedEvents, ...mappedLikedEvents, ...mappedParticipatedEvents].flatMap((event) => (event.rawEventId ? [[event.rawEventId, event] as const] : [])));
       const mappedProductsById = new Map(mappedProducts.flatMap((category) => category.products.map((product) => [product.id, product] as const)));
       setProfile(nextProfile);
@@ -1256,6 +1261,29 @@ export function App() {
     setSession(nextSession);
     writeStoredSession(nextSession);
   }
+
+  useEffect(() => {
+    if (!session || screen !== "wallet") {
+      return undefined;
+    }
+
+    const currentSession = session;
+    void loadApplicationData(currentSession);
+
+    function refreshOnFocus() {
+      if (document.visibilityState === "visible") {
+        void loadApplicationData(currentSession);
+      }
+    }
+
+    window.addEventListener("focus", refreshOnFocus);
+    document.addEventListener("visibilitychange", refreshOnFocus);
+
+    return () => {
+      window.removeEventListener("focus", refreshOnFocus);
+      document.removeEventListener("visibilitychange", refreshOnFocus);
+    };
+  }, [screen, session?.token]);
 
   async function handleLogin(email: string, password: string) {
     const response = await login(email, password);
@@ -2528,7 +2556,19 @@ function WalletScreen({
   onPurchase: () => void;
   onProductSelect: (product: ProductItem) => void;
 }) {
-  const visibleCategories = tab === "recommended" ? productCategories : productCategories.slice(0, 1);
+  const visibleCategories = useMemo(() => {
+    if (tab === "recommended") {
+      return productCategories;
+    }
+
+    return productCategories
+      .map((category) => ({
+        ...category,
+        products: category.products.filter((product) => product.favorited),
+      }))
+      .filter((category) => category.products.length > 0);
+  }, [productCategories, tab]);
+  const emptyMessage = tab === "favorite" ? translate("favoriteServicesEmpty", language) : translate("exchangeServicesEmpty", language);
   const walletHistory = useMemo(
     () => buildWalletHistoryItems({ participations, transactions, purchases, language }).slice(0, 6),
     [language, participations, purchases, transactions],
@@ -2588,6 +2628,7 @@ function WalletScreen({
         />
         <p className="map-hint">{translate("storeMapHint", language)}</p>
         <div className="product-stack">
+          {visibleCategories.length === 0 ? <p className="empty-message">{emptyMessage}</p> : null}
           {visibleCategories.map((category) => (
             <section key={category.id}>
               <SectionHeading>{category.name}</SectionHeading>

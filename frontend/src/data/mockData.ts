@@ -35,6 +35,7 @@ export type ProductItem = {
   mapQuery: string;
   requiredPoints?: number;
   imageUrl?: string;
+  favorited?: boolean;
 };
 
 export const user = {
