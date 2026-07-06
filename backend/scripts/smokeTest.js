@@ -202,6 +202,8 @@ async function main() {
       })
     }, 201);
     assert.ok(createdEvent.check_in_code);
+    const [createdEventRows] = await pool.query('SELECT event_datetime FROM events WHERE event_id = ?', [createdEvent.event_id]);
+    assert.strictEqual(createdEventRows[0].event_datetime, '2026-07-01 10:00:00');
     const [createdEventTranslations] = await pool.query(
       `SELECT field_name, translated_text
        FROM content_translations

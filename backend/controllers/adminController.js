@@ -13,6 +13,20 @@ function generateCheckInCode(eventId) {
   return `EVT-${eventId}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
 }
 
+function normalizeEventDateTime(value) {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(?::(\d{2}))?$/);
+  if (!match) {
+    return trimmed;
+  }
+
+  return `${match[1]} ${match[2]}:${match[3] || '00'}`;
+}
+
 async function ensureEventCheckInCode(eventId) {
   const [tokens] = await pool.query(
     `SELECT token_id, check_in_code, expires_at
@@ -112,10 +126,11 @@ async function createEvent(req, res, next) {
       return res.status(400).json({ message: 'Invalid event status.' });
     }
 
+    const normalizedEventDatetime = normalizeEventDateTime(event_datetime);
     const [result] = await pool.query(
       `INSERT INTO events (event_name, event_datetime, location, grant_points, status)
        VALUES (?, ?, ?, ?, ?)`,
-      [event_name, event_datetime, location || null, Number(grant_points || 0), eventStatus]
+      [event_name, normalizedEventDatetime, location || null, Number(grant_points || 0), eventStatus]
     );
 
     const token = await ensureEventCheckInCode(result.insertId);
@@ -152,7 +167,7 @@ async function updateEvent(req, res, next) {
 
     const nextEvent = {
       event_name: event_name || events[0].event_name,
-      event_datetime: event_datetime || events[0].event_datetime,
+      event_datetime: event_datetime ? normalizeEventDateTime(event_datetime) : events[0].event_datetime,
       location: location === undefined ? events[0].location : location,
       grant_points: grant_points === undefined ? events[0].grant_points : Number(grant_points),
       status: eventStatus

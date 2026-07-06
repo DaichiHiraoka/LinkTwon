@@ -437,6 +437,7 @@ async function getMysqlPool() {
 
     mysqlPool = mysql.createPool({
       ...config,
+      dateStrings: true,
       waitForConnections: true,
       connectionLimit: env.PARTNER_DB_CONNECTION_LIMIT,
       queueLimit: 0

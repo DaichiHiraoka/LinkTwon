@@ -71,6 +71,7 @@ function createMysqlPool() {
 
   return mysql.createPool({
     ...config,
+    dateStrings: true,
     waitForConnections: true,
     connectionLimit: env.DB_CONNECTION_LIMIT,
     queueLimit: 0
