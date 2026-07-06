@@ -45,22 +45,56 @@ const schemaStatements = [
     location TEXT,
     grant_points INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'paused')),
+    description TEXT,
+    activity TEXT,
+    notes TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE TABLE IF NOT EXISTS event_organizers (
+    organizer_id TEXT PRIMARY KEY,
+    login_code TEXT NOT NULL UNIQUE,
+    login_password TEXT NOT NULL,
+    organizer_name TEXT NOT NULL,
+    contact_email TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE TABLE IF NOT EXISTS event_organizer_events (
+    organizer_id TEXT NOT NULL,
+    event_id INTEGER NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (organizer_id, event_id),
+    FOREIGN KEY (organizer_id) REFERENCES event_organizers(organizer_id) ON DELETE CASCADE,
+    FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
   )`,
   `CREATE TABLE IF NOT EXISTS stores (
     store_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    login_code TEXT,
+    login_password TEXT,
     store_name TEXT NOT NULL,
+    store_address TEXT,
+    map_query TEXT,
+    contact_email TEXT,
     status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'paused')),
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE TABLE IF NOT EXISTS service_categories (
+    category_id TEXT PRIMARY KEY,
+    category_name TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
   )`,
   `CREATE TABLE IF NOT EXISTS services (
     service_id INTEGER PRIMARY KEY AUTOINCREMENT,
     store_id INTEGER NOT NULL,
+    category_id TEXT,
     service_name TEXT NOT NULL,
+    description TEXT,
     required_points INTEGER NOT NULL,
     status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'paused')),
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (store_id) REFERENCES stores(store_id) ON DELETE CASCADE
+    FOREIGN KEY (store_id) REFERENCES stores(store_id) ON DELETE CASCADE,
+    FOREIGN KEY (category_id) REFERENCES service_categories(category_id) ON DELETE SET NULL
   )`,
   `CREATE TABLE IF NOT EXISTS participations (
     participation_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -82,6 +116,38 @@ const schemaStatements = [
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
     FOREIGN KEY (service_id) REFERENCES services(service_id) ON DELETE SET NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS portal_event_check_ins (
+    check_in_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    organizer_id TEXT NOT NULL,
+    event_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    user_name TEXT NOT NULL,
+    nonce TEXT NOT NULL,
+    qr_issued_at TEXT,
+    qr_expires_at TEXT NOT NULL,
+    granted_points INTEGER NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (event_id, user_id, nonce),
+    FOREIGN KEY (organizer_id) REFERENCES event_organizers(organizer_id) ON DELETE CASCADE,
+    FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS portal_store_exchanges (
+    exchange_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    store_id INTEGER NOT NULL,
+    service_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    user_name TEXT NOT NULL,
+    nonce TEXT NOT NULL,
+    qr_issued_at TEXT,
+    qr_expires_at TEXT NOT NULL,
+    used_points INTEGER NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (service_id, user_id, nonce),
+    FOREIGN KEY (store_id) REFERENCES stores(store_id) ON DELETE CASCADE,
+    FOREIGN KEY (service_id) REFERENCES services(service_id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
   )`,
   `CREATE TABLE IF NOT EXISTS point_purchases (
     purchase_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -202,7 +268,17 @@ const columnMigrations = [
   ['users', 'login_password_plaintext', 'TEXT'],
   ['users', 'email_verified_at', 'TEXT'],
   ['events', 'status', "TEXT NOT NULL DEFAULT 'active'"],
+  ['events', 'description', 'TEXT'],
+  ['events', 'activity', 'TEXT'],
+  ['events', 'notes', 'TEXT'],
+  ['stores', 'login_code', 'TEXT'],
+  ['stores', 'login_password', 'TEXT'],
+  ['stores', 'store_address', 'TEXT'],
+  ['stores', 'map_query', 'TEXT'],
+  ['stores', 'contact_email', 'TEXT'],
   ['stores', 'status', "TEXT NOT NULL DEFAULT 'active'"],
+  ['services', 'category_id', 'TEXT'],
+  ['services', 'description', 'TEXT'],
   ['services', 'status', "TEXT NOT NULL DEFAULT 'active'"]
 ];
 
@@ -225,6 +301,9 @@ function applySchema(db) {
       }
     }
   }
+
+  db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_event_organizers_login_code ON event_organizers(login_code)').run();
+  db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_stores_login_code ON stores(login_code) WHERE login_code IS NOT NULL').run();
 }
 
 function ensureUserSettings(db) {
@@ -249,6 +328,97 @@ function ensureEventCheckInCodes(db) {
       insertToken.run(event.event_id, `EVENT-${event.event_id}`);
     }
   });
+}
+
+function ensurePartnerPortalDemoData(db) {
+  db.prepare(
+    `INSERT INTO service_categories (category_id, category_name)
+     VALUES ('category-food', '商店街の人気商品')
+     ON CONFLICT(category_id) DO UPDATE SET category_name = excluded.category_name, updated_at = CURRENT_TIMESTAMP`
+  ).run();
+  db.prepare(
+    `INSERT INTO service_categories (category_id, category_name)
+     VALUES ('category-life', '生活応援商品')
+     ON CONFLICT(category_id) DO UPDATE SET category_name = excluded.category_name, updated_at = CURRENT_TIMESTAMP`
+  ).run();
+
+  const eventDetails = [
+    [
+      '地域清掃ボランティア',
+      '地域の歩道と広場を清掃し、来街者が歩きやすい環境を整えます。',
+      'ごみ拾い、落ち葉の回収、掲示板周辺の拭き掃除を担当します。',
+      '軍手とごみ袋は主催者が用意します。'
+    ],
+    [
+      '見守りパトロール',
+      '駅前商店街を巡回し、住民と来街者に声かけを行います。',
+      '巡回、案内、困りごとの聞き取りを担当します。',
+      '集合時に当日の巡回ルートを共有します。'
+    ],
+    [
+      '子ども食堂サポート',
+      '子ども食堂の会場準備と配膳を支援します。',
+      '受付、配膳、片付け、見守り補助を行います。',
+      '衛生管理のため、マスク着用をお願いします。'
+    ]
+  ];
+  const updateEvent = db.prepare(
+    `UPDATE events
+     SET description = COALESCE(NULLIF(description, ''), ?),
+         activity = COALESCE(NULLIF(activity, ''), ?),
+         notes = COALESCE(NULLIF(notes, ''), ?)
+     WHERE event_name = ?`
+  );
+  eventDetails.forEach(([eventName, description, activity, notes]) => updateEvent.run(description, activity, notes, eventName));
+
+  db.prepare(
+    `INSERT INTO event_organizers (organizer_id, login_code, login_password, organizer_name, contact_email)
+     VALUES ('org-demo', 'event-demo', 'event-demo-pass', 'LinkTwon地域活動事務局', 'event@example.com')
+     ON CONFLICT(organizer_id) DO UPDATE SET
+       login_code = excluded.login_code,
+       login_password = excluded.login_password,
+       organizer_name = excluded.organizer_name,
+       contact_email = excluded.contact_email,
+       updated_at = CURRENT_TIMESTAMP`
+  ).run();
+
+  const assignEvent = db.prepare(
+    `INSERT OR IGNORE INTO event_organizer_events (organizer_id, event_id)
+     VALUES ('org-demo', ?)`
+  );
+  db.prepare("SELECT event_id FROM events WHERE status = 'active' ORDER BY event_id ASC")
+    .all()
+    .forEach((event) => assignEvent.run(event.event_id));
+
+  const demoStore =
+    db.prepare("SELECT store_id FROM stores WHERE store_name = '地域マルシェ'").get() ||
+    db.prepare('SELECT store_id FROM stores ORDER BY store_id ASC LIMIT 1').get();
+
+  if (demoStore) {
+    db.prepare(
+      `UPDATE stores
+       SET login_code = 'store-demo',
+           login_password = 'store-demo-pass',
+           store_address = COALESCE(NULLIF(store_address, ''), '東京都千代田区日比谷公園'),
+           map_query = COALESCE(NULLIF(map_query, ''), store_name || ' 東京都千代田区日比谷公園'),
+           contact_email = COALESCE(NULLIF(contact_email, ''), 'store@example.com')
+       WHERE store_id = ?`
+    ).run(demoStore.store_id);
+  }
+
+  const serviceDetails = [
+    ['コーヒー無料券', 'category-food', '商店街の協力店舗が用意するコーヒー交換券です。'],
+    ['ケーキセット割引', 'category-food', '店内で使えるケーキセットの割引商品です。'],
+    ['焼きたてパン引換券', 'category-food', '焼きたてパンと交換できる商品です。'],
+    ['野菜セット引換券', 'category-life', '地域で仕入れた旬の野菜を少量ずつ詰め合わせた交換商品です。']
+  ];
+  const updateService = db.prepare(
+    `UPDATE services
+     SET category_id = ?,
+         description = COALESCE(NULLIF(description, ''), ?)
+     WHERE service_name = ?`
+  );
+  serviceDetails.forEach(([serviceName, categoryId, description]) => updateService.run(categoryId, description, serviceName));
 }
 
 function seedDatabase(db) {
@@ -311,6 +481,7 @@ function seedDatabase(db) {
 
   ensureUserSettings(db);
   ensureEventCheckInCodes(db);
+  ensurePartnerPortalDemoData(db);
 
   const demoUser = db.prepare('SELECT user_id FROM users WHERE email = ?').get('demo@example.com');
   if (demoUser) {

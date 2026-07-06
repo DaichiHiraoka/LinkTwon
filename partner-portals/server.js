@@ -217,6 +217,12 @@ async function processEventCheckIn(body, locale, options = {}) {
   if (writeResult.duplicate) {
     return { status: 409, body: { message: 'This user QR has already been used for this event.', user, event_id: event.event_id } };
   }
+  if (writeResult.userNotFound) {
+    return { status: 404, body: { message: 'User not found for this QR.', user, event_id: event.event_id } };
+  }
+  if (writeResult.alreadyParticipated) {
+    return { status: 409, body: { message: 'This user has already checked in to this event.', user, event_id: event.event_id } };
+  }
 
   const cache = await loadTranslationCache(options.cachePath || CACHE_PATH);
   const translatedEvent = translateEvent(event, cache, locale);
@@ -228,7 +234,8 @@ async function processEventCheckIn(body, locale, options = {}) {
       user,
       event_id: event.event_id,
       event_name: translatedEvent.event_name,
-      granted_points: event.grant_points
+      granted_points: event.grant_points,
+      current_points: writeResult.current_points
     }
   };
 }
@@ -253,6 +260,21 @@ async function processStoreExchange(body, locale, options = {}) {
   if (writeResult.duplicate) {
     return { status: 409, body: { message: 'This user QR has already been used for this service.', user, service_id: service.service_id } };
   }
+  if (writeResult.userNotFound) {
+    return { status: 404, body: { message: 'User not found for this QR.', user, service_id: service.service_id } };
+  }
+  if (writeResult.notEnoughPoints) {
+    return {
+      status: 400,
+      body: {
+        message: 'Not enough points.',
+        user,
+        service_id: service.service_id,
+        required_points: service.required_points,
+        current_points: writeResult.current_points
+      }
+    };
+  }
 
   const cache = await loadTranslationCache(options.cachePath || CACHE_PATH);
   const category = data.serviceCategories.find((item) => item.category_id === service.category_id);
@@ -265,7 +287,8 @@ async function processStoreExchange(body, locale, options = {}) {
       user,
       service_id: service.service_id,
       service_name: translatedService.service_name,
-      used_points: service.required_points
+      used_points: service.required_points,
+      current_points: writeResult.current_points
     }
   };
 }

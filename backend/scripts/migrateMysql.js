@@ -265,6 +265,115 @@ async function migrate() {
       )`
     );
 
+    await ensureColumn(pool, 'events', 'description', 'ALTER TABLE events ADD COLUMN description TEXT NULL AFTER status');
+    await ensureColumn(pool, 'events', 'activity', 'ALTER TABLE events ADD COLUMN activity TEXT NULL AFTER description');
+    await ensureColumn(pool, 'events', 'notes', 'ALTER TABLE events ADD COLUMN notes TEXT NULL AFTER activity');
+
+    await ensureTable(
+      pool,
+      'event_organizers',
+      `CREATE TABLE event_organizers (
+        organizer_id VARCHAR(100) PRIMARY KEY,
+        login_code VARCHAR(100) NOT NULL UNIQUE,
+        login_password VARCHAR(255) NOT NULL,
+        organizer_name VARCHAR(255) NOT NULL,
+        contact_email VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )`
+    );
+
+    await ensureTable(
+      pool,
+      'event_organizer_events',
+      `CREATE TABLE event_organizer_events (
+        organizer_id VARCHAR(100) NOT NULL,
+        event_id INT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (organizer_id, event_id),
+        CONSTRAINT fk_event_organizer_events_organizer
+          FOREIGN KEY (organizer_id) REFERENCES event_organizers(organizer_id)
+          ON DELETE CASCADE,
+        CONSTRAINT fk_event_organizer_events_event
+          FOREIGN KEY (event_id) REFERENCES events(event_id)
+          ON DELETE CASCADE
+      )`
+    );
+
+    await ensureColumn(pool, 'stores', 'login_code', 'ALTER TABLE stores ADD COLUMN login_code VARCHAR(100) NULL UNIQUE AFTER store_id');
+    await ensureColumn(pool, 'stores', 'login_password', 'ALTER TABLE stores ADD COLUMN login_password VARCHAR(255) NULL AFTER login_code');
+    await ensureColumn(pool, 'stores', 'store_address', 'ALTER TABLE stores ADD COLUMN store_address VARCHAR(255) NULL AFTER store_name');
+    await ensureColumn(pool, 'stores', 'map_query', 'ALTER TABLE stores ADD COLUMN map_query VARCHAR(255) NULL AFTER store_address');
+    await ensureColumn(pool, 'stores', 'contact_email', 'ALTER TABLE stores ADD COLUMN contact_email VARCHAR(255) NULL AFTER map_query');
+
+    await ensureTable(
+      pool,
+      'service_categories',
+      `CREATE TABLE service_categories (
+        category_id VARCHAR(100) PRIMARY KEY,
+        category_name VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )`
+    );
+
+    await ensureColumn(pool, 'services', 'category_id', 'ALTER TABLE services ADD COLUMN category_id VARCHAR(100) NULL AFTER store_id');
+    await ensureColumn(pool, 'services', 'description', 'ALTER TABLE services ADD COLUMN description TEXT NULL AFTER service_name');
+
+    await ensureTable(
+      pool,
+      'portal_event_check_ins',
+      `CREATE TABLE portal_event_check_ins (
+        check_in_id INT AUTO_INCREMENT PRIMARY KEY,
+        organizer_id VARCHAR(100) NOT NULL,
+        event_id INT NOT NULL,
+        user_id INT NOT NULL,
+        user_name VARCHAR(255) NOT NULL,
+        nonce VARCHAR(255) NOT NULL,
+        qr_issued_at DATETIME NULL,
+        qr_expires_at DATETIME NOT NULL,
+        granted_points INT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_portal_event_qr (event_id, user_id, nonce),
+        CONSTRAINT fk_portal_checkins_organizer
+          FOREIGN KEY (organizer_id) REFERENCES event_organizers(organizer_id)
+          ON DELETE CASCADE,
+        CONSTRAINT fk_portal_checkins_event
+          FOREIGN KEY (event_id) REFERENCES events(event_id)
+          ON DELETE CASCADE,
+        CONSTRAINT fk_portal_checkins_user
+          FOREIGN KEY (user_id) REFERENCES users(user_id)
+          ON DELETE CASCADE
+      )`
+    );
+
+    await ensureTable(
+      pool,
+      'portal_store_exchanges',
+      `CREATE TABLE portal_store_exchanges (
+        exchange_id INT AUTO_INCREMENT PRIMARY KEY,
+        store_id INT NOT NULL,
+        service_id INT NOT NULL,
+        user_id INT NOT NULL,
+        user_name VARCHAR(255) NOT NULL,
+        nonce VARCHAR(255) NOT NULL,
+        qr_issued_at DATETIME NULL,
+        qr_expires_at DATETIME NOT NULL,
+        used_points INT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_portal_store_qr (service_id, user_id, nonce),
+        CONSTRAINT fk_portal_exchanges_store
+          FOREIGN KEY (store_id) REFERENCES stores(store_id)
+          ON DELETE CASCADE,
+        CONSTRAINT fk_portal_exchanges_service
+          FOREIGN KEY (service_id) REFERENCES services(service_id)
+          ON DELETE CASCADE,
+        CONSTRAINT fk_portal_exchanges_user
+          FOREIGN KEY (user_id) REFERENCES users(user_id)
+          ON DELETE CASCADE
+      )`
+    );
+
     console.log('mysql migration completed');
   } finally {
     await pool.end();

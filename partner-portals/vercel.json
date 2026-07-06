@@ -8,7 +8,7 @@
   ],
   "functions": {
     "api/index.js": {
-      "includeFiles": "{data/partner-data.json,data/translation-cache.json,event-organizer-app/**,store-app/**,shared.css}"
+      "includeFiles": "{event-organizer-app/**,store-app/**,shared.css}"
     }
   }
 }

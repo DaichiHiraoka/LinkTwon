@@ -13,21 +13,30 @@ const demoEvents = [
     legacyEventName: 'Demo Community Cleanup',
     eventDatetime: '2026-07-01 10:00:00',
     location: '中央公園',
-    grantPoints: 60
+    grantPoints: 60,
+    description: '地域の歩道と広場を清掃し、来街者が歩きやすい環境を整えます。',
+    activity: 'ごみ拾い、落ち葉の回収、掲示板周辺の拭き掃除を担当します。',
+    notes: '軍手とごみ袋は主催者が用意します。'
   },
   {
     eventName: '見守りパトロール',
     legacyEventName: 'Demo Watch Patrol',
     eventDatetime: '2026-07-03 16:00:00',
     location: '駅前商店街',
-    grantPoints: 80
+    grantPoints: 80,
+    description: '駅前商店街を巡回し、住民と来街者に声かけを行います。',
+    activity: '巡回、案内、困りごとの聞き取りを担当します。',
+    notes: '集合時に当日の巡回ルートを共有します。'
   },
   {
     eventName: '子ども食堂サポート',
     legacyEventName: 'Demo Food Support',
     eventDatetime: '2026-07-08 11:00:00',
     location: '市民センター',
-    grantPoints: 120
+    grantPoints: 120,
+    description: '子ども食堂の会場準備と配膳を支援します。',
+    activity: '受付、配膳、片付け、見守り補助を行います。',
+    notes: '衛生管理のため、マスク着用をお願いします。'
   }
 ];
 
@@ -35,19 +44,52 @@ const demoStores = [
   {
     storeName: 'Link Cafe',
     services: [
-      { serviceName: 'コーヒー無料券', legacyServiceName: 'Demo Coffee Coupon', requiredPoints: 120 },
-      { serviceName: 'ケーキセット割引', legacyServiceName: 'Demo Cake Coupon', requiredPoints: 180 }
+      {
+        serviceName: 'コーヒー無料券',
+        legacyServiceName: 'Demo Coffee Coupon',
+        requiredPoints: 120,
+        categoryId: 'category-food',
+        description: '商店街の協力店舗が用意するコーヒー交換券です。'
+      },
+      {
+        serviceName: 'ケーキセット割引',
+        legacyServiceName: 'Demo Cake Coupon',
+        requiredPoints: 180,
+        categoryId: 'category-food',
+        description: '店内で使えるケーキセットの割引商品です。'
+      }
     ]
   },
   {
     storeName: 'まちのパン屋',
     legacyStoreName: 'Demo Bakery',
-    services: [{ serviceName: '焼きたてパン引換券', legacyServiceName: 'Demo Bread Coupon', requiredPoints: 150 }]
+    services: [
+      {
+        serviceName: '焼きたてパン引換券',
+        legacyServiceName: 'Demo Bread Coupon',
+        requiredPoints: 150,
+        categoryId: 'category-food',
+        description: '焼きたてパンと交換できる商品です。'
+      }
+    ]
   },
   {
     storeName: '地域マルシェ',
     legacyStoreName: 'Demo Market',
-    services: [{ serviceName: '野菜セット引換券', legacyServiceName: 'Demo Vegetable Coupon', requiredPoints: 220 }]
+    loginCode: 'store-demo',
+    loginPassword: 'store-demo-pass',
+    storeAddress: '東京都千代田区日比谷公園',
+    mapQuery: '地域マルシェ 東京都千代田区日比谷公園',
+    contactEmail: 'store@example.com',
+    services: [
+      {
+        serviceName: '野菜セット引換券',
+        legacyServiceName: 'Demo Vegetable Coupon',
+        requiredPoints: 220,
+        categoryId: 'category-life',
+        description: '地域で仕入れた旬の野菜を少量ずつ詰め合わせた交換商品です。'
+      }
+    ]
   }
 ];
 
@@ -153,6 +195,22 @@ async function ensureEventCheckInCode(eventId) {
   );
 }
 
+async function ensureServiceCategories() {
+  const categories = [
+    ['category-food', '商店街の人気商品'],
+    ['category-life', '生活応援商品']
+  ];
+
+  for (const [categoryId, categoryName] of categories) {
+    const existing = await query('SELECT category_id FROM service_categories WHERE category_id = ?', [categoryId]);
+    if (existing.length > 0) {
+      await query('UPDATE service_categories SET category_name = ? WHERE category_id = ?', [categoryName, categoryId]);
+    } else {
+      await query('INSERT INTO service_categories (category_id, category_name) VALUES (?, ?)', [categoryId, categoryName]);
+    }
+  }
+}
+
 async function ensureDemoEvents() {
   const eventIds = [];
 
@@ -172,15 +230,16 @@ async function ensureDemoEvents() {
       eventId = existingEvents[0].event_id;
       await query(
         `UPDATE events
-         SET event_name = ?, event_datetime = ?, location = ?, grant_points = ?, status = 'active'
+         SET event_name = ?, event_datetime = ?, location = ?, grant_points = ?, status = 'active',
+             description = ?, activity = ?, notes = ?
          WHERE event_id = ?`,
-        [event.eventName, event.eventDatetime, event.location, event.grantPoints, eventId]
+        [event.eventName, event.eventDatetime, event.location, event.grantPoints, event.description, event.activity, event.notes, eventId]
       );
     } else {
       const result = await query(
-        `INSERT INTO events (event_name, event_datetime, location, grant_points, status)
-         VALUES (?, ?, ?, ?, 'active')`,
-        [event.eventName, event.eventDatetime, event.location, event.grantPoints]
+        `INSERT INTO events (event_name, event_datetime, location, grant_points, status, description, activity, notes)
+         VALUES (?, ?, ?, ?, 'active', ?, ?, ?)`,
+        [event.eventName, event.eventDatetime, event.location, event.grantPoints, event.description, event.activity, event.notes]
       );
       eventId = result.insertId;
     }
@@ -190,6 +249,42 @@ async function ensureDemoEvents() {
   }
 
   return eventIds;
+}
+
+async function ensureDemoOrganizer(eventIds) {
+  const organizerId = 'org-demo';
+  const organizers = await query('SELECT organizer_id FROM event_organizers WHERE organizer_id = ?', [organizerId]);
+
+  if (organizers.length > 0) {
+    await query(
+      `UPDATE event_organizers
+       SET login_code = ?, login_password = ?, organizer_name = ?, contact_email = ?
+       WHERE organizer_id = ?`,
+      ['event-demo', 'event-demo-pass', 'LinkTwon Demo Organizer', 'event@example.com', organizerId]
+    );
+  } else {
+    await query(
+      `INSERT INTO event_organizers (organizer_id, login_code, login_password, organizer_name, contact_email)
+       VALUES (?, ?, ?, ?, ?)`,
+      [organizerId, 'event-demo', 'event-demo-pass', 'LinkTwon Demo Organizer', 'event@example.com']
+    );
+  }
+
+  for (const eventId of eventIds) {
+    const assignments = await query(
+      `SELECT organizer_id
+       FROM event_organizer_events
+       WHERE organizer_id = ? AND event_id = ?`,
+      [organizerId, eventId]
+    );
+    if (assignments.length === 0) {
+      await query(
+        `INSERT INTO event_organizer_events (organizer_id, event_id)
+         VALUES (?, ?)`,
+        [organizerId, eventId]
+      );
+    }
+  }
 }
 
 async function ensureDemoStoresAndServices() {
@@ -209,12 +304,39 @@ async function ensureDemoStoresAndServices() {
 
     if (existingStores.length > 0) {
       storeId = existingStores[0].store_id;
-      await query('UPDATE stores SET store_name = ?, status = ? WHERE store_id = ?', [store.storeName, 'active', storeId]);
+      await query(
+        `UPDATE stores
+         SET store_name = ?,
+             status = ?,
+             login_code = ?,
+             login_password = ?,
+             store_address = ?,
+             map_query = ?,
+             contact_email = ?
+       WHERE store_id = ?`,
+        [
+          store.storeName,
+          'active',
+          store.loginCode || null,
+          store.loginPassword || null,
+          store.storeAddress || null,
+          store.mapQuery || null,
+          store.contactEmail || null,
+          storeId
+        ]
+      );
     } else {
       const result = await query(
-        `INSERT INTO stores (store_name, status)
-         VALUES (?, 'active')`,
-        [store.storeName]
+        `INSERT INTO stores (store_name, login_code, login_password, store_address, map_query, contact_email, status)
+         VALUES (?, ?, ?, ?, ?, ?, 'active')`,
+        [
+          store.storeName,
+          store.loginCode || null,
+          store.loginPassword || null,
+          store.storeAddress || null,
+          store.mapQuery || null,
+          store.contactEmail || null
+        ]
       );
       storeId = result.insertId;
     }
@@ -234,16 +356,16 @@ async function ensureDemoStoresAndServices() {
         const serviceId = existingServices[0].service_id;
         await query(
           `UPDATE services
-           SET service_name = ?, required_points = ?, status = 'active'
+           SET service_name = ?, category_id = ?, description = ?, required_points = ?, status = 'active'
            WHERE service_id = ?`,
-          [service.serviceName, service.requiredPoints, serviceId]
+          [service.serviceName, service.categoryId || null, service.description || null, service.requiredPoints, serviceId]
         );
         serviceIds.push(serviceId);
       } else {
         const result = await query(
-          `INSERT INTO services (store_id, service_name, required_points, status)
-           VALUES (?, ?, ?, 'active')`,
-          [storeId, service.serviceName, service.requiredPoints]
+          `INSERT INTO services (store_id, category_id, service_name, description, required_points, status)
+           VALUES (?, ?, ?, ?, ?, 'active')`,
+          [storeId, service.categoryId || null, service.serviceName, service.description || null, service.requiredPoints]
         );
         serviceIds.push(result.insertId);
       }
@@ -256,7 +378,9 @@ async function ensureDemoStoresAndServices() {
 async function seedDemoData() {
   const userId = await ensureDemoUser();
   await ensureAdmin();
+  await ensureServiceCategories();
   const eventIds = await ensureDemoEvents();
+  await ensureDemoOrganizer(eventIds);
   const serviceIds = await ensureDemoStoresAndServices();
 
   return {

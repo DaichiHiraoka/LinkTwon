@@ -23,26 +23,69 @@ CREATE TABLE events (
   location VARCHAR(255),
   grant_points INT NOT NULL DEFAULT 0,
   status ENUM('active', 'paused') NOT NULL DEFAULT 'active',
+  description TEXT NULL,
+  activity TEXT NULL,
+  notes TEXT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE event_organizers (
+  organizer_id VARCHAR(100) PRIMARY KEY,
+  login_code VARCHAR(100) NOT NULL UNIQUE,
+  login_password VARCHAR(255) NOT NULL,
+  organizer_name VARCHAR(255) NOT NULL,
+  contact_email VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE event_organizer_events (
+  organizer_id VARCHAR(100) NOT NULL,
+  event_id INT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (organizer_id, event_id),
+  CONSTRAINT fk_event_organizer_events_organizer
+    FOREIGN KEY (organizer_id) REFERENCES event_organizers(organizer_id)
+    ON DELETE CASCADE,
+  CONSTRAINT fk_event_organizer_events_event
+    FOREIGN KEY (event_id) REFERENCES events(event_id)
+    ON DELETE CASCADE
 );
 
 CREATE TABLE stores (
   store_id INT AUTO_INCREMENT PRIMARY KEY,
+  login_code VARCHAR(100) NULL UNIQUE,
+  login_password VARCHAR(255) NULL,
   store_name VARCHAR(255) NOT NULL,
+  store_address VARCHAR(255) NULL,
+  map_query VARCHAR(255) NULL,
+  contact_email VARCHAR(255) NULL,
   status ENUM('active', 'paused') NOT NULL DEFAULT 'active',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE service_categories (
+  category_id VARCHAR(100) PRIMARY KEY,
+  category_name VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 CREATE TABLE services (
   service_id INT AUTO_INCREMENT PRIMARY KEY,
   store_id INT NOT NULL,
+  category_id VARCHAR(100) NULL,
   service_name VARCHAR(255) NOT NULL,
+  description TEXT NULL,
   required_points INT NOT NULL,
   status ENUM('active', 'paused') NOT NULL DEFAULT 'active',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_services_store
     FOREIGN KEY (store_id) REFERENCES stores(store_id)
-    ON DELETE CASCADE
+    ON DELETE CASCADE,
+  CONSTRAINT fk_services_category
+    FOREIGN KEY (category_id) REFERENCES service_categories(category_id)
+    ON DELETE SET NULL
 );
 
 CREATE TABLE participations (
@@ -74,6 +117,52 @@ CREATE TABLE point_transactions (
   CONSTRAINT fk_transactions_service
     FOREIGN KEY (service_id) REFERENCES services(service_id)
     ON DELETE SET NULL
+);
+
+CREATE TABLE portal_event_check_ins (
+  check_in_id INT AUTO_INCREMENT PRIMARY KEY,
+  organizer_id VARCHAR(100) NOT NULL,
+  event_id INT NOT NULL,
+  user_id INT NOT NULL,
+  user_name VARCHAR(255) NOT NULL,
+  nonce VARCHAR(255) NOT NULL,
+  qr_issued_at DATETIME NULL,
+  qr_expires_at DATETIME NOT NULL,
+  granted_points INT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY unique_portal_event_qr (event_id, user_id, nonce),
+  CONSTRAINT fk_portal_checkins_organizer
+    FOREIGN KEY (organizer_id) REFERENCES event_organizers(organizer_id)
+    ON DELETE CASCADE,
+  CONSTRAINT fk_portal_checkins_event
+    FOREIGN KEY (event_id) REFERENCES events(event_id)
+    ON DELETE CASCADE,
+  CONSTRAINT fk_portal_checkins_user
+    FOREIGN KEY (user_id) REFERENCES users(user_id)
+    ON DELETE CASCADE
+);
+
+CREATE TABLE portal_store_exchanges (
+  exchange_id INT AUTO_INCREMENT PRIMARY KEY,
+  store_id INT NOT NULL,
+  service_id INT NOT NULL,
+  user_id INT NOT NULL,
+  user_name VARCHAR(255) NOT NULL,
+  nonce VARCHAR(255) NOT NULL,
+  qr_issued_at DATETIME NULL,
+  qr_expires_at DATETIME NOT NULL,
+  used_points INT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY unique_portal_store_qr (service_id, user_id, nonce),
+  CONSTRAINT fk_portal_exchanges_store
+    FOREIGN KEY (store_id) REFERENCES stores(store_id)
+    ON DELETE CASCADE,
+  CONSTRAINT fk_portal_exchanges_service
+    FOREIGN KEY (service_id) REFERENCES services(service_id)
+    ON DELETE CASCADE,
+  CONSTRAINT fk_portal_exchanges_user
+    FOREIGN KEY (user_id) REFERENCES users(user_id)
+    ON DELETE CASCADE
 );
 
 CREATE TABLE point_purchases (
