@@ -315,8 +315,8 @@ export function deletePaymentMethod(userId: number, paymentMethodId: number, tok
   );
 }
 
-export function getNotifications(userId: number, token: string) {
-  return request<NotificationItem[]>(`/users/${userId}/notifications`, {}, token);
+export function getNotifications(userId: number, token: string, locale: Locale = "ja") {
+  return request<NotificationItem[]>(withLocale(`/users/${userId}/notifications`, locale), {}, token);
 }
 
 export function markNotificationRead(notificationId: number, token: string) {

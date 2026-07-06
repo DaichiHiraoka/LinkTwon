@@ -250,6 +250,81 @@ const translations = {
     historyEmpty: "履歴はありません。",
     walletHistory: "履歴確認",
     walletHistoryEmpty: "ポイント履歴はありません。",
+    apiConnectionError: "APIサーバーに接続できません。しばらく待って再試行するか、公開URLとAPI URLの設定を確認してください。",
+    genericError: "処理に失敗しました。",
+    closeToast: "通知を閉じる",
+    help: "ヘルプ",
+    mail: "メール",
+    appMenu: "アプリメニュー",
+    homeEventList: "開催イベント一覧",
+    homePointPurchase: "ポイント購入",
+    homePointExchange: "ポイント交換所",
+    upcomingEvent: "参加予定のイベント",
+    recommendedEventsTitle: "おすすめのイベント",
+    likedEvents: "いいねしたイベント",
+    participatedEvents: "応募済みイベント",
+    eventsEmpty: "表示できるイベントはありません。",
+    cancelParticipation: "応募をキャンセル",
+    eventImageAlt: "{title}の画像",
+    productImageAlt: "{name}の画像",
+    meetingPlace: "集合場所",
+    meetingTime: "集合時間",
+    eventActivityTime: "活動時間",
+    eventDeadlinePlaceholder: "あと0時間〇〇分で締め切り",
+    eventRecruitmentPlaceholder: "現在の募集人数　〇人",
+    activityContent: "活動内容",
+    mainActivityContent: "主な活動内容",
+    activityItemTrash: "・公園内のゴミ拾い",
+    activityItemStones: "・大きな石などの撤去作業",
+    activityItemCleaning: "・動物の糞などの清掃作業",
+    eventQuestionHint: "不明点がありましたら、管理の方に遠慮なく聞いてください。",
+    eventNotes: "注意事項",
+    applyEvent: "このイベントに応募する",
+    eventAlreadyApplied: "応募済みのイベントです",
+    likeAction: "いいね！",
+    adFrame: "広告掲載フレーム",
+    languageJapanese: "日本語",
+    languageEnglish: "英語",
+    fontSmall: "小",
+    fontMedium: "中",
+    fontLarge: "大",
+    deleteAccountConfirm: "アカウントを削除します。よろしいですか？この操作は取り消せません。",
+    accountSaved: "アカウント設定を保存しました。",
+    passwordChanged: "パスワードを変更しました。",
+    cannotApplyEvent: "このイベントは現在応募できません。",
+    eventApplied: "イベントに応募しました。",
+    cannotCancelEvent: "このイベントは現在キャンセルできません。",
+    eventCanceled: "応募をキャンセルしました。",
+    loginRequired: "ログイン情報が確認できません。",
+    invalidServiceId: "サービスIDが不正です。",
+    exchangeSuccessMessage: "{serviceName} を {points}pt で交換しました (残高 {balance}pt)",
+    notificationMarkedRead: "既読にしました。",
+    paymentMethodAdded: "支払方法を追加しました。",
+    paymentMethodDeleted: "支払方法を削除しました。",
+    supportTicketCreated: "問い合わせを送信しました。",
+    purchaseSuccessMessage: "{points}pt を購入しました (残高 {balance}pt)",
+    cannotLikeEvent: "このイベントは現在いいねできません。",
+    paymentMethodLabelRequired: "ラベルを入力してください。",
+    supportSubjectBodyRequired: "件名と内容を入力してください。",
+    eventHistoryLabel: "地域イベント",
+    chargeHistoryLabel: "チャージ",
+    pointChargeTitle: "チャージpt",
+    exchangeHistoryLabel: "ポイント交換",
+    pointExchangeTitle: "ポイント交換",
+    eventPointGrant: "イベントポイント付与",
+    purchaseStatusPending: "処理待ち",
+    purchaseStatusPaid: "支払済み",
+    purchaseStatusFailed: "失敗",
+    purchaseStatusCancelled: "キャンセル済み",
+    supportStatusOpen: "未対応",
+    supportStatusInProgress: "対応中",
+    supportStatusResolved: "解決済み",
+    supportStatusClosed: "終了",
+    accountTypeGeneral: "一般",
+    accountTypeResident: "地域住民",
+    accountTypeVolunteer: "ボランティア",
+    notSet: "未設定",
+    localShoppingDistrict: "地域商店街周辺",
   },
   en: {
     translate: "Translate",
@@ -339,6 +414,81 @@ const translations = {
     historyEmpty: "No history.",
     walletHistory: "History",
     walletHistoryEmpty: "No point history.",
+    apiConnectionError: "Could not connect to the API server. Try again later or check the public URL and API URL settings.",
+    genericError: "The operation failed.",
+    closeToast: "Close notification",
+    help: "Help",
+    mail: "Mail",
+    appMenu: "App menu",
+    homeEventList: "Event list",
+    homePointPurchase: "Buy points",
+    homePointExchange: "Point exchange",
+    upcomingEvent: "Upcoming event",
+    recommendedEventsTitle: "Recommended events",
+    likedEvents: "Liked events",
+    participatedEvents: "Applied events",
+    eventsEmpty: "No events to display.",
+    cancelParticipation: "Cancel application",
+    eventImageAlt: "Image for {title}",
+    productImageAlt: "Image for {name}",
+    meetingPlace: "Meeting place",
+    meetingTime: "Meeting time",
+    eventActivityTime: "Activity time",
+    eventDeadlinePlaceholder: "Closes in 0 hours",
+    eventRecruitmentPlaceholder: "Current openings: 0",
+    activityContent: "Activity details",
+    mainActivityContent: "Main activities",
+    activityItemTrash: "- Picking up litter in the park",
+    activityItemStones: "- Removing large stones and debris",
+    activityItemCleaning: "- Cleaning animal waste and other dirt",
+    eventQuestionHint: "If you have questions, ask the organizer.",
+    eventNotes: "Notes",
+    applyEvent: "Apply for this event",
+    eventAlreadyApplied: "You have already applied",
+    likeAction: "Like",
+    adFrame: "Ad placement",
+    languageJapanese: "Japanese",
+    languageEnglish: "English",
+    fontSmall: "Small",
+    fontMedium: "Medium",
+    fontLarge: "Large",
+    deleteAccountConfirm: "Delete this account? This action cannot be undone.",
+    accountSaved: "Account settings saved.",
+    passwordChanged: "Password changed.",
+    cannotApplyEvent: "This event is not accepting applications.",
+    eventApplied: "Applied for the event.",
+    cannotCancelEvent: "This event cannot be cancelled now.",
+    eventCanceled: "Application cancelled.",
+    loginRequired: "Could not confirm your login session.",
+    invalidServiceId: "Invalid service ID.",
+    exchangeSuccessMessage: "Exchanged {serviceName} for {points}pt (balance {balance}pt)",
+    notificationMarkedRead: "Marked as read.",
+    paymentMethodAdded: "Payment method added.",
+    paymentMethodDeleted: "Payment method deleted.",
+    supportTicketCreated: "Support request sent.",
+    purchaseSuccessMessage: "Purchased {points}pt (balance {balance}pt)",
+    cannotLikeEvent: "This event cannot be liked now.",
+    paymentMethodLabelRequired: "Enter a label.",
+    supportSubjectBodyRequired: "Enter a subject and body.",
+    eventHistoryLabel: "Event",
+    chargeHistoryLabel: "Charge",
+    pointChargeTitle: "Point charge",
+    exchangeHistoryLabel: "Exchange",
+    pointExchangeTitle: "Point exchange",
+    eventPointGrant: "Event point grant",
+    purchaseStatusPending: "Pending",
+    purchaseStatusPaid: "Paid",
+    purchaseStatusFailed: "Failed",
+    purchaseStatusCancelled: "Cancelled",
+    supportStatusOpen: "Open",
+    supportStatusInProgress: "In progress",
+    supportStatusResolved: "Resolved",
+    supportStatusClosed: "Closed",
+    accountTypeGeneral: "General",
+    accountTypeResident: "Resident",
+    accountTypeVolunteer: "Volunteer",
+    notSet: "Not set",
+    localShoppingDistrict: "Local shopping district",
   },
 } as const;
 
@@ -348,21 +498,77 @@ function translate(key: TranslationKey, language: AppLanguage) {
   return translations[language][key];
 }
 
+function formatTranslation(key: TranslationKey, language: AppLanguage, values: Record<string, string | number>) {
+  return translate(key, language).replace(/\{(\w+)\}/g, (_match, name: string) => String(values[name] ?? ""));
+}
+
+function formatYen(amount: number, language: AppLanguage) {
+  return new Intl.NumberFormat(language === "en" ? "en-US" : "ja-JP", {
+    style: "currency",
+    currency: "JPY",
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+const accountTypeTranslationKeys: Record<string, TranslationKey> = {
+  general: "accountTypeGeneral",
+  resident: "accountTypeResident",
+  volunteer: "accountTypeVolunteer",
+  一般: "accountTypeGeneral",
+  地域住民: "accountTypeResident",
+  ボランティア: "accountTypeVolunteer",
+};
+
+function translateAccountType(value: string, language: AppLanguage) {
+  const key = accountTypeTranslationKeys[value];
+  return key ? translate(key, language) : value;
+}
+
+function translatePurchaseStatus(status: Purchase["status"], language: AppLanguage) {
+  const keys: Record<Purchase["status"], TranslationKey> = {
+    pending: "purchaseStatusPending",
+    paid: "purchaseStatusPaid",
+    failed: "purchaseStatusFailed",
+    cancelled: "purchaseStatusCancelled",
+  };
+  return translate(keys[status], language);
+}
+
+function translateSupportStatus(status: SupportTicket["status"], language: AppLanguage) {
+  const keys: Record<SupportTicket["status"], TranslationKey> = {
+    open: "supportStatusOpen",
+    in_progress: "supportStatusInProgress",
+    resolved: "supportStatusResolved",
+    closed: "supportStatusClosed",
+  };
+  return translate(keys[status], language);
+}
+
 const localizedContent = [
+  { ja: "〇〇市の防災活動　ご家族での参加もOK！", en: "Disaster preparedness activity - families welcome" },
+  { ja: "〇〇公園の清掃ボランティア　どなたでも大歓迎！", en: "Park cleanup volunteer activity - everyone welcome" },
+  { ja: "手縫いタオル制作　初心者でも大丈夫！", en: "Hand-sewn towel workshop - beginners welcome" },
+  { ja: "〇〇イベントの記念スタンプ募集", en: "Commemorative stamp activity" },
   { ja: "地域清掃ボランティア", en: "Demo Community Cleanup" },
   { ja: "見守りパトロール", en: "Demo Watch Patrol" },
   { ja: "子ども食堂サポート", en: "Demo Food Support" },
-  { ja: "中央公園", en: "Demo Park" },
-  { ja: "駅前商店街", en: "Demo Station" },
-  { ja: "市民センター", en: "Demo Community Center" },
-  { ja: "まちのパン屋", en: "Demo Bakery" },
-  { ja: "地域マルシェ", en: "Demo Market" },
+  { ja: "商店街の人気商品", en: "Popular local shopping street items" },
+  { ja: "おみやげ", en: "Souvenirs" },
+  { ja: "生活応援商品", en: "Daily life support items" },
+  { ja: "人気商品A", en: "Popular item A" },
+  { ja: "人気商品B", en: "Popular item B" },
+  { ja: "人気商品C", en: "Popular item C" },
+  { ja: "人気商品D", en: "Popular item D" },
+  { ja: "おみやげA", en: "Souvenir A" },
+  { ja: "おみやげB", en: "Souvenir B" },
+  { ja: "おみやげC", en: "Souvenir C" },
+  { ja: "生活用品A", en: "Daily item A" },
+  { ja: "生活用品B", en: "Daily item B" },
+  { ja: "生活用品C", en: "Daily item C" },
   { ja: "コーヒー無料券", en: "Demo Coffee Coupon" },
   { ja: "ケーキセット割引", en: "Demo Cake Coupon" },
   { ja: "焼きたてパン引換券", en: "Demo Bread Coupon" },
   { ja: "野菜セット引換券", en: "Demo Vegetable Coupon" },
-  { ja: "一般", en: "general" },
-  { ja: "ボランティア", en: "volunteer" },
 ] as const;
 
 function localizeApiText(value: string, language: AppLanguage) {
@@ -439,7 +645,7 @@ function withEventDisplayDate<T extends EventItem>(event: T, displayDate: string
 
 function mapEvent(event: ApiEventItem, displayDate: string, language: AppLanguage): DisplayEvent {
   const parts = formatDateTimeParts(event.event_datetime, displayDate);
-  const location = event.location ? localizeApiText(event.location, language) : language === "en" ? "Not set" : "\u672a\u8a2d\u5b9a";
+  const location = event.location || translate("notSet", language);
   return {
     id: String(event.event_id),
     date: parts.date,
@@ -456,7 +662,7 @@ function mapEvent(event: ApiEventItem, displayDate: string, language: AppLanguag
 
 function mapParticipation(participation: Participation, displayDate: string, language: AppLanguage): DisplayEvent {
   const parts = formatDateTimeParts(participation.event_datetime, displayDate);
-  const location = participation.location ? localizeApiText(participation.location, language) : language === "en" ? "Not set" : "\u672a\u8a2d\u5b9a";
+  const location = participation.location || translate("notSet", language);
   return {
     id: String(participation.event_id),
     date: parts.date,
@@ -474,8 +680,8 @@ function mapServices(services: ServiceItem[], language: AppLanguage): ProductCat
 
   for (const service of services) {
     const serviceName = localizeApiText(service.service_name, language);
-    const storeName = localizeApiText(service.store_name, language);
-    const storeAddress = service.store_address ? localizeApiText(service.store_address, language) : language === "en" ? "Local shopping district" : "\u5730\u57df\u5546\u5e97\u8857\u5468\u8fba";
+    const storeName = service.store_name;
+    const storeAddress = service.store_address || translate("localShoppingDistrict", language);
     const product: ProductItem = {
       id: String(service.service_id),
       name: serviceName,
@@ -506,13 +712,13 @@ function localizeDisplayEvent(event: DisplayEvent, language: AppLanguage): Displ
   return {
     ...event,
     title: localizeApiText(event.title, language),
-    location: localizeApiText(event.location, language),
+    location: event.location,
   };
 }
 
 function localizeProduct(product: ProductItem, language: AppLanguage): ProductItem {
-  const storeName = localizeApiText(product.storeName, language);
-  const storeAddress = localizeApiText(product.storeAddress, language);
+  const storeName = product.storeName;
+  const storeAddress = product.storeAddress;
 
   return {
     ...product,
@@ -800,16 +1006,16 @@ function useSwipeDownDismiss<T extends HTMLElement>(onClose: () => void) {
   };
 }
 
-function getErrorMessage(error: unknown) {
+function getErrorMessage(error: unknown, language: AppLanguage = "ja") {
   if (error instanceof ApiError || error instanceof Error) {
     if (error instanceof TypeError && error.message === "Failed to fetch") {
-      return "APIサーバーに接続できません。しばらく待って再試行するか、公開URLとAPI URLの設定を確認してください。";
+      return translate("apiConnectionError", language);
     }
 
     return error.message;
   }
 
-  return "処理に失敗しました。";
+  return translate("genericError", language);
 }
 
 function toBoolean(value: boolean | number | undefined | null) {
@@ -950,7 +1156,7 @@ export function App() {
   }, [appFeedback]);
 
   function notifyError(error: unknown) {
-    setAppFeedback({ ok: false, message: getErrorMessage(error) });
+    setAppFeedback({ ok: false, message: getErrorMessage(error, appLanguage) });
   }
 
   function notifySuccess(message: string) {
@@ -977,7 +1183,7 @@ export function App() {
         getLikedEvents(currentSession.user.user_id, currentSession.token, nextLanguage),
         getServices(currentSession.token, nextLanguage),
         getUserHistory(currentSession.user.user_id, currentSession.token, nextLanguage),
-        getNotifications(currentSession.user.user_id, currentSession.token).catch(() => []),
+        getNotifications(currentSession.user.user_id, currentSession.token, nextLanguage).catch(() => []),
         getPaymentMethods(currentSession.user.user_id, currentSession.token).catch(() => []),
         getMySupportTickets(currentSession.token).catch(() => []),
       ]);
@@ -1095,7 +1301,7 @@ export function App() {
 
   async function handleApplyToEvent(event: DisplayEvent) {
     if (!session || !event.rawEventId) {
-      setAppFeedback({ ok: false, message: "このイベントは現在応募できません。" });
+      setAppFeedback({ ok: false, message: translate("cannotApplyEvent", appLanguage) });
       return;
     }
 
@@ -1107,7 +1313,7 @@ export function App() {
       await participateInEvent(event.rawEventId, session.token);
       setParticipatedEventIds((current) => new Set(current).add(event.rawEventId!));
       await loadApplicationData(session);
-      notifySuccess("イベントに応募しました。");
+      notifySuccess(translate("eventApplied", appLanguage));
     } catch (error) {
       notifyError(error);
     }
@@ -1115,7 +1321,7 @@ export function App() {
 
   async function handleCancelParticipation(event: DisplayEvent) {
     if (!session || !event.rawEventId) {
-      setAppFeedback({ ok: false, message: "このイベントは現在キャンセルできません。" });
+      setAppFeedback({ ok: false, message: translate("cannotCancelEvent", appLanguage) });
       return;
     }
 
@@ -1128,7 +1334,7 @@ export function App() {
       });
       setParticipatedEvents((current) => current.filter((participatedEvent) => participatedEvent.rawEventId !== event.rawEventId));
       await loadApplicationData(session);
-      notifySuccess("応募をキャンセルしました。");
+      notifySuccess(translate("eventCanceled", appLanguage));
     } catch (error) {
       notifyError(error);
     }
@@ -1136,12 +1342,12 @@ export function App() {
 
   async function handleExchangeService(product: ProductItem): Promise<ActionResult> {
     if (!session) {
-      return { ok: false, message: getErrorMessage(new Error("ログイン情報が確認できません。")) };
+      return { ok: false, message: translate("loginRequired", appLanguage) };
     }
 
     const serviceId = Number(product.id);
     if (!Number.isFinite(serviceId)) {
-      return { ok: false, message: "サービスIDが不正です。" };
+      return { ok: false, message: translate("invalidServiceId", appLanguage) };
     }
 
     try {
@@ -1149,24 +1355,28 @@ export function App() {
       await loadApplicationData(session);
       return {
         ok: true,
-        message: `${response.service_name} を ${response.used_points}pt で交換しました (残高 ${response.current_points}pt)`,
+        message: formatTranslation("exchangeSuccessMessage", appLanguage, {
+          serviceName: product.name || localizeApiText(response.service_name, appLanguage),
+          points: response.used_points,
+          balance: response.current_points,
+        }),
       };
     } catch (error) {
-      return { ok: false, message: getErrorMessage(error) };
+      return { ok: false, message: getErrorMessage(error, appLanguage) };
     }
   }
 
   async function handleMarkNotificationRead(notificationId: number): Promise<ActionResult> {
     if (!session) {
-      return { ok: false, message: "ログイン情報が確認できません。" };
+      return { ok: false, message: translate("loginRequired", appLanguage) };
     }
 
     try {
       await markNotificationRead(notificationId, session.token);
       await loadApplicationData(session);
-      return { ok: true, message: "既読にしました。" };
+      return { ok: true, message: translate("notificationMarkedRead", appLanguage) };
     } catch (error) {
-      return { ok: false, message: getErrorMessage(error) };
+      return { ok: false, message: getErrorMessage(error, appLanguage) };
     }
   }
 
@@ -1177,29 +1387,29 @@ export function App() {
     is_default?: boolean;
   }): Promise<ActionResult> {
     if (!session || !profile) {
-      return { ok: false, message: "ログイン情報が確認できません。" };
+      return { ok: false, message: translate("loginRequired", appLanguage) };
     }
 
     try {
       await addPaymentMethod(profile.user_id, payload, session.token);
       await loadApplicationData(session);
-      return { ok: true, message: "支払方法を追加しました。" };
+      return { ok: true, message: translate("paymentMethodAdded", appLanguage) };
     } catch (error) {
-      return { ok: false, message: getErrorMessage(error) };
+      return { ok: false, message: getErrorMessage(error, appLanguage) };
     }
   }
 
   async function handleDeletePaymentMethod(paymentMethodId: number): Promise<ActionResult> {
     if (!session || !profile) {
-      return { ok: false, message: "ログイン情報が確認できません。" };
+      return { ok: false, message: translate("loginRequired", appLanguage) };
     }
 
     try {
       await deletePaymentMethod(profile.user_id, paymentMethodId, session.token);
       await loadApplicationData(session);
-      return { ok: true, message: "支払方法を削除しました。" };
+      return { ok: true, message: translate("paymentMethodDeleted", appLanguage) };
     } catch (error) {
-      return { ok: false, message: getErrorMessage(error) };
+      return { ok: false, message: getErrorMessage(error, appLanguage) };
     }
   }
 
@@ -1209,21 +1419,21 @@ export function App() {
     body: string;
   }): Promise<ActionResult> {
     if (!session) {
-      return { ok: false, message: "ログイン情報が確認できません。" };
+      return { ok: false, message: translate("loginRequired", appLanguage) };
     }
 
     try {
       await createSupportTicket(payload, session.token);
       await loadApplicationData(session);
-      return { ok: true, message: "問い合わせを送信しました。" };
+      return { ok: true, message: translate("supportTicketCreated", appLanguage) };
     } catch (error) {
-      return { ok: false, message: getErrorMessage(error) };
+      return { ok: false, message: getErrorMessage(error, appLanguage) };
     }
   }
 
   async function handlePurchasePoints(points: number): Promise<ActionResult> {
     if (!session) {
-      return { ok: false, message: getErrorMessage(new Error("ログイン情報が確認できません。")) };
+      return { ok: false, message: translate("loginRequired", appLanguage) };
     }
 
     try {
@@ -1231,16 +1441,19 @@ export function App() {
       await loadApplicationData(session);
       return {
         ok: true,
-        message: `${response.points}pt を購入しました (残高 ${response.current_points}pt)`,
+        message: formatTranslation("purchaseSuccessMessage", appLanguage, {
+          points: response.points,
+          balance: response.current_points,
+        }),
       };
     } catch (error) {
-      return { ok: false, message: getErrorMessage(error) };
+      return { ok: false, message: getErrorMessage(error, appLanguage) };
     }
   }
 
   async function handleToggleEventLike(event: DisplayEvent) {
     if (!session || !event.rawEventId) {
-      setAppFeedback({ ok: false, message: "このイベントは現在いいねできません。" });
+      setAppFeedback({ ok: false, message: translate("cannotLikeEvent", appLanguage) });
       return;
     }
 
@@ -1287,10 +1500,10 @@ export function App() {
         await updateUserEmail(profile.user_id, accountEmail, session.token);
       }
 
-      setAccountMessage("アカウント設定を保存しました。");
+      setAccountMessage(translate("accountSaved", appLanguage));
       await loadApplicationData(session);
     } catch (error) {
-      setAccountMessage(getErrorMessage(error));
+      setAccountMessage(getErrorMessage(error, appLanguage));
     }
   }
 
@@ -1305,9 +1518,9 @@ export function App() {
       await changePassword(currentPassword, newPassword, session.token);
       setCurrentPassword("");
       setNewPassword("");
-      setAccountMessage("パスワードを変更しました。");
+      setAccountMessage(translate("passwordChanged", appLanguage));
     } catch (error) {
-      setAccountMessage(getErrorMessage(error));
+      setAccountMessage(getErrorMessage(error, appLanguage));
     }
   }
 
@@ -1327,13 +1540,13 @@ export function App() {
       handleLogout();
     } catch (error) {
       setDeleteConfirming(false);
-      setAccountMessage(getErrorMessage(error));
+      setAccountMessage(getErrorMessage(error, appLanguage));
     }
   }
 
   const displayUser = {
     displayName: profile?.name || session?.user.name || fallbackUser.accountType,
-    accountType: profile?.user_type ? localizeApiText(profile.user_type, appLanguage) : fallbackUser.accountType,
+    accountType: profile?.user_type ? translateAccountType(profile.user_type, appLanguage) : translateAccountType(fallbackUser.accountType, appLanguage),
     userId: profile ? String(profile.user_id) : fallbackUser.userId,
     email: profile?.email || fallbackUser.email,
     homePoints: profile?.points ?? fallbackUser.homePoints,
@@ -1346,7 +1559,7 @@ export function App() {
         {appFeedback ? (
           <div className={`app-toast app-toast--${appFeedback.ok ? "success" : "error"}`} role={appFeedback.ok ? "status" : "alert"}>
             <span>{appFeedback.message}</span>
-            <button type="button" aria-label="閉じる" onClick={() => setAppFeedback(null)}>
+            <button type="button" aria-label={translate("closeToast", appLanguage)} onClick={() => setAppFeedback(null)}>
               ×
             </button>
           </div>
@@ -1508,7 +1721,7 @@ function Header({
             {language === "ja" ? "EN" : "JA"}
           </button>
         ) : null}
-        <button type="button" className="icon-button" aria-label={help ? "ヘルプ" : "メール"}>
+        <button type="button" className="icon-button" aria-label={help ? translate("help", language) : translate("mail", language)}>
           {help ? <HelpIcon /> : <MailIcon />}
         </button>
       </div>
@@ -2176,7 +2389,7 @@ function HomeScreen({
       <Header language={language} onLanguageToggle={onLanguageToggle} />
       <article className="points-card points-card--home">
         <div className="points-card__row">
-          <span>ポイント残高</span>
+          <span>{translate("pointsBalance", language)}</span>
           <strong>
             {user.homePoints}
             <small>pt</small>
@@ -2185,26 +2398,26 @@ function HomeScreen({
         </div>
         <div className="points-card__actions">
           <button type="button" onClick={() => onNavigate("events")}>
-            開催イベント一覧
+            {translate("homeEventList", language)}
           </button>
           <button type="button" onClick={() => onNavigate("purchase")}>
-            ポイント購入
+            {translate("homePointPurchase", language)}
           </button>
           <button type="button" onClick={() => onNavigate("wallet")}>
-            ポイント交換所
+            {translate("homePointExchange", language)}
           </button>
         </div>
       </article>
 
       <section className="section">
-        <SectionHeading>参加予定のイベント</SectionHeading>
-        <EventCard event={scheduledEvent} compact onSelect={onEventSelect} />
+        <SectionHeading>{translate("upcomingEvent", language)}</SectionHeading>
+        <EventCard event={scheduledEvent} compact language={language} onSelect={onEventSelect} />
       </section>
       <section className="section">
-        <SectionHeading>おすすめのイベント</SectionHeading>
+        <SectionHeading>{translate("recommendedEventsTitle", language)}</SectionHeading>
         <div className="event-rail">
           {events.map((event) => (
-            <EventCard key={event.id} event={event} compact onSelect={onEventSelect} />
+            <EventCard key={event.id} event={event} compact language={language} onSelect={onEventSelect} />
           ))}
         </div>
       </section>
@@ -2241,25 +2454,25 @@ function EventsScreen({
       <Tabs
         value={tab}
         items={[
-          ["recommended", "おすすめ"],
-          ["liked", "いいねしたイベント"],
-          ["participated", "応募済みイベント"],
+          ["recommended", translate("recommended", language)],
+          ["liked", translate("likedEvents", language)],
+          ["participated", translate("participatedEvents", language)],
         ]}
         onChange={onTabChange}
       />
-      <AdFrame />
+      <AdFrame language={language} />
       <div className="event-list">
-        {visibleEvents.length === 0 ? <p className="event-empty-message">表示できるイベントはありません。</p> : null}
+        {visibleEvents.length === 0 ? <p className="event-empty-message">{translate("eventsEmpty", language)}</p> : null}
         {visibleEvents.map((event) =>
           tab === "participated" ? (
             <div className="event-list__item" key={event.id}>
-              <EventCard event={event} onSelect={onEventSelect} />
+              <EventCard event={event} language={language} onSelect={onEventSelect} />
               <button className="event-cancel-button" type="button" onClick={() => onCancelParticipation(event)}>
-                応募をキャンセル
+                {translate("cancelParticipation", language)}
               </button>
             </div>
           ) : (
-            <EventCard key={event.id} event={event} onSelect={onEventSelect} />
+            <EventCard key={event.id} event={event} language={language} onSelect={onEventSelect} />
           ),
         )}
       </div>
@@ -2359,7 +2572,7 @@ function WalletScreen({
                 {category.products.map((product) => (
                   <button className="product-card product-card--button" type="button" key={product.id} onClick={() => onProductSelect(product)}>
                     <div>
-                      <img src={product.imageUrl || DUMMY_PRODUCT_IMAGE_URL} alt={`${product.name}の画像`} loading="lazy" />
+                      <img src={product.imageUrl || DUMMY_PRODUCT_IMAGE_URL} alt={formatTranslation("productImageAlt", language, { name: product.name })} loading="lazy" />
                     </div>
                     <span>{product.name}</span>
                     <small>{product.storeName}</small>
@@ -2417,7 +2630,7 @@ function PurchaseScreen({
           </div>
           <div>
             <dt>{translate("paymentAmount", language)}</dt>
-            <dd>{selectedAmount} 円</dd>
+            <dd>{formatYen(selectedAmount, language)}</dd>
           </div>
           <div>
             <dt>{translate("totalAvailablePoints", language)}</dt>
@@ -2460,7 +2673,7 @@ function PurchaseScreen({
         </button>
       </section>
       <div className="purchase-ad">
-        <AdFrame />
+      <AdFrame language={language} />
       </div>
     </section>
   );
@@ -2542,8 +2755,8 @@ function AccountScreen({
                 <label className="account-field">
                   <span>{translate("languageSettings", language)}</span>
                   <select value={settings.language} onChange={(event) => onSettingsChange({ ...settings, language: event.target.value })}>
-                    <option value="ja">日本語</option>
-                    <option value="en">English</option>
+                    <option value="ja">{translate("languageJapanese", language)}</option>
+                    <option value="en">{translate("languageEnglish", language)}</option>
                   </select>
                 </label>
                 <label className="account-field">
@@ -2552,9 +2765,9 @@ function AccountScreen({
                     value={settings.font_size}
                     onChange={(event) => onSettingsChange({ ...settings, font_size: event.target.value as UserSettings["font_size"] })}
                   >
-                    <option value="small">小</option>
-                    <option value="medium">中</option>
-                    <option value="large">大</option>
+                    <option value="small">{translate("fontSmall", language)}</option>
+                    <option value="medium">{translate("fontMedium", language)}</option>
+                    <option value="large">{translate("fontLarge", language)}</option>
                   </select>
                 </label>
               </>
@@ -2608,7 +2821,7 @@ function AccountScreen({
           </button>
           {deleteConfirming ? (
             <div className="account-delete-confirm">
-              <p>アカウントを削除します。よろしいですか？この操作は取り消せません。</p>
+              <p>{translate("deleteAccountConfirm", language)}</p>
               <div className="account-delete-confirm__actions">
                 <button type="button" className="secondary-button" onClick={onCancelDelete}>
                   {translate("cancel", language)}
@@ -2748,7 +2961,7 @@ function PaymentMethodsScreen({
     event.preventDefault();
     if (submitting) return;
     if (!label.trim()) {
-      setResult({ ok: false, message: "ラベルを入力してください。" });
+      setResult({ ok: false, message: translate("paymentMethodLabelRequired", language) });
       return;
     }
     setSubmitting(true);
@@ -2853,7 +3066,7 @@ function SupportScreen({
     event.preventDefault();
     if (submitting) return;
     if (!subject.trim() || !body.trim()) {
-      setResult({ ok: false, message: "件名と内容を入力してください。" });
+      setResult({ ok: false, message: translate("supportSubjectBodyRequired", language) });
       return;
     }
     setSubmitting(true);
@@ -2896,7 +3109,7 @@ function SupportScreen({
                     {ticket.category === "bug" ? translate("supportCategoryBug", language) : translate("supportCategorySupport", language)}
                   </span>
                   <strong>{ticket.subject}</strong>
-                  <small>{ticket.status}</small>
+                  <small>{translateSupportStatus(ticket.status, language)}</small>
                 </div>
                 <p>{ticket.body}</p>
                 <small className="support-item__date">{formatTimestamp(ticket.created_at)}</small>
@@ -2984,7 +3197,13 @@ function HistoryScreen({
             {transactions.map((entry) => (
               <li key={entry.transaction_id} className="history-row">
                 <div>
-                  <strong>{entry.description ?? entry.service_name ?? entry.type}</strong>
+                  <strong>
+                    {entry.type === "grant"
+                      ? translate("eventPointGrant", language)
+                      : entry.service_name
+                        ? localizeApiText(entry.service_name, language)
+                        : translate("pointExchangeTitle", language)}
+                  </strong>
                   <small>{formatTimestamp(entry.created_at)}</small>
                 </div>
                 <span className={`history-row__delta ${entry.type === "grant" ? "history-row__delta--plus" : "history-row__delta--minus"}`}>
@@ -3005,10 +3224,10 @@ function HistoryScreen({
               <li key={entry.purchase_id} className="history-row">
                 <div>
                   <strong>
-                    {entry.points}pt ({entry.amount_yen}円)
+                    {entry.points}pt ({formatYen(entry.amount_yen, language)})
                   </strong>
                   <small>
-                    {formatTimestamp(entry.created_at)} {entry.status}
+                    {formatTimestamp(entry.created_at)} {translatePurchaseStatus(entry.status, language)}
                   </small>
                 </div>
                 <span className="history-row__delta history-row__delta--plus">+{entry.points}pt</span>
@@ -3167,30 +3386,32 @@ function EventDetailScreen({
         <Header language={language} onLanguageToggle={onLanguageToggle} />
         <p className="event-detail__date">{event.date}</p>
         <div className="event-detail__photo">
-          <img src={imageUrl} alt={`${event.title}の画像`} loading="lazy" />
+          <img src={imageUrl} alt={formatTranslation("eventImageAlt", language, { title: event.title })} loading="lazy" />
         </div>
         <article className="event-detail__body">
           <h1>{event.title}</h1>
-          <p className="event-detail__meta">活動時間：{event.time}　　集合場所：{event.location}　　△△係前</p>
+          <p className="event-detail__meta">
+            {translate("eventActivityTime", language)}: {event.time}　　{translate("meetingPlace", language)}: {event.location}
+          </p>
           <div className="event-detail__status">
-            <span>あと0時間〇〇分で締め切り</span>
-            <strong>現在の募集人数　〇人</strong>
+            <span>{translate("eventDeadlinePlaceholder", language)}</span>
+            <strong>{translate("eventRecruitmentPlaceholder", language)}</strong>
           </div>
           <strong className="event-detail__points">{event.points}pt</strong>
           <section>
-            <h2>活動内容</h2>
-            <h3>主な活動内容</h3>
+            <h2>{translate("activityContent", language)}</h2>
+            <h3>{translate("mainActivityContent", language)}</h3>
             <p>
-              ・公園内のゴミ拾い
+              {translate("activityItemTrash", language)}
               <br />
-              ・大きな石などの撤去作業
+              {translate("activityItemStones", language)}
               <br />
-              ・動物の糞などの清掃作業
+              {translate("activityItemCleaning", language)}
             </p>
-            <p>不明点がありましたら、管理の方に遠慮なく聞いてください。</p>
+            <p>{translate("eventQuestionHint", language)}</p>
           </section>
           <section>
-            <h2>注意事項</h2>
+            <h2>{translate("eventNotes", language)}</h2>
           </section>
         </article>
         <footer className="event-detail__footer">
@@ -3200,14 +3421,14 @@ function EventDetailScreen({
             onClick={() => onApply(event)}
             disabled={isParticipated}
           >
-            {isParticipated ? "応募済みのイベントです" : "このイベントに応募する"}
+            {isParticipated ? translate("eventAlreadyApplied", language) : translate("applyEvent", language)}
           </button>
           <button className="event-detail__like" type="button" onClick={() => onLike(event)} aria-pressed={event.liked}>
             <svg aria-hidden="true" viewBox="0 0 24 24">
               <path d="M8 21H4a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1h4" />
               <path d="M8 11l4-8 1.5 1.5a3 3 0 0 1 .8 2.7L14 9h5.2a2 2 0 0 1 2 2.3l-1.2 7A3.2 3.2 0 0 1 16.8 21H8V11Z" />
             </svg>
-            <small>いいね！</small>
+            <small>{translate("likeAction", language)}</small>
           </button>
         </footer>
       </section>
@@ -3218,10 +3439,12 @@ function EventDetailScreen({
 function EventCard({
   event,
   compact = false,
+  language = "ja",
   onSelect,
 }: {
   event: DisplayEvent;
   compact?: boolean;
+  language?: AppLanguage;
   onSelect?: (event: DisplayEvent) => void;
 }) {
   const imageUrl = event.imageUrl || DUMMY_EVENT_IMAGE_URL;
@@ -3247,12 +3470,16 @@ function EventCard({
     >
       <p className="event-card__date">{event.date}</p>
       <div className="event-card__image">
-        <img src={imageUrl} alt={`${event.title}の画像`} loading="lazy" />
+        <img src={imageUrl} alt={formatTranslation("eventImageAlt", language, { title: event.title })} loading="lazy" />
       </div>
       <div>
         <h3>{event.title}</h3>
         <strong>{event.points}pt</strong>
-        {!compact ? <p>集合場所：{event.location}　集合時間：{event.time}</p> : null}
+        {!compact ? (
+          <p>
+            {translate("meetingPlace", language)}: {event.location}　{translate("meetingTime", language)}: {event.time}
+          </p>
+        ) : null}
       </div>
     </article>
   );
@@ -3292,8 +3519,8 @@ function Tabs<T extends string>({
   );
 }
 
-function AdFrame() {
-  return <div className="ad-frame">広告掲載フレーム</div>;
+function AdFrame({ language = "ja" }: { language?: AppLanguage }) {
+  return <div className="ad-frame">{translate("adFrame", language)}</div>;
 }
 
 type WalletHistoryKind = "event" | "charge" | "exchange";
@@ -3345,7 +3572,7 @@ function buildWalletHistoryItems({
       return {
         id: `participation-${entry.participation_id}`,
         kind: "event" as const,
-        label: language === "en" ? "Event" : "地域イベント",
+        label: translate("eventHistoryLabel", language),
         title: localizeApiText(entry.event_name, language),
         meta: `${eventTime.date} ${eventTime.time}`,
         delta: entry.granted_points,
@@ -3357,8 +3584,8 @@ function buildWalletHistoryItems({
       return {
         id: `purchase-${entry.purchase_id}`,
         kind: "charge" as const,
-        label: language === "en" ? "Charge" : "チャージ",
-        title: language === "en" ? "Point charge" : "チャージpt",
+        label: translate("chargeHistoryLabel", language),
+        title: translate("pointChargeTitle", language),
         meta: `${formatWalletHistoryDate(date)} ${formatWalletHistoryTime(date)}`,
         delta: entry.points,
         date,
@@ -3371,8 +3598,8 @@ function buildWalletHistoryItems({
         return {
           id: `transaction-${entry.transaction_id}`,
           kind: "exchange" as const,
-          label: language === "en" ? "Exchange" : "ポイント交換",
-          title: localizeApiText(entry.service_name ?? entry.description ?? (language === "en" ? "Point exchange" : "ポイント交換"), language),
+          label: translate("exchangeHistoryLabel", language),
+          title: entry.service_name ? localizeApiText(entry.service_name, language) : translate("pointExchangeTitle", language),
           meta: `${formatWalletHistoryDate(date)} ${formatWalletHistoryTime(date)}`,
           delta: -Math.abs(entry.points),
           date,
@@ -3411,7 +3638,7 @@ function BottomNav({ current, language, onNavigate }: { current: Screen; languag
   ] as const;
 
   return (
-    <nav className="bottom-nav" aria-label="アプリメニュー">
+    <nav className="bottom-nav" aria-label={translate("appMenu", language)}>
       {items.map(([target, label, icon]) => (
         <button
           key={target}

@@ -139,7 +139,7 @@ async function main() {
     const localizedServices = await request('/points/services?locale=en', { headers: userAuth });
     assert.ok(localizedServices.length > 0);
     assert.ok(localizedServices[0].service_name.startsWith('[en] '));
-    assert.ok(localizedServices[0].store_name.startsWith('[en] '));
+    assert.ok(!localizedServices[0].store_name.startsWith('[en] '));
     await request(`/points/services/${services[0].service_id}/favorite`, { method: 'POST', headers: userAuth }, 201);
     const favorites = await request(`/users/${userId}/favorite-services`, { headers: userAuth });
     assert.ok(favorites.length > 0);
@@ -184,6 +184,9 @@ async function main() {
     }, 201);
     const notifications = await request(`/users/${userId}/notifications`, { headers: userAuth });
     assert.ok(notifications.length > 0);
+    const localizedNotifications = await request(`/users/${userId}/notifications?locale=en`, { headers: userAuth });
+    assert.ok(localizedNotifications[0].title.startsWith('[en] '));
+    assert.ok(localizedNotifications[0].body.startsWith('[en] '));
     await request(`/notifications/${notifications[0].notification_id}/read`, { method: 'PUT', headers: userAuth });
 
     const createdEvent = await request('/admin/events', {

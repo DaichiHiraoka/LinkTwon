@@ -18,11 +18,7 @@ async function getServices(req, res, next) {
     );
     const localizedRows =
       locale === 'en'
-        ? await localizeRows(
-            await localizeRows(rows, { contentType: 'service', idField: 'service_id', fields: ['service_name'] }, locale),
-            { contentType: 'store', idField: 'store_id', fields: ['store_name'] },
-            locale
-          )
+        ? await localizeRows(rows, { contentType: 'service', idField: 'service_id', fields: ['service_name'] }, locale)
         : rows;
 
     res.json(localizedRows);

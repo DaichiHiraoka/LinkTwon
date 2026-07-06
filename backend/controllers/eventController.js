@@ -20,7 +20,7 @@ async function getEvents(req, res, next) {
     );
     const localizedRows =
       locale === 'en'
-        ? await localizeRows(rows, { contentType: 'event', idField: 'event_id', fields: ['event_name', 'location'] }, locale)
+        ? await localizeRows(rows, { contentType: 'event', idField: 'event_id', fields: ['event_name'] }, locale)
         : rows;
 
     res.json(localizedRows);

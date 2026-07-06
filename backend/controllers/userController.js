@@ -31,17 +31,20 @@ function getRequestLocale(req) {
 
 async function localizeEventRows(rows, locale) {
   return locale === 'en'
-    ? localizeRows(rows, { contentType: 'event', idField: 'event_id', fields: ['event_name', 'location'] }, locale)
+    ? localizeRows(rows, { contentType: 'event', idField: 'event_id', fields: ['event_name'] }, locale)
     : rows;
 }
 
 async function localizeServiceRows(rows, locale) {
-  if (locale !== 'en') {
-    return rows;
-  }
+  return locale === 'en'
+    ? localizeRows(rows, { contentType: 'service', idField: 'service_id', fields: ['service_name'] }, locale)
+    : rows;
+}
 
-  const withServices = await localizeRows(rows, { contentType: 'service', idField: 'service_id', fields: ['service_name'] }, locale);
-  return localizeRows(withServices, { contentType: 'store', idField: 'store_id', fields: ['store_name'] }, locale);
+async function localizeNotificationRows(rows, locale) {
+  return locale === 'en'
+    ? localizeRows(rows, { contentType: 'notification', idField: 'notification_id', fields: ['title', 'body'] }, locale)
+    : rows;
 }
 
 async function getUserPoints(req, res, next) {
@@ -90,7 +93,7 @@ async function getUserHistory(req, res, next) {
 
     const [transactions] = await pool.query(
       `SELECT pt.transaction_id, pt.type, pt.points, pt.description, pt.created_at,
-              s.service_id, s.service_name, st.store_id, st.store_name
+              s.service_id, s.service_name, st.store_name
        FROM point_transactions pt
        LEFT JOIN services s ON pt.service_id = s.service_id
        LEFT JOIN stores st ON s.store_id = st.store_id
@@ -394,6 +397,7 @@ async function deletePaymentMethod(req, res, next) {
 async function getNotifications(req, res, next) {
   try {
     const { id } = req.params;
+    const locale = getRequestLocale(req);
 
     if (!(await assertUserAccess(req, res, id, 'You can only view your own notifications.'))) {
       return;
@@ -407,7 +411,7 @@ async function getNotifications(req, res, next) {
       [id]
     );
 
-    res.json(rows);
+    res.json(await localizeNotificationRows(rows, locale));
   } catch (error) {
     next(error);
   }

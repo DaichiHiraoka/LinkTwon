@@ -40,7 +40,7 @@ CREATE TABLE content_translations (
   translation_id INT AUTO_INCREMENT PRIMARY KEY,
   content_type VARCHAR(50) NOT NULL,      -- 'event' | 'service' | 'store' など
   content_id VARCHAR(50) NOT NULL,
-  field_name VARCHAR(100) NOT NULL,       -- 'event_name', 'location', 'service_name', 'store_name' など
+  field_name VARCHAR(100) NOT NULL,       -- 'event_name', 'service_name', 'title', 'body' など
   source_locale VARCHAR(10) NOT NULL DEFAULT 'ja',
   target_locale VARCHAR(10) NOT NULL,
   source_text_hash CHAR(64) NOT NULL,     -- 原文の SHA-256 hex
@@ -112,16 +112,19 @@ async function refreshTranslations({ force = false })
 
 ### 5.1 既存 API のローカライズ対応
 
-対象: `GET /events`(eventController)と `GET /points/services`(pointController)。
+対象: `GET /events`(eventController)、`GET /points/services`(pointController)、`GET /users/:id/notifications`(userController)。
 
 - クエリパラメータ `?locale=en` を受け付ける。`en` 以外は全て `ja` 扱い(バリデーション: `locale === 'en' ? 'en' : 'ja'`)。
 - `locale=en` のとき、レスポンスの以下のフィールドを `localizeRows` で翻訳済みテキストに差し替える:
 
 | API | contentType | idField | fields |
 |---|---|---|---|
-| GET /events | `event` | `event_id` | `event_name`, `location` |
+| GET /events | `event` | `event_id` | `event_name` |
 | GET /points/services | `service` | `service_id` | `service_name` |
-| GET /points/services | `store` | `store_id` | `store_name` |
+| GET /users/:id/notifications | `notification` | `notification_id` | `title`, `body` |
+
+- 店舗正式名称、住所、地図検索用の値、イベント日時、ポイント数は翻訳対象外とする。
+- UI固定文言は frontend の組み込み辞書で翻訳し、DeepL API には送らない。
 
 - 元のフィールド名のまま翻訳文を返す(フィールド追加はしない)。フロントの型変更を不要にするため。
 - キャッシュヒット時のオーバーヘッドは SELECT 1回で済むよう、一覧系は `WHERE (content_type, ...) IN (...)` 相当の一括取得で実装する(1行ずつ N+1 クエリにしない)。
@@ -167,7 +170,7 @@ TRANSLATION_PROVIDER=deepl
 `frontend/src/App.tsx`:
 
 1. `GET /events`、`GET /points/services` の fetch に `?locale=${language}` を付与する。言語切替時は再フェッチする(既存の言語 state 変更ハンドラにフェッチ処理を追加)。
-2. `localizeApiText()` と `localizedContent` 辞書は**フォールバックとして残す**(API が原文を返した場合のみ作用するため無害)。新規エントリの追加はしない。
+2. `localizeApiText()` と `localizedContent` 辞書は、ローカルデモデータのフォールバックとしてのみ残す。店舗名・住所・ユーザー種別など翻訳対象外/固定分類の値はここで翻訳しない。
 3. 型 `ServiceItem` 等の変更は不要(5.1 でフィールド名を変えないため)。
 
 ## 7. 実装しないこと(スコープ外)
