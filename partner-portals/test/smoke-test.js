@@ -2,6 +2,13 @@ const assert = require('assert/strict');
 const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
+
+process.env.APP_ENV = 'test';
+process.env.NODE_ENV = 'test';
+process.env.TRANSLATION_API_URL = '';
+process.env.TRANSLATION_API_TOKEN = '';
+process.env.TRANSLATION_PROVIDER = 'mock-cache';
+
 const {
   extractTranslationRecords,
   getTranslatedField,

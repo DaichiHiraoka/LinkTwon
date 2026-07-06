@@ -959,29 +959,29 @@ export function App() {
 
   async function loadApplicationData(currentSession: Session) {
     try {
+      const [nextProfile, nextSettings] = await Promise.all([
+        getUserProfile(currentSession.user.user_id, currentSession.token),
+        getUserSettings(currentSession.user.user_id, currentSession.token),
+      ]);
+      const nextLanguage = normalizeLanguage(nextSettings.language);
       const [
-        nextProfile,
         nextEvents,
         nextLikedEvents,
         nextServices,
-        nextSettings,
         nextHistory,
         nextNotifications,
         nextPaymentMethods,
         nextSupportTickets,
       ] = await Promise.all([
-        getUserProfile(currentSession.user.user_id, currentSession.token),
-        getEvents(currentSession.token),
+        getEvents(currentSession.token, nextLanguage),
         getLikedEvents(currentSession.user.user_id, currentSession.token),
-        getServices(currentSession.token),
-        getUserSettings(currentSession.user.user_id, currentSession.token),
+        getServices(currentSession.token, nextLanguage),
         getUserHistory(currentSession.user.user_id, currentSession.token),
         getNotifications(currentSession.user.user_id, currentSession.token).catch(() => []),
         getPaymentMethods(currentSession.user.user_id, currentSession.token).catch(() => []),
         getMySupportTickets(currentSession.token).catch(() => []),
       ]);
 
-      const nextLanguage = normalizeLanguage(nextSettings.language);
       const mappedEvents = nextEvents.map((event) => mapEvent(event, eventDisplayDate, nextLanguage));
       const mappedEventsById = new Map(mappedEvents.flatMap((event) => (event.rawEventId ? [[event.rawEventId, event] as const] : [])));
       const mappedLikedEvents = nextLikedEvents.map((event) => mapEvent(event, eventDisplayDate, nextLanguage));

@@ -4,8 +4,10 @@ require('./loadEnv');
 const APP_ENVS = new Set(['development', 'test', 'staging', 'production']);
 const DB_CLIENTS = new Set(['sqlite', 'mysql']);
 const MAIL_DRIVERS = new Set(['smtp', 'resend', 'outbox', 'console', 'none']);
+const TRANSLATION_PROVIDERS = new Set(['deepl', 'mock']);
 const DEFAULT_SQLITE_PATH = path.resolve(__dirname, '../database/dev.sqlite');
 const DEFAULT_OUTBOX_DIR = path.resolve(__dirname, '../database/mail-outbox');
+const DEFAULT_DEEPL_API_URL = 'https://api-free.deepl.com/v2/translate';
 
 function fail(errors) {
   const message = ['Invalid backend environment configuration:', ...errors.map((error) => `- ${error}`)].join('\n');
@@ -123,6 +125,8 @@ function createEnv() {
   const dbClient = readString('DB_CLIENT', readString('DATABASE_URL') ? 'mysql' : 'sqlite').toLowerCase();
   const mailDriver = readString('MAIL_DRIVER', isDeployed ? 'smtp' : 'outbox').toLowerCase();
   const jwtSecret = readString('JWT_SECRET', isDeployed ? '' : 'link-town-local-secret');
+  const deeplApiKey = readString('DEEPL_API_KEY');
+  const translationProvider = readString('TRANSLATION_PROVIDER', deeplApiKey ? 'deepl' : 'mock').toLowerCase();
   const frontendOrigins = readOriginList('FRONTEND_ORIGIN', errors);
   const frontendOriginPatterns = readRegexList('FRONTEND_ORIGIN_PATTERNS', errors);
   const frontendBaseUrl = assertUrl(
@@ -138,6 +142,14 @@ function createEnv() {
 
   if (!MAIL_DRIVERS.has(mailDriver)) {
     errors.push(`MAIL_DRIVER must be one of ${Array.from(MAIL_DRIVERS).join(', ')}.`);
+  }
+
+  if (!TRANSLATION_PROVIDERS.has(translationProvider)) {
+    errors.push(`TRANSLATION_PROVIDER must be one of ${Array.from(TRANSLATION_PROVIDERS).join(', ')}.`);
+  }
+
+  if (translationProvider === 'deepl' && !deeplApiKey) {
+    errors.push('DEEPL_API_KEY is required when TRANSLATION_PROVIDER=deepl.');
   }
 
   if (jwtSecret.length < (isDeployed ? 32 : 8)) {
@@ -209,6 +221,10 @@ function createEnv() {
     MAIL_EXPOSE_RESET_TOKEN: readBoolean('MAIL_EXPOSE_RESET_TOKEN'),
     EMAIL_VERIFICATION_EXPIRES_MINUTES: readInteger('EMAIL_VERIFICATION_EXPIRES_MINUTES', 1440, 1, 10080, errors),
     PASSWORD_RESET_EXPIRES_MINUTES: readInteger('PASSWORD_RESET_EXPIRES_MINUTES', 30, 1, 1440, errors),
+    TRANSLATION_PROVIDER: translationProvider,
+    DEEPL_API_KEY: deeplApiKey,
+    DEEPL_API_URL: assertUrl('DEEPL_API_URL', readString('DEEPL_API_URL', DEFAULT_DEEPL_API_URL), errors, false),
+    TRANSLATION_REFRESH_KEY: readString('TRANSLATION_REFRESH_KEY'),
     SMTP_HOST: readString('SMTP_HOST'),
     SMTP_PORT: readInteger('SMTP_PORT', 587, 1, 65535, errors),
     SMTP_SECURE: readBoolean('SMTP_SECURE'),

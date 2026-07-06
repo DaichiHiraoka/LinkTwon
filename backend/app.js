@@ -7,6 +7,7 @@ const pointRoutes = require('./routes/pointRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const supportRoutes = require('./routes/supportRoutes');
+const translationRoutes = require('./routes/translationRoutes');
 const { errorHandler } = require('./middlewares/errorMiddleware');
 const { env } = require('./config/env');
 
@@ -52,6 +53,7 @@ app.use('/points', pointRoutes);
 app.use('/admin', adminRoutes);
 app.use('/notifications', notificationRoutes);
 app.use('/support', supportRoutes);
+app.use('/api/translations', translationRoutes);
 
 app.use(errorHandler);
 

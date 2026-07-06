@@ -55,7 +55,7 @@
 
 | Method | Path | Auth | 概要 |
 | --- | --- | --- | --- |
-| GET | `/events` | user | 公開中イベント一覧取得。`liked`, `like_count` を含む |
+| GET | `/events` | user | 公開中イベント一覧取得。`liked`, `like_count` を含む。`?locale=en` で `event_name`, `location` を翻訳キャッシュ経由で返す |
 | POST | `/events/participate` | user | `event_id` 指定のイベント参加登録とポイント付与 |
 | DELETE | `/events/:id/participation` | user | 指定イベントの参加応募キャンセル、付与ポイントの取り消し |
 | POST | `/events/check-in` | user | `check_in_code` による QR チェックイン参加 |
@@ -66,7 +66,7 @@
 
 | Method | Path | Auth | 概要 |
 | --- | --- | --- | --- |
-| GET | `/points/services` | user | 公開中の交換サービス一覧取得。`favorited` を含む |
+| GET | `/points/services` | user | 公開中の交換サービス一覧取得。`favorited` を含む。`?locale=en` で `service_name`, `store_name` を翻訳キャッシュ経由で返す |
 | POST | `/points/exchange` | user | ポイント交換 |
 | POST | `/points/purchase` | user | mock ポイント購入。`paid` の場合のみ残高加算 |
 | POST | `/points/services/:id/favorite` | user | 交換サービスお気に入り追加 |
@@ -84,6 +84,13 @@
 | --- | --- | --- | --- |
 | GET | `/support/tickets` | user | 自分の問い合わせ、不具合報告一覧取得 |
 | POST | `/support/tickets` | user/admin | 問い合わせ、不具合報告作成 |
+
+## Translations
+
+| Method | Path | Auth | 概要 |
+| --- | --- | --- | --- |
+| POST | `/api/translations/translate` | refresh key | partner-portals 向けの単文翻訳。`TRANSLATION_REFRESH_KEY` 未設定時は開発用にキーなしで通す |
+| POST | `/api/translations/refresh` | refresh key | events/services/stores の対象フィールドを事前翻訳。`?force=1` で強制更新 |
 
 ## Admin
 

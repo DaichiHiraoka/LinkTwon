@@ -71,6 +71,7 @@ function getApiBaseUrl(): ApiBaseUrlConfig {
 const API_BASE_URL_CONFIG = getApiBaseUrl();
 const API_BASE_URL = API_BASE_URL_CONFIG.baseUrl;
 const NETWORK_RETRY_DELAYS_MS = [1200, 3000, 6000];
+type Locale = "ja" | "en";
 
 export class ApiError extends Error {
   status: number;
@@ -143,6 +144,10 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string, 
   }
 
   return payload as T;
+}
+
+function withLocale(path: string, locale: Locale = "ja") {
+  return `${path}${path.includes("?") ? "&" : "?"}locale=${encodeURIComponent(locale)}`;
 }
 
 export function login(email: string, password: string) {
@@ -339,8 +344,8 @@ export function createSupportTicket(payload: { category: "support" | "bug"; subj
   );
 }
 
-export function getEvents(token: string) {
-  return request<EventItem[]>("/events", {}, token);
+export function getEvents(token: string, locale: Locale = "ja") {
+  return request<EventItem[]>(withLocale("/events", locale), {}, token);
 }
 
 export function participateInEvent(eventId: number, token: string) {
@@ -395,8 +400,8 @@ export function unlikeEvent(eventId: number, token: string) {
   );
 }
 
-export function getServices(token: string) {
-  return request<ServiceItem[]>("/points/services", {}, token);
+export function getServices(token: string, locale: Locale = "ja") {
+  return request<ServiceItem[]>(withLocale("/points/services", locale), {}, token);
 }
 
 export function exchangePoints(serviceId: number, token: string) {

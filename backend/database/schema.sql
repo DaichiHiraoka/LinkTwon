@@ -209,3 +209,21 @@ CREATE TABLE support_tickets (
     FOREIGN KEY (user_id) REFERENCES users(user_id)
     ON DELETE SET NULL
 );
+
+CREATE TABLE content_translations (
+  translation_id INT AUTO_INCREMENT PRIMARY KEY,
+  content_type VARCHAR(50) NOT NULL,
+  content_id VARCHAR(50) NOT NULL,
+  field_name VARCHAR(100) NOT NULL,
+  source_locale VARCHAR(10) NOT NULL DEFAULT 'ja',
+  target_locale VARCHAR(10) NOT NULL,
+  source_text_hash CHAR(64) NOT NULL,
+  translated_text TEXT NOT NULL,
+  translation_provider VARCHAR(50) NOT NULL,
+  translation_status ENUM('current', 'failed') NOT NULL DEFAULT 'current',
+  error_message VARCHAR(255) NULL,
+  translated_at DATETIME NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY unique_translation (content_type, content_id, field_name, target_locale)
+);

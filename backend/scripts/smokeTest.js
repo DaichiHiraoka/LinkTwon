@@ -10,6 +10,7 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || 'link-town-test-secret';
 process.env.MAIL_DRIVER = 'outbox';
 process.env.MAIL_EXPOSE_VERIFICATION_TOKEN = 'true';
 process.env.MAIL_OUTBOX_DIR = path.resolve(__dirname, '../database/test-mail-outbox');
+process.env.TRANSLATION_PROVIDER = 'mock';
 
 if (fs.existsSync(process.env.SQLITE_PATH)) {
   fs.unlinkSync(process.env.SQLITE_PATH);
@@ -132,6 +133,11 @@ async function main() {
 
     const services = await request('/points/services', { headers: userAuth });
     assert.ok(services.length > 0);
+    assert.ok(!services[0].service_name.startsWith('[en] '));
+    const localizedServices = await request('/points/services?locale=en', { headers: userAuth });
+    assert.ok(localizedServices.length > 0);
+    assert.ok(localizedServices[0].service_name.startsWith('[en] '));
+    assert.ok(localizedServices[0].store_name.startsWith('[en] '));
     await request(`/points/services/${services[0].service_id}/favorite`, { method: 'POST', headers: userAuth }, 201);
     const favorites = await request(`/users/${userId}/favorite-services`, { headers: userAuth });
     assert.ok(favorites.length > 0);

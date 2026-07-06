@@ -178,6 +178,23 @@ const schemaStatements = [
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE SET NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS content_translations (
+    translation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    content_type TEXT NOT NULL,
+    content_id TEXT NOT NULL,
+    field_name TEXT NOT NULL,
+    source_locale TEXT NOT NULL DEFAULT 'ja',
+    target_locale TEXT NOT NULL,
+    source_text_hash TEXT NOT NULL,
+    translated_text TEXT NOT NULL,
+    translation_provider TEXT NOT NULL,
+    translation_status TEXT NOT NULL DEFAULT 'current' CHECK(translation_status IN ('current', 'failed')),
+    error_message TEXT,
+    translated_at TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (content_type, content_id, field_name, target_locale)
   )`
 ];
 

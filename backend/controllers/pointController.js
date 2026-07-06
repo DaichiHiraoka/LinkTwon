@@ -1,8 +1,10 @@
 const pool = require('../config/db');
+const { localizeRows } = require('../services/translationService');
 
 async function getServices(req, res, next) {
   try {
     const userId = req.user.id;
+    const locale = req.query.locale === 'en' ? 'en' : 'ja';
     const [rows] = await pool.query(
       `SELECT s.service_id, s.service_name, s.required_points, s.status,
               st.store_id, st.store_name,
@@ -14,8 +16,16 @@ async function getServices(req, res, next) {
        ORDER BY s.service_id DESC`,
       [userId]
     );
+    const localizedRows =
+      locale === 'en'
+        ? await localizeRows(
+            await localizeRows(rows, { contentType: 'service', idField: 'service_id', fields: ['service_name'] }, locale),
+            { contentType: 'store', idField: 'store_id', fields: ['store_name'] },
+            locale
+          )
+        : rows;
 
-    res.json(rows);
+    res.json(localizedRows);
   } catch (error) {
     next(error);
   }

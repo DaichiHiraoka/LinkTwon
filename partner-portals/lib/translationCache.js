@@ -123,6 +123,7 @@ async function translateWithConfiguredApi(record, targetLocale) {
 
   if (env.TRANSLATION_API_TOKEN) {
     headers.authorization = `Bearer ${env.TRANSLATION_API_TOKEN}`;
+    headers['x-refresh-key'] = env.TRANSLATION_API_TOKEN;
   }
 
   const response = await fetch(apiUrl, {
