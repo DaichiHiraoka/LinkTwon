@@ -230,20 +230,20 @@ export function getUserProfile(userId: number, token: string) {
   return request<UserProfile>(`/users/${userId}/points`, {}, token);
 }
 
-export function getUserHistory(userId: number, token: string) {
-  return request<UserHistory>(`/users/${userId}/history`, {}, token);
+export function getUserHistory(userId: number, token: string, locale: Locale = "ja") {
+  return request<UserHistory>(withLocale(`/users/${userId}/history`, locale), {}, token);
 }
 
 export function getUserPurchases(userId: number, token: string) {
   return request<Purchase[]>(`/users/${userId}/purchases`, {}, token);
 }
 
-export function getLikedEvents(userId: number, token: string) {
-  return request<EventItem[]>(`/users/${userId}/liked-events`, {}, token);
+export function getLikedEvents(userId: number, token: string, locale: Locale = "ja") {
+  return request<EventItem[]>(withLocale(`/users/${userId}/liked-events`, locale), {}, token);
 }
 
-export function getFavoriteServices(userId: number, token: string) {
-  return request<ServiceItem[]>(`/users/${userId}/favorite-services`, {}, token);
+export function getFavoriteServices(userId: number, token: string, locale: Locale = "ja") {
+  return request<ServiceItem[]>(withLocale(`/users/${userId}/favorite-services`, locale), {}, token);
 }
 
 export function getUserSettings(userId: number, token: string) {

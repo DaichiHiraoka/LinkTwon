@@ -974,9 +974,9 @@ export function App() {
         nextSupportTickets,
       ] = await Promise.all([
         getEvents(currentSession.token, nextLanguage),
-        getLikedEvents(currentSession.user.user_id, currentSession.token),
+        getLikedEvents(currentSession.user.user_id, currentSession.token, nextLanguage),
         getServices(currentSession.token, nextLanguage),
-        getUserHistory(currentSession.user.user_id, currentSession.token),
+        getUserHistory(currentSession.user.user_id, currentSession.token, nextLanguage),
         getNotifications(currentSession.user.user_id, currentSession.token).catch(() => []),
         getPaymentMethods(currentSession.user.user_id, currentSession.token).catch(() => []),
         getMySupportTickets(currentSession.token).catch(() => []),

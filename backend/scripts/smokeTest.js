@@ -109,6 +109,8 @@ async function main() {
     await request(`/events/${events[0].event_id}/like`, { method: 'POST', headers: userAuth }, 201);
     const likedEvents = await request(`/users/${userId}/liked-events`, { headers: userAuth });
     assert.ok(likedEvents.length > 0);
+    const localizedLikedEvents = await request(`/users/${userId}/liked-events?locale=en`, { headers: userAuth });
+    assert.ok(localizedLikedEvents[0].event_name.startsWith('[en] '));
     const checkIn = await request('/events/check-in', {
       method: 'POST',
       headers: userAuth,
@@ -141,11 +143,16 @@ async function main() {
     await request(`/points/services/${services[0].service_id}/favorite`, { method: 'POST', headers: userAuth }, 201);
     const favorites = await request(`/users/${userId}/favorite-services`, { headers: userAuth });
     assert.ok(favorites.length > 0);
+    const localizedFavorites = await request(`/users/${userId}/favorite-services?locale=en`, { headers: userAuth });
+    assert.ok(localizedFavorites[0].service_name.startsWith('[en] '));
     await request('/points/exchange', {
       method: 'POST',
       headers: userAuth,
       body: JSON.stringify({ service_id: services[0].service_id })
     });
+    const localizedHistory = await request(`/users/${userId}/history?locale=en`, { headers: userAuth });
+    const localizedExchange = localizedHistory.transactions.find((entry) => entry.type === 'exchange');
+    assert.ok(localizedExchange.service_name.startsWith('[en] '));
 
     const payment = await request(`/users/${userId}/payment-methods`, { headers: userAuth });
     const purchase = await request('/points/purchase', {

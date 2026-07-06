@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { localizeRows } = require('../services/translationService');
 
 function canAccessUser(req, userId) {
   return Number(req.user.id) === Number(userId) || req.user.role === 'admin';
@@ -22,6 +23,25 @@ async function ensureSettings(userId) {
       [userId]
     );
   }
+}
+
+function getRequestLocale(req) {
+  return req.query.locale === 'en' ? 'en' : 'ja';
+}
+
+async function localizeEventRows(rows, locale) {
+  return locale === 'en'
+    ? localizeRows(rows, { contentType: 'event', idField: 'event_id', fields: ['event_name', 'location'] }, locale)
+    : rows;
+}
+
+async function localizeServiceRows(rows, locale) {
+  if (locale !== 'en') {
+    return rows;
+  }
+
+  const withServices = await localizeRows(rows, { contentType: 'service', idField: 'service_id', fields: ['service_name'] }, locale);
+  return localizeRows(withServices, { contentType: 'store', idField: 'store_id', fields: ['store_name'] }, locale);
 }
 
 async function getUserPoints(req, res, next) {
@@ -52,6 +72,7 @@ async function getUserPoints(req, res, next) {
 async function getUserHistory(req, res, next) {
   try {
     const { id } = req.params;
+    const locale = getRequestLocale(req);
 
     if (!(await assertUserAccess(req, res, id, 'You can only view your own history.'))) {
       return;
@@ -69,7 +90,7 @@ async function getUserHistory(req, res, next) {
 
     const [transactions] = await pool.query(
       `SELECT pt.transaction_id, pt.type, pt.points, pt.description, pt.created_at,
-              s.service_id, s.service_name, st.store_name
+              s.service_id, s.service_name, st.store_id, st.store_name
        FROM point_transactions pt
        LEFT JOIN services s ON pt.service_id = s.service_id
        LEFT JOIN stores st ON s.store_id = st.store_id
@@ -87,8 +108,8 @@ async function getUserHistory(req, res, next) {
     );
 
     res.json({
-      participations,
-      transactions,
+      participations: await localizeEventRows(participations, locale),
+      transactions: await localizeServiceRows(transactions, locale),
       purchases
     });
   } catch (error) {
@@ -123,6 +144,7 @@ async function getUserPurchases(req, res, next) {
 async function getLikedEvents(req, res, next) {
   try {
     const { id } = req.params;
+    const locale = getRequestLocale(req);
 
     if (!(await assertUserAccess(req, res, id, 'You can only view your own liked events.'))) {
       return;
@@ -140,7 +162,7 @@ async function getLikedEvents(req, res, next) {
       [id]
     );
 
-    res.json(rows);
+    res.json(await localizeEventRows(rows, locale));
   } catch (error) {
     next(error);
   }
@@ -149,6 +171,7 @@ async function getLikedEvents(req, res, next) {
 async function getFavoriteServices(req, res, next) {
   try {
     const { id } = req.params;
+    const locale = getRequestLocale(req);
 
     if (!(await assertUserAccess(req, res, id, 'You can only view your own favorite services.'))) {
       return;
@@ -165,7 +188,7 @@ async function getFavoriteServices(req, res, next) {
       [id]
     );
 
-    res.json(rows);
+    res.json(await localizeServiceRows(rows, locale));
   } catch (error) {
     next(error);
   }

@@ -19,6 +19,8 @@ const { translateText } = require('../services/translationService');
 const pool = require('../config/db');
 
 async function main() {
+  await pool.query('DROP TABLE IF EXISTS content_translations');
+
   const fetchBodies = [];
   global.fetch = async (_url, init) => {
     const body = JSON.parse(init.body);

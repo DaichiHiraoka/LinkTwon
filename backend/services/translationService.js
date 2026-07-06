@@ -19,6 +19,7 @@ const REFRESH_FIELD_CONFIG = [
 ];
 
 let quotaWarningLogged = false;
+let schemaReadyPromise;
 
 class TranslationValidationError extends Error {
   constructor(message) {
@@ -88,12 +89,70 @@ function chunk(items, size) {
   return chunks;
 }
 
+async function createTranslationSchema() {
+  if (env.DB_CLIENT === 'mysql') {
+    await pool.query(
+      `CREATE TABLE IF NOT EXISTS content_translations (
+        translation_id INT AUTO_INCREMENT PRIMARY KEY,
+        content_type VARCHAR(50) NOT NULL,
+        content_id VARCHAR(50) NOT NULL,
+        field_name VARCHAR(100) NOT NULL,
+        source_locale VARCHAR(10) NOT NULL DEFAULT 'ja',
+        target_locale VARCHAR(10) NOT NULL,
+        source_text_hash CHAR(64) NOT NULL,
+        translated_text TEXT NOT NULL,
+        translation_provider VARCHAR(50) NOT NULL,
+        translation_status ENUM('current', 'failed') NOT NULL DEFAULT 'current',
+        error_message VARCHAR(255) NULL,
+        translated_at DATETIME NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_translation (content_type, content_id, field_name, target_locale)
+      )`
+    );
+    return;
+  }
+
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS content_translations (
+      translation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      content_type TEXT NOT NULL,
+      content_id TEXT NOT NULL,
+      field_name TEXT NOT NULL,
+      source_locale TEXT NOT NULL DEFAULT 'ja',
+      target_locale TEXT NOT NULL,
+      source_text_hash TEXT NOT NULL,
+      translated_text TEXT NOT NULL,
+      translation_provider TEXT NOT NULL,
+      translation_status TEXT NOT NULL DEFAULT 'current' CHECK(translation_status IN ('current', 'failed')),
+      error_message TEXT,
+      translated_at TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (content_type, content_id, field_name, target_locale)
+    )`
+  );
+}
+
+async function ensureTranslationSchema() {
+  if (!schemaReadyPromise) {
+    schemaReadyPromise = createTranslationSchema().catch((error) => {
+      schemaReadyPromise = undefined;
+      throw error;
+    });
+  }
+
+  return schemaReadyPromise;
+}
+
 async function loadExistingEntries(records, targetLocale) {
   const entries = new Map();
 
   if (records.length === 0) {
     return entries;
   }
+
+  await ensureTranslationSchema();
 
   for (const recordChunk of chunk(records, CACHE_SELECT_BATCH_SIZE)) {
     const where = recordChunk
@@ -118,6 +177,7 @@ async function loadExistingEntries(records, targetLocale) {
 
 async function upsertCurrentTranslation(record, targetLocale, translatedText, provider) {
   const sourceTextHash = hashSourceText(record.sourceText);
+  await ensureTranslationSchema();
 
   if (env.DB_CLIENT === 'mysql') {
     await pool.query(
@@ -179,6 +239,7 @@ async function upsertFailedTranslation(record, targetLocale, fallbackText, provi
   const sourceTextHash = hashSourceText(record.sourceText);
   const translatedAt = existing?.translated_at || null;
   const safeErrorMessage = truncateErrorMessage(errorMessage);
+  await ensureTranslationSchema();
 
   if (env.DB_CLIENT === 'mysql') {
     await pool.query(
