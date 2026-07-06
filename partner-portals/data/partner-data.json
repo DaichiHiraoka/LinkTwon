@@ -16,7 +16,7 @@
       "login_password": "store-demo-pass",
       "store_name": "地域マルシェ",
       "store_address": "東京都千代田区日比谷公園",
-      "map_query": "地域マルシェ 東京都千代田区日比谷公園",
+      "map_query": "34.699799,135.49311",
       "contact_email": "store@example.com",
       "service_ids": ["service-001", "service-002", "service-003"]
     }

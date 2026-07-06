@@ -82,6 +82,14 @@ import type {
 const SESSION_STORAGE_KEY = "link-town-session";
 const DUMMY_EVENT_IMAGE_URL = "/dummy-event-image.svg";
 const DUMMY_PRODUCT_IMAGE_URL = "/dummy-product-image.svg";
+const PICKUP_LOCATION = {
+  labelJa: "大阪国際工科専門職大学",
+  labelEn: "International Professional University of Technology in Osaka",
+  addressJa: "〒530-0001 大阪府大阪市北区梅田3-3-1",
+  addressEn: "3-3-1 Umeda, Kita-ku, Osaka 530-0001, Japan",
+  lat: 34.699799,
+  lng: 135.49311,
+} as const;
 
 const SCREEN_ROUTES: Record<Screen, string> = {
   login: "/login",
@@ -178,6 +186,7 @@ const translations = {
     storeMapHint: "商品を選ぶと、提供店舗をGoogle Map上にピン表示します。",
     providedBy: "提供店舗",
     address: "住所",
+    mapDemoNotice: "※デモ用の架空店舗です。実際の受け取り場所は大阪国際工科専門職大学です。",
     requiredPoints: "必要ポイント",
     openInGoogleMaps: "Google Mapで開く",
     close: "閉じる",
@@ -326,7 +335,6 @@ const translations = {
     accountTypeResident: "地域住民",
     accountTypeVolunteer: "ボランティア",
     notSet: "未設定",
-    localShoppingDistrict: "地域商店街周辺",
   },
   en: {
     translate: "Translate",
@@ -344,6 +352,7 @@ const translations = {
     storeMapHint: "Select a product to pin the shop on Google Maps.",
     providedBy: "Shop",
     address: "Address",
+    mapDemoNotice: "* This is a fictional demo store. The actual pickup location is International Professional University of Technology in Osaka.",
     requiredPoints: "Required points",
     openInGoogleMaps: "Open in Google Maps",
     close: "Close",
@@ -492,7 +501,6 @@ const translations = {
     accountTypeResident: "Resident",
     accountTypeVolunteer: "Volunteer",
     notSet: "Not set",
-    localShoppingDistrict: "Local shopping district",
   },
 } as const;
 
@@ -704,17 +712,18 @@ function mapParticipation(participation: Participation, displayDate: string, lan
 
 function mapServices(services: ServiceItem[], language: AppLanguage): ProductCategory[] {
   const grouped = new Map<number, ProductCategory>();
+  const pickupMapQuery = `${PICKUP_LOCATION.lat},${PICKUP_LOCATION.lng}`;
 
   for (const service of services) {
     const serviceName = localizeApiText(service.service_name, language);
     const storeName = service.store_name;
-    const storeAddress = service.store_address || translate("localShoppingDistrict", language);
+    const storeAddress = language === "en" ? PICKUP_LOCATION.addressEn : PICKUP_LOCATION.addressJa;
     const product: ProductItem = {
       id: String(service.service_id),
       name: serviceName,
       storeName,
       storeAddress,
-      mapQuery: `${storeName} ${storeAddress}`.trim(),
+      mapQuery: pickupMapQuery,
       requiredPoints: service.required_points,
       imageUrl: service.image_url || DUMMY_PRODUCT_IMAGE_URL,
       favorited: toBoolean(service.favorited),
@@ -746,14 +755,14 @@ function localizeDisplayEvent(event: DisplayEvent, language: AppLanguage): Displ
 
 function localizeProduct(product: ProductItem, language: AppLanguage): ProductItem {
   const storeName = product.storeName;
-  const storeAddress = product.storeAddress;
+  const storeAddress = language === "en" ? PICKUP_LOCATION.addressEn : PICKUP_LOCATION.addressJa;
 
   return {
     ...product,
     name: localizeApiText(product.name, language),
     storeName,
     storeAddress,
-    mapQuery: `${storeName} ${storeAddress}`.trim(),
+    mapQuery: `${PICKUP_LOCATION.lat},${PICKUP_LOCATION.lng}`,
   };
 }
 
@@ -3733,7 +3742,7 @@ function ProductMapModal({
   onExchange: (product: ProductItem) => Promise<ActionResult>;
   onClose: () => void;
 }) {
-  const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(product.mapQuery)}&output=embed`;
+  const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(product.mapQuery)}&output=embed&z=17`;
   const externalMapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(product.mapQuery)}`;
   const swipeDismiss = useSwipeDownDismiss<HTMLElement>(onClose);
   const [confirming, setConfirming] = useState(false);
@@ -3793,6 +3802,7 @@ function ProductMapModal({
             </div>
           ) : null}
         </dl>
+        <p className="map-demo-notice">{translate("mapDemoNotice", language)}</p>
         <iframe className="product-map-frame" title={`${product.storeName} Google Map`} src={mapUrl} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
         <a className="product-map-link" href={externalMapUrl} target="_blank" rel="noreferrer">
           {translate("openInGoogleMaps", language)}
