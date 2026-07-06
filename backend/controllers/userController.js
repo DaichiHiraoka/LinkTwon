@@ -31,7 +31,7 @@ function getRequestLocale(req) {
 
 async function localizeEventRows(rows, locale) {
   return locale === 'en'
-    ? localizeRows(rows, { contentType: 'event', idField: 'event_id', fields: ['event_name'] }, locale)
+    ? localizeRows(rows, { contentType: 'event', idField: 'event_id', fields: ['event_name', 'location'] }, locale)
     : rows;
 }
 

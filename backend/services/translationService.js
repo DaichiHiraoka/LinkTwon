@@ -13,7 +13,7 @@ const SOURCE_LOCALE_MAP = {
 const DEEPL_BATCH_SIZE = 50;
 const CACHE_SELECT_BATCH_SIZE = 200;
 const REFRESH_FIELD_CONFIG = [
-  { tableName: 'events', contentType: 'event', idField: 'event_id', fields: ['event_name'] },
+  { tableName: 'events', contentType: 'event', idField: 'event_id', fields: ['event_name', 'location'] },
   { tableName: 'services', contentType: 'service', idField: 'service_id', fields: ['service_name'] },
   { tableName: 'notifications', contentType: 'notification', idField: 'notification_id', fields: ['title', 'body'] }
 ];

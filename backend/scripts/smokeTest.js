@@ -111,6 +111,7 @@ async function main() {
     assert.ok(likedEvents.length > 0);
     const localizedLikedEvents = await request(`/users/${userId}/liked-events?locale=en`, { headers: userAuth });
     assert.ok(localizedLikedEvents[0].event_name.startsWith('[en] '));
+    assert.ok(localizedLikedEvents[0].location.startsWith('[en] '));
     const checkIn = await request('/events/check-in', {
       method: 'POST',
       headers: userAuth,

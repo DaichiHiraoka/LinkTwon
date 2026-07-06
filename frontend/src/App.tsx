@@ -552,6 +552,9 @@ const localizedContent = [
   { ja: "地域清掃ボランティア", en: "Demo Community Cleanup" },
   { ja: "見守りパトロール", en: "Demo Watch Patrol" },
   { ja: "子ども食堂サポート", en: "Demo Food Support" },
+  { ja: "中央公園", en: "Demo Park" },
+  { ja: "駅前商店街", en: "Demo Station" },
+  { ja: "市民センター", en: "Demo Community Center" },
   { ja: "商店街の人気商品", en: "Popular local shopping street items" },
   { ja: "おみやげ", en: "Souvenirs" },
   { ja: "生活応援商品", en: "Daily life support items" },
@@ -587,7 +590,8 @@ function normalizeLocationText(value: string | null | undefined, language: AppLa
     return translate("notSet", language);
   }
 
-  return legacyDemoLocationMap[value] ?? value;
+  const sourceText = language === "ja" ? legacyDemoLocationMap[value] ?? value : value;
+  return localizeApiText(sourceText, language);
 }
 
 function normalizeLanguage(value: string | undefined | null): AppLanguage {

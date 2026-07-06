@@ -119,11 +119,11 @@ async function refreshTranslations({ force = false })
 
 | API | contentType | idField | fields |
 |---|---|---|---|
-| GET /events | `event` | `event_id` | `event_name` |
+| GET /events | `event` | `event_id` | `event_name`, `location` |
 | GET /points/services | `service` | `service_id` | `service_name` |
 | GET /users/:id/notifications | `notification` | `notification_id` | `title`, `body` |
 
-- 店舗正式名称、住所、地図検索用の値、イベント日時、ポイント数は翻訳対象外とする。
+- 店舗正式名称、住所、地図検索用の値、イベント日時、ポイント数は翻訳対象外とする。イベントの集合場所表示(`location`)はイベント内容の一部として翻訳対象に含める。
 - UI固定文言は frontend の組み込み辞書で翻訳し、DeepL API には送らない。
 
 - 元のフィールド名のまま翻訳文を返す(フィールド追加はしない)。フロントの型変更を不要にするため。
