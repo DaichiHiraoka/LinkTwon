@@ -512,12 +512,24 @@ function mapService(row) {
 
 function buildPartnerData({ organizers, assignments, stores, events, categories, services }) {
   const eventIdsByOrganizer = new Map();
+  const assignedEventIds = new Set();
   for (const assignment of assignments) {
     const organizerId = asId(assignment.organizer_id);
+    const eventId = asId(assignment.event_id);
     if (!eventIdsByOrganizer.has(organizerId)) {
       eventIdsByOrganizer.set(organizerId, []);
     }
-    eventIdsByOrganizer.get(organizerId).push(asId(assignment.event_id));
+    eventIdsByOrganizer.get(organizerId).push(eventId);
+    assignedEventIds.add(eventId);
+  }
+
+  const unassignedEventIds = events.map((event) => asId(event.event_id)).filter((eventId) => !assignedEventIds.has(eventId));
+  if (unassignedEventIds.length > 0) {
+    for (const organizer of organizers) {
+      const organizerId = asId(organizer.organizer_id);
+      const eventIds = eventIdsByOrganizer.get(organizerId) || [];
+      eventIdsByOrganizer.set(organizerId, [...eventIds, ...unassignedEventIds]);
+    }
   }
 
   const serviceIdsByStore = new Map();

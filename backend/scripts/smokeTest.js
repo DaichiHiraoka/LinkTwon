@@ -211,6 +211,13 @@ async function main() {
     );
     assert.deepStrictEqual(createdEventTranslations.map((translation) => translation.field_name), ['event_name', 'location']);
     assert.ok(createdEventTranslations.every((translation) => translation.translated_text.startsWith('[en] ')));
+    const [createdEventOrganizerAssignments] = await pool.query(
+      `SELECT organizer_id
+       FROM event_organizer_events
+       WHERE event_id = ?`,
+      [createdEvent.event_id]
+    );
+    assert.ok(createdEventOrganizerAssignments.length > 0);
     await request(`/admin/events/${createdEvent.event_id}`, {
       method: 'PUT',
       headers: adminAuth,

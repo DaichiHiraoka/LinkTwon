@@ -40,6 +40,27 @@ async function ensureEventCheckInCode(eventId) {
   };
 }
 
+async function assignEventToExistingOrganizers(eventId) {
+  const [organizers] = await pool.query('SELECT organizer_id FROM event_organizers ORDER BY organizer_id ASC');
+
+  for (const organizer of organizers) {
+    const [assignments] = await pool.query(
+      `SELECT organizer_id
+       FROM event_organizer_events
+       WHERE organizer_id = ? AND event_id = ?`,
+      [organizer.organizer_id, eventId]
+    );
+
+    if (assignments.length === 0) {
+      await pool.query(
+        `INSERT INTO event_organizer_events (organizer_id, event_id)
+         VALUES (?, ?)`,
+        [organizer.organizer_id, eventId]
+      );
+    }
+  }
+}
+
 async function prewarmTranslationCache(contentType, contentId, fields) {
   const entries = Object.entries(fields).filter(([, value]) => typeof value === 'string' && value.trim() !== '');
 
@@ -98,6 +119,7 @@ async function createEvent(req, res, next) {
     );
 
     const token = await ensureEventCheckInCode(result.insertId);
+    await assignEventToExistingOrganizers(result.insertId);
     await prewarmTranslationCache('event', result.insertId, {
       event_name,
       location

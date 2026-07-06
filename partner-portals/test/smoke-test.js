@@ -51,10 +51,17 @@ async function prepareTempPartnerDb() {
   const db = openDatabase({ dbPath, seedDemoData: true });
 
   try {
+    db.prepare(
+      `INSERT INTO events
+        (event_name, event_datetime, location, grant_points, status, description, activity, notes)
+       VALUES
+        ('管理者作成イベント', '2026-07-20T10:00:00+09:00', '市民ホール', 40, 'active',
+         '管理画面から作成された未割当イベントです。', '受付確認を行います。', '割当がなくても主催者アプリに表示します。')`
+    ).run();
     const eventCount = db.prepare('SELECT COUNT(*) AS count FROM events').get().count;
     const storeCount = db.prepare('SELECT COUNT(*) AS count FROM stores').get().count;
     const organizerCount = db.prepare('SELECT COUNT(*) AS count FROM event_organizers').get().count;
-    assert.equal(eventCount, 2);
+    assert.equal(eventCount, 3);
     assert.equal(storeCount, 1);
     assert.equal(organizerCount, 1);
   } finally {
@@ -68,11 +75,13 @@ async function testPortalPayloads(cachePath, dbPath) {
   const eventPayload = await buildEventPayload('event-demo', 'event-demo-pass', 'en', { cachePath, dbPath });
   const storePayload = await buildStorePayload('store-demo', 'store-demo-pass', 'en', { cachePath, dbPath });
   const translatedEvent = eventPayload.events.find((eventItem) => eventItem.grant_points === 100);
+  const unassignedEvent = eventPayload.events.find((eventItem) => eventItem.event_name.includes('管理者作成イベント'));
   const translatedService = storePayload.services.find((serviceItem) => serviceItem.required_points === 220);
 
   assert.equal(eventPayload.role, 'event');
-  assert.equal(eventPayload.events.length, 2);
+  assert.equal(eventPayload.events.length, 3);
   assert.ok(translatedEvent);
+  assert.ok(unassignedEvent);
   assert.equal(translatedEvent.event_name, 'Disaster Supply Check and Local Guidance');
   assert.equal(await buildEventPayload('event-demo', 'wrong-password', 'en', { cachePath, dbPath }), null);
 
