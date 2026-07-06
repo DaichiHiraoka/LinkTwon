@@ -3,73 +3,126 @@ const state = {
   code: '',
   password: '',
   payload: null,
-  resultById: {},
-  errorById: {},
-  error: ''
+  screen: 'access',
+  selectedServiceId: '',
+  manualPayload: '',
+  pendingPayload: '',
+  pendingUser: null,
+  latestResult: null,
+  error: '',
+  errorKind: 'invalid'
 };
 
 const ui = {
   ja: {
-    title: '商店ポータル',
+    product: 'Link Town',
+    title: '店舗用',
     language: 'EN',
-    accessCode: '商店ID',
-    accessPlaceholder: '商店IDを入力',
+    accessCode: '店舗ID',
+    accessPlaceholder: '店舗IDを入力',
     password: 'パスワード',
     passwordPlaceholder: 'パスワードを入力',
-    signIn: '商品を表示',
-    store: '店舗',
-    contact: '連絡先',
-    address: '住所',
+    signIn: 'ログイン',
+    forgotCode: 'パスワードを忘れた方',
+    invalidCode: '店舗IDまたはパスワードが違います',
+    selectTitle: '交換する商品を選択',
     requiredPoints: '必要ポイント',
-    description: '説明',
-    category: 'カテゴリ',
-    openMap: 'Google Map',
-    scannerTitle: '利用者QR読取',
-    scannerHint: '利用者のアプリに表示された本人確認QRを読み取って交換を確定します。',
-    cameraScan: 'カメラで読む',
-    qrPayload: 'QR内容',
-    confirm: '交換する',
-    completed: '交換完了',
-    user: '利用者',
-    usedPoints: '利用ポイント',
-    invalidCode: '商店IDまたはパスワードが違います。',
-    cameraUnavailable: 'このブラウザではカメラQR読取を利用できません。QR内容を手入力してください。'
+    exchange: 'この商品と交換する',
+    scanTitle: 'QRコードを読み取る',
+    scanPrompt: 'お客様のQRコードを枠内にかざしてください',
+    manualEntry: 'QRコードを手入力する',
+    manualTitle: 'QRコードを手入力',
+    manualPlaceholder: 'お客様のアプリに表示されたQR内容を貼り付けてください',
+    customer: 'お客様',
+    camera: 'カメラに戻る',
+    confirm: '内容を確認する',
+    analyzing: 'QRコードを確認しています',
+    confirmTitle: 'この内容で交換しますか？',
+    cancel: 'キャンセル',
+    usePoints: '利用ポイント',
+    execute: '交換を確定する',
+    processing: '交換処理中です',
+    processingHint: '画面を閉じずにお待ちください',
+    completed: '交換が完了しました',
+    remainingPoints: '交換後のポイント',
+    nextExchange: '続けて交換する',
+    chooseAnother: '商品を選び直す',
+    retry: 'もう一度読み取る',
+    qrRequired: 'QR内容を入力してください',
+    invalidQr: 'QRコードを確認できませんでした',
+    duplicateQr: 'このQRコードはすでに使用されています',
+    expiredQr: 'QRコードの有効期限が切れています',
+    futureQr: 'QRコードの時刻を確認してください',
+    insufficientPoints: 'ポイントが不足しています',
+    cameraUnavailable: 'カメラを利用できません',
+    communicationError: '通信に失敗しました',
+    errorHint: 'お客様の画面を確認して、もう一度お試しください'
   },
   en: {
-    title: 'Store Portal',
+    product: 'Link Town',
+    title: 'Store',
     language: 'JA',
     accessCode: 'Store ID',
     accessPlaceholder: 'Enter store ID',
     password: 'Password',
     passwordPlaceholder: 'Enter password',
-    signIn: 'Open services',
-    store: 'Store',
-    contact: 'Contact',
-    address: 'Address',
+    signIn: 'Log in',
+    forgotCode: 'Forgot password',
+    invalidCode: 'Check the store ID and password',
+    selectTitle: 'Select an item to exchange',
     requiredPoints: 'Required points',
-    description: 'Description',
-    category: 'Category',
-    openMap: 'Google Map',
-    scannerTitle: 'Customer QR scan',
-    scannerHint: 'Scan the identity QR shown in the customer app to complete the exchange.',
-    cameraScan: 'Scan with camera',
-    qrPayload: 'QR payload',
-    confirm: 'Exchange',
+    exchange: 'Exchange for this item',
+    scanTitle: 'Scan customer QR',
+    scanPrompt: 'Hold the customer QR code inside the frame',
+    manualEntry: 'Enter QR payload manually',
+    manualTitle: 'Enter QR payload',
+    manualPlaceholder: 'Paste the QR payload shown in the customer app',
+    customer: 'Customer',
+    camera: 'Back to camera',
+    confirm: 'Review exchange',
+    analyzing: 'Checking QR code',
+    confirmTitle: 'Complete this exchange?',
+    cancel: 'Cancel',
+    usePoints: 'Points to use',
+    execute: 'Confirm exchange',
+    processing: 'Processing exchange',
+    processingHint: 'Keep this screen open',
     completed: 'Exchange completed',
-    user: 'Customer',
-    usedPoints: 'Used points',
-    invalidCode: 'Check the store ID and password.',
-    cameraUnavailable: 'Camera QR scanning is unavailable in this browser. Enter the QR payload manually.'
+    remainingPoints: 'Remaining points',
+    nextExchange: 'Exchange another',
+    chooseAnother: 'Choose another item',
+    retry: 'Scan again',
+    qrRequired: 'Enter the QR payload',
+    invalidQr: 'The QR code could not be verified',
+    duplicateQr: 'This QR code has already been used',
+    expiredQr: 'This QR code has expired',
+    futureQr: 'Check the QR code time',
+    insufficientPoints: 'The customer does not have enough points',
+    cameraUnavailable: 'The camera is unavailable',
+    communicationError: 'Connection failed',
+    errorHint: 'Check the customer screen and try again'
   }
 };
 
 const app = document.getElementById('app');
+let cameraStream = null;
+let scannerActive = false;
 
 function t(key) {
   return ui[state.locale][key];
 }
 
+function stopCamera() {
+  scannerActive = false;
+  cameraStream?.getTracks().forEach((track) => track.stop());
+  cameraStream = null;
+}
+
 function setState(nextState) {
+  if (nextState.screen && nextState.screen !== 'scanner') {
+    stopCamera();
+  }
+
   Object.assign(state, nextState);
   localStorage.setItem('store-portal-locale', state.locale);
   render();
@@ -84,12 +137,67 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
-async function loadPortal(event) {
-  if (event) {
-    event.preventDefault();
+function selectedService() {
+  return state.payload?.services.find((service) => service.service_id === state.selectedServiceId) || null;
+}
+
+function parseUserPreview(rawPayload) {
+  const trimmed = String(rawPayload || '').trim();
+
+  if (!trimmed) {
+    throw new Error(t('qrRequired'));
   }
 
-  state.error = '';
+  try {
+    const payload = trimmed.startsWith('{') ? JSON.parse(trimmed) : Object.fromEntries(new URL(trimmed).searchParams.entries());
+    const user = {
+      user_id: String(payload.user_id || '').trim(),
+      name: String(payload.name || '').trim(),
+      nonce: String(payload.nonce || '').trim()
+    };
+
+    if (!user.user_id || !user.nonce) {
+      throw new Error(t('invalidQr'));
+    }
+
+    return { ...user, name: user.name || `User ${user.user_id}` };
+  } catch (error) {
+    throw new Error(error.message === t('qrRequired') ? error.message : t('invalidQr'));
+  }
+}
+
+function classifyExchangeError(message) {
+  const value = String(message || '').toLowerCase();
+
+  if (value.includes('already been used') || value.includes('duplicate')) {
+    return { kind: 'duplicate', message: t('duplicateQr') };
+  }
+  if (value.includes('not enough points')) {
+    return { kind: 'points', message: t('insufficientPoints') };
+  }
+  if (value.includes('expired')) {
+    return { kind: 'expired', message: t('expiredQr') };
+  }
+  if (value.includes('not valid yet') || value.includes('future')) {
+    return { kind: 'time', message: t('futureQr') };
+  }
+  if (value.includes('camera') || value.includes('barcode')) {
+    return { kind: 'camera', message: t('cameraUnavailable') };
+  }
+  if (value.includes('fetch') || value.includes('network') || value.includes('connection')) {
+    return { kind: 'network', message: t('communicationError') };
+  }
+
+  return { kind: 'invalid', message: message || t('invalidQr') };
+}
+
+function showError(error) {
+  const classified = classifyExchangeError(error?.message || error);
+  setState({ screen: 'error', error: classified.message, errorKind: classified.kind });
+}
+
+async function loadPortal(event) {
+  event?.preventDefault();
 
   try {
     const response = await fetch(
@@ -98,45 +206,45 @@ async function loadPortal(event) {
     const payload = await response.json();
 
     if (!response.ok) {
-      throw new Error(payload.message || t('invalidCode'));
+      throw new Error(t('invalidCode'));
     }
 
-    setState({ payload, error: '', resultById: {}, errorById: {} });
+    setState({
+      payload,
+      screen: 'products',
+      selectedServiceId: '',
+      manualPayload: '',
+      pendingPayload: '',
+      pendingUser: null,
+      latestResult: null,
+      error: ''
+    });
   } catch (error) {
-    setState({ payload: null, error: error.message || t('invalidCode') });
+    setState({ payload: null, screen: 'access', error: error.message || t('invalidCode') });
   }
 }
 
-async function readQrWithCamera() {
+async function startCameraScanner() {
   if (!('BarcodeDetector' in window) || !navigator.mediaDevices?.getUserMedia) {
-    throw new Error(t('cameraUnavailable'));
+    showError(t('cameraUnavailable'));
+    return;
   }
 
-  const overlay = document.createElement('div');
-  overlay.className = 'camera-overlay';
-  overlay.innerHTML = '<div class="camera-box"><video autoplay muted playsinline></video><button type="button">×</button></div>';
-  document.body.append(overlay);
+  const video = document.getElementById('qr-camera');
 
-  const video = overlay.querySelector('video');
-  const closeButton = overlay.querySelector('button');
-  const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-  const detector = new BarcodeDetector({ formats: ['qr_code'] });
-  let active = true;
-
-  function cleanup() {
-    active = false;
-    stream.getTracks().forEach((track) => track.stop());
-    overlay.remove();
+  if (!video) {
+    return;
   }
 
-  closeButton.addEventListener('click', cleanup, { once: true });
-  video.srcObject = stream;
-  await video.play();
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    const detector = new BarcodeDetector({ formats: ['qr_code'] });
+    scannerActive = true;
+    video.srcObject = cameraStream;
+    await video.play();
 
-  return new Promise((resolve, reject) => {
     async function tick() {
-      if (!active) {
-        reject(new Error(t('cameraUnavailable')));
+      if (!scannerActive) {
         return;
       }
 
@@ -145,13 +253,11 @@ async function readQrWithCamera() {
         const qr = codes.find((code) => code.rawValue);
 
         if (qr) {
-          cleanup();
-          resolve(qr.rawValue);
+          prepareConfirmation(qr.rawValue);
           return;
         }
       } catch (error) {
-        cleanup();
-        reject(error);
+        showError(error);
         return;
       }
 
@@ -159,16 +265,47 @@ async function readQrWithCamera() {
     }
 
     tick();
-  });
+  } catch (error) {
+    showError(error);
+  }
 }
 
-async function submitExchange(serviceId, rawPayload) {
-  const payload = rawPayload.trim();
+function openScanner(serviceId = state.selectedServiceId) {
+  setState({
+    screen: 'scanner',
+    selectedServiceId: serviceId,
+    manualPayload: '',
+    pendingPayload: '',
+    pendingUser: null,
+    error: ''
+  });
+  startCameraScanner();
+}
 
-  if (!payload) {
-    setState({ errorById: { ...state.errorById, [serviceId]: t('qrPayload') } });
+function prepareConfirmation(rawPayload) {
+  try {
+    const pendingPayload = String(rawPayload || '').trim();
+    const pendingUser = parseUserPreview(pendingPayload);
+    setState({ screen: 'analyzing', pendingPayload, pendingUser, error: '' });
+    window.setTimeout(() => {
+      if (state.screen === 'analyzing') {
+        setState({ screen: 'confirm' });
+      }
+    }, 360);
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function submitExchange() {
+  const service = selectedService();
+
+  if (!service || !state.pendingPayload) {
+    showError(t('invalidQr'));
     return;
   }
+
+  setState({ screen: 'processing', error: '' });
 
   try {
     const response = await fetch(`/api/store/exchanges?locale=${encodeURIComponent(state.locale)}`, {
@@ -177,135 +314,282 @@ async function submitExchange(serviceId, rawPayload) {
       body: JSON.stringify({
         code: state.code,
         password: state.password,
-        service_id: serviceId,
-        user_qr_payload: payload
+        service_id: service.service_id,
+        user_qr_payload: state.pendingPayload
       })
     });
     const result = await response.json();
 
     if (!response.ok) {
-      throw new Error(result.message || 'Scan failed.');
+      throw new Error(result.message || t('invalidQr'));
     }
 
     setState({
-      resultById: { ...state.resultById, [serviceId]: result },
-      errorById: { ...state.errorById, [serviceId]: '' }
+      screen: 'success',
+      latestResult: result,
+      manualPayload: '',
+      pendingPayload: '',
+      pendingUser: null,
+      error: ''
     });
   } catch (error) {
-    setState({ errorById: { ...state.errorById, [serviceId]: error.message } });
+    showError(error);
   }
 }
 
-function headerTemplate() {
+function brandMarkTemplate(className = 'brand-mark') {
+  return `<img class="${className}" src="/assets/linktown-icon.png" alt="" />`;
+}
+
+function appHeaderTemplate(options = {}) {
   return `
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">LinkTwon</p>
-        <h1>${escapeHtml(t('title'))}</h1>
+    <header class="app-header ${options.dimmed ? 'is-dimmed' : ''}">
+      <div class="brand">
+        ${
+          options.backAction
+            ? `<button class="icon-btn" type="button" data-action="${escapeHtml(options.backAction)}" aria-label="back">←</button>`
+            : brandMarkTemplate()
+        }
+        <div>
+          <div class="brand-name">${escapeHtml(state.payload?.account?.name || t('product'))}</div>
+          <div class="brand-sub">${escapeHtml(t('title'))}</div>
+        </div>
       </div>
-      <button class="icon-button" type="button" data-action="toggle-locale">${escapeHtml(t('language'))}</button>
+      <button class="locale-btn" type="button" data-action="toggle-locale">${escapeHtml(t('language'))}</button>
     </header>
   `;
 }
 
-function loginTemplate() {
+function accessTemplate() {
   return `
-    <section class="toolbar toolbar--single">
-      <form class="access-form">
-        <label>
-          <span>${escapeHtml(t('accessCode'))}</span>
-          <input name="code" value="${escapeHtml(state.code)}" placeholder="${escapeHtml(t('accessPlaceholder'))}" autocomplete="off" />
-        </label>
-        <label>
-          <span>${escapeHtml(t('password'))}</span>
-          <input name="password" value="${escapeHtml(state.password)}" placeholder="${escapeHtml(t('passwordPlaceholder'))}" type="password" autocomplete="current-password" />
-        </label>
-        <button class="primary-button" type="submit">${escapeHtml(t('signIn'))}</button>
-      </form>
-    </section>
-    ${state.error ? `<p class="error-message">${escapeHtml(state.error)}</p>` : ''}
-  `;
-}
-
-function scannerTemplate(service) {
-  const result = state.resultById[service.service_id];
-  const error = state.errorById[service.service_id];
-
-  return `
-    <section class="scan-panel">
-      <h3>${escapeHtml(t('scannerTitle'))}</h3>
-      <p>${escapeHtml(t('scannerHint'))}</p>
-      <button class="secondary-button" type="button" data-action="camera" data-service-id="${escapeHtml(service.service_id)}">${escapeHtml(t('cameraScan'))}</button>
-      <form class="scan-form" data-service-id="${escapeHtml(service.service_id)}">
-        <label>
-          <span>${escapeHtml(t('qrPayload'))}</span>
-          <textarea name="user_qr_payload" rows="3"></textarea>
-        </label>
-        <button class="primary-button" type="submit">${escapeHtml(t('confirm'))}</button>
-      </form>
-      ${error ? `<p class="error-message">${escapeHtml(error)}</p>` : ''}
-      ${
-        result
-          ? `<div class="scan-result"><strong>${escapeHtml(t('completed'))}</strong><dl><div><dt>${escapeHtml(t('user'))}</dt><dd>${escapeHtml(result.user.name)} (${escapeHtml(result.user.user_id)})</dd></div><div><dt>${escapeHtml(t('usedPoints'))}</dt><dd>${escapeHtml(result.used_points)}pt</dd></div></dl></div>`
-          : ''
-      }
-    </section>
-  `;
-}
-
-function serviceCardTemplate(service) {
-  return `
-    <article class="portal-card">
-      <div class="card-main">
-        <div class="card-heading">
-          <span class="status-pill">${escapeHtml(t('scannerTitle'))}</span>
-          <h2>${escapeHtml(service.service_name)}</h2>
+    <div class="tablet-frame tablet-frame--auth ${state.error ? 'auth-error' : ''}">
+      <main class="center-stage">
+        <div class="auth-card">
+          <div class="hero-brand">
+            ${brandMarkTemplate('login-logo')}
+            <div class="name">${escapeHtml(t('product'))}</div>
+            <div class="sub">${escapeHtml(t('title'))}</div>
+          </div>
+          <form class="code-form">
+            <label for="code">${escapeHtml(t('accessCode'))}</label>
+            <input id="code" class="input" name="code" value="${escapeHtml(state.code)}" placeholder="${escapeHtml(t('accessPlaceholder'))}" autocomplete="off" />
+            <label for="password">${escapeHtml(t('password'))}</label>
+            <input id="password" class="input" name="password" value="${escapeHtml(state.password)}" placeholder="${escapeHtml(t('passwordPlaceholder'))}" type="password" autocomplete="current-password" />
+            ${state.error ? `<div class="form-error">${escapeHtml(state.error)}</div>` : ''}
+            <button type="submit" class="btn btn-primary btn-block">${escapeHtml(t('signIn'))}</button>
+            <button type="button" class="text-link" data-action="noop">${escapeHtml(t('forgotCode'))}</button>
+          </form>
         </div>
-        <dl class="meta-grid">
-          <div><dt>${escapeHtml(t('category'))}</dt><dd>${escapeHtml(service.category_name)}</dd></div>
-          <div><dt>${escapeHtml(t('requiredPoints'))}</dt><dd>${escapeHtml(service.required_points)}pt</dd></div>
-        </dl>
-        <section class="text-block">
-          <h3>${escapeHtml(t('description'))}</h3>
-          <p>${escapeHtml(service.description)}</p>
-        </section>
+      </main>
+    </div>
+  `;
+}
+
+function productCardTemplate(service, index) {
+  return `
+    <article class="product-card">
+      <div class="product-thumb product-thumb--${(index % 3) + 1}" aria-hidden="true">
+        <span>${escapeHtml(service.service_name.slice(0, 1))}</span>
       </div>
-      ${scannerTemplate(service)}
+      <div class="product-copy">
+        <div class="product-category">${escapeHtml(service.category_name)}</div>
+        <h2>${escapeHtml(service.service_name)}</h2>
+        <p>${escapeHtml(service.description)}</p>
+      </div>
+      <div class="product-action">
+        <div class="point-label">${escapeHtml(t('requiredPoints'))}</div>
+        <div class="point-value">${escapeHtml(service.required_points)}<span>pt</span></div>
+        <button class="btn btn-primary" type="button" data-action="open-scanner" data-service-id="${escapeHtml(service.service_id)}">${escapeHtml(t('exchange'))}</button>
+      </div>
     </article>
   `;
 }
 
-function accountTemplate(payload) {
-  const account = payload.account;
-  const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(account.map_query)}`;
+function productsTemplate(options = {}) {
+  const account = state.payload.account;
+
   return `
-    <section class="account-band">
-      <dl>
-        <div><dt>${escapeHtml(t('store'))}</dt><dd>${escapeHtml(account.name)}</dd></div>
-        <div><dt>${escapeHtml(t('address'))}</dt><dd>${escapeHtml(account.address)}</dd></div>
-        <div><dt>${escapeHtml(t('contact'))}</dt><dd>${escapeHtml(account.email)}</dd></div>
-      </dl>
-      <a class="secondary-link" href="${escapeHtml(mapUrl)}" target="_blank" rel="noreferrer">${escapeHtml(t('openMap'))}</a>
+    <div class="tablet-frame">
+      ${appHeaderTemplate({ dimmed: options.dimmed })}
+      <main class="products-stage ${options.dimmed ? 'is-dimmed' : ''}">
+        <div class="page-heading">
+          <div>
+            <div class="store-address">${escapeHtml(account.address)}</div>
+            <h1>${escapeHtml(t('selectTitle'))}</h1>
+          </div>
+          <div class="service-count">${escapeHtml(state.payload.services.length)}</div>
+        </div>
+        <div class="product-list">
+          ${state.payload.services.map(productCardTemplate).join('')}
+        </div>
+      </main>
+    </div>
+  `;
+}
+
+function selectedProductStripTemplate() {
+  const service = selectedService();
+
+  return `
+    <section class="selected-product">
+      <div>
+        <div class="product-category">${escapeHtml(service.category_name)}</div>
+        <strong>${escapeHtml(service.service_name)}</strong>
+      </div>
+      <div class="selected-points">-${escapeHtml(service.required_points)}<span>pt</span></div>
     </section>
   `;
 }
 
-function portalTemplate() {
-  if (!state.payload) {
-    return '';
+function scannerBodyTemplate(options = {}) {
+  return `
+    <main class="scanner-stage ${options.dimmed ? 'is-dimmed' : ''}">
+      ${selectedProductStripTemplate()}
+      <section class="camera-panel">
+        ${options.live ? '<video id="qr-camera" autoplay muted playsinline></video>' : '<div class="camera-placeholder"></div>'}
+        <div class="scan-guide" aria-hidden="true"><span class="qr-glyph">▦</span></div>
+        <div class="scan-prompt">${escapeHtml(t('scanPrompt'))}</div>
+      </section>
+      <button class="btn btn-outline btn-block" type="button" data-action="open-manual">⌨ ${escapeHtml(t('manualEntry'))}</button>
+    </main>
+  `;
+}
+
+function scannerTemplate() {
+  return `
+    <div class="tablet-frame">
+      ${appHeaderTemplate({ backAction: 'open-products' })}
+      ${scannerBodyTemplate({ live: true })}
+    </div>
+  `;
+}
+
+function manualTemplate() {
+  let preview = null;
+
+  try {
+    preview = state.manualPayload ? parseUserPreview(state.manualPayload) : null;
+  } catch (error) {
+    preview = null;
   }
 
   return `
-    ${accountTemplate(state.payload)}
-    <section class="portal-list">
-      ${state.payload.services.map(serviceCardTemplate).join('')}
-    </section>
+    <div class="tablet-frame">
+      ${appHeaderTemplate({ backAction: 'open-scanner-current' })}
+      <main class="manual-stage">
+        <form class="manual-form">
+          <h1>${escapeHtml(t('manualTitle'))}</h1>
+          ${selectedProductStripTemplate()}
+          <label for="user-qr">${escapeHtml(t('manualTitle'))}</label>
+          <textarea id="user-qr" class="input" name="user_qr_payload" placeholder="${escapeHtml(t('manualPlaceholder'))}">${escapeHtml(state.manualPayload)}</textarea>
+          <div class="recipient-card">
+            <span>${escapeHtml(t('customer'))}</span>
+            <strong>${escapeHtml(preview?.name || '-')}</strong>
+          </div>
+          <div class="split-actions">
+            <button class="btn btn-outline" type="button" data-action="open-scanner-current">▣ ${escapeHtml(t('camera'))}</button>
+            <button class="btn btn-primary" type="submit">${escapeHtml(t('confirm'))}</button>
+          </div>
+        </form>
+      </main>
+    </div>
+  `;
+}
+
+function analyzingTemplate() {
+  return `
+    <div class="tablet-frame">
+      ${appHeaderTemplate()}
+      <main class="status-stage status-stage--soft">
+        <div class="scan-loader"><span class="qr-glyph">▦</span></div>
+        <h1>${escapeHtml(t('analyzing'))}</h1>
+        <div class="loading-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+      </main>
+    </div>
+  `;
+}
+
+function confirmTemplate(processing = false) {
+  const service = selectedService();
+
+  return `
+    <div class="tablet-frame">
+      ${appHeaderTemplate({ dimmed: true })}
+      ${scannerBodyTemplate({ dimmed: true })}
+      <div class="modal-overlay">
+        <section class="modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(processing ? t('processing') : t('confirmTitle'))}">
+          ${
+            processing
+              ? `<div class="processing-ring" aria-hidden="true"></div><h1>${escapeHtml(t('processing'))}</h1><p class="modal-hint">${escapeHtml(t('processingHint'))}</p>`
+              : `<h1>${escapeHtml(t('confirmTitle'))}</h1>
+                 <div class="recipient"><span>${escapeHtml(t('customer'))}</span><strong>${escapeHtml(state.pendingUser?.name || '-')}</strong></div>
+                 <div class="exchange-summary"><div><span>${escapeHtml(service.service_name)}</span><strong>-${escapeHtml(service.required_points)} pt</strong></div></div>
+                 <div class="actions"><button class="btn btn-outline" type="button" data-action="cancel-confirm">${escapeHtml(t('cancel'))}</button><button class="btn btn-primary" type="button" data-action="submit-exchange">${escapeHtml(t('execute'))}</button></div>`
+          }
+        </section>
+      </div>
+    </div>
+  `;
+}
+
+function successTemplate() {
+  const result = state.latestResult;
+
+  return `
+    <div class="tablet-frame">
+      ${appHeaderTemplate()}
+      <main class="status-stage status-stage--success">
+        <div class="success-mark">✓</div>
+        <h1>${escapeHtml(t('completed'))}</h1>
+        <div class="status-name">${escapeHtml(result?.user?.name || '')}</div>
+        <div class="status-delta">-${escapeHtml(result?.used_points || selectedService()?.required_points || 0)} pt</div>
+        <div class="remaining"><span>${escapeHtml(t('remainingPoints'))}</span><strong>${escapeHtml(result?.current_points ?? '-')} pt</strong></div>
+        <div class="status-actions">
+          <button class="btn btn-primary" type="button" data-action="open-scanner-current">${escapeHtml(t('nextExchange'))}</button>
+          <button class="text-link" type="button" data-action="open-products">${escapeHtml(t('chooseAnother'))}</button>
+        </div>
+      </main>
+    </div>
+  `;
+}
+
+function errorTemplate() {
+  return `
+    <div class="tablet-frame tablet-frame--error">
+      ${appHeaderTemplate()}
+      <main class="status-stage status-stage--error">
+        <div class="error-mark">!</div>
+        <h1>${escapeHtml(state.error || t('invalidQr'))}</h1>
+        <p>${escapeHtml(t('errorHint'))}</p>
+        <div class="status-actions status-actions--row">
+          <button class="btn btn-primary" type="button" data-action="open-scanner-current">${escapeHtml(t('retry'))}</button>
+          <button class="btn btn-outline" type="button" data-action="open-manual">${escapeHtml(t('manualEntry'))}</button>
+        </div>
+      </main>
+    </div>
   `;
 }
 
 function render() {
   document.documentElement.lang = state.locale;
-  app.innerHTML = `${headerTemplate()}${loginTemplate()}${portalTemplate()}`;
+
+  if (!state.payload || state.screen === 'access') {
+    app.innerHTML = accessTemplate();
+    return;
+  }
+
+  const templates = {
+    products: productsTemplate,
+    scanner: scannerTemplate,
+    manual: manualTemplate,
+    analyzing: analyzingTemplate,
+    confirm: () => confirmTemplate(false),
+    processing: () => confirmTemplate(true),
+    success: successTemplate,
+    error: errorTemplate
+  };
+
+  app.innerHTML = (templates[state.screen] || productsTemplate)();
 }
 
 app.addEventListener('click', async (event) => {
@@ -323,27 +607,45 @@ app.addEventListener('click', async (event) => {
     return;
   }
 
-  if (target.dataset.action === 'camera') {
-    const serviceId = target.dataset.serviceId;
+  if (target.dataset.action === 'open-products') {
+    setState({ screen: 'products', selectedServiceId: '', error: '' });
+    return;
+  }
 
-    try {
-      const rawPayload = await readQrWithCamera();
-      await submitExchange(serviceId, rawPayload);
-    } catch (error) {
-      setState({ errorById: { ...state.errorById, [serviceId]: error.message } });
-    }
+  if (target.dataset.action === 'open-scanner') {
+    openScanner(target.dataset.serviceId);
+    return;
+  }
+
+  if (target.dataset.action === 'open-scanner-current') {
+    openScanner();
+    return;
+  }
+
+  if (target.dataset.action === 'open-manual') {
+    setState({ screen: 'manual', manualPayload: '', error: '' });
+    return;
+  }
+
+  if (target.dataset.action === 'cancel-confirm') {
+    setState({ screen: 'manual', manualPayload: state.pendingPayload, error: '' });
+    return;
+  }
+
+  if (target.dataset.action === 'submit-exchange') {
+    await submitExchange();
   }
 });
 
 app.addEventListener('submit', (event) => {
-  if (event.target.classList.contains('access-form')) {
+  if (event.target.classList.contains('code-form')) {
     event.preventDefault();
     const form = new FormData(event.target);
     state.code = String(form.get('code') || '').trim();
     state.password = String(form.get('password') || '');
 
     if (!state.code || !state.password) {
-      setState({ error: t('invalidCode'), payload: null });
+      setState({ payload: null, screen: 'access', error: t('invalidCode') });
       return;
     }
 
@@ -351,11 +653,19 @@ app.addEventListener('submit', (event) => {
     return;
   }
 
-  if (event.target.classList.contains('scan-form')) {
+  if (event.target.classList.contains('manual-form')) {
     event.preventDefault();
     const form = new FormData(event.target);
-    submitExchange(event.target.dataset.serviceId, String(form.get('user_qr_payload') || ''));
+    state.manualPayload = String(form.get('user_qr_payload') || '');
+    prepareConfirmation(state.manualPayload);
   }
 });
 
+app.addEventListener('input', (event) => {
+  if (event.target.name === 'user_qr_payload') {
+    state.manualPayload = event.target.value;
+  }
+});
+
+window.addEventListener('beforeunload', stopCamera);
 render();
