@@ -73,8 +73,13 @@ function toRecord({ contentType, contentId, fieldName, sourceText, sourceLocale 
   };
 }
 
-function isEntryCurrent(entry, record) {
-  return entry && entry.translation_status === 'current' && entry.source_text_hash === hashSourceText(record.sourceText);
+function isEntryCurrent(entry, record, provider) {
+  return (
+    entry &&
+    entry.translation_status === 'current' &&
+    entry.source_text_hash === hashSourceText(record.sourceText) &&
+    entry.translation_provider === provider
+  );
 }
 
 function truncateErrorMessage(message) {
@@ -368,6 +373,7 @@ async function translateRecords(records, targetLocale, options = {}) {
   const translations = new Map();
   const metadata = new Map();
   const existingEntries = await loadExistingEntries(records, targetLocale);
+  const provider = getProvider();
   const missingRecords = [];
   let skipped = 0;
   let translated = 0;
@@ -377,7 +383,7 @@ async function translateRecords(records, targetLocale, options = {}) {
     const key = getEntryKey(record, targetLocale);
     const existing = existingEntries.get(key);
 
-    if (!options.force && isEntryCurrent(existing, record)) {
+    if (!options.force && isEntryCurrent(existing, record, provider)) {
       translations.set(key, existing.translated_text);
       metadata.set(key, { provider: existing.translation_provider, cached: true });
       skipped += 1;
@@ -408,11 +414,11 @@ async function translateRecords(records, targetLocale, options = {}) {
     } catch (error) {
       for (const { record, existing } of missingChunk) {
         const key = getEntryKey(record, targetLocale);
-        const fallbackText = existing?.translated_text || record.sourceText;
-        const provider = existing?.translation_provider || getProvider();
+        const canUseExistingFallback = existing?.translation_provider === provider && existing?.translated_text;
+        const fallbackText = canUseExistingFallback ? existing.translated_text : record.sourceText;
         await upsertFailedTranslation(record, targetLocale, fallbackText, provider, error.message, existing);
         translations.set(key, fallbackText);
-        metadata.set(key, { provider, cached: Boolean(existing?.translated_text), failed: true });
+        metadata.set(key, { provider, cached: Boolean(canUseExistingFallback), failed: true });
         failed += 1;
       }
     }

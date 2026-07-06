@@ -81,9 +81,10 @@ async function refreshTranslations({ force = false })
 ### 4.2 動作仕様
 
 1. `targetLocale === 'ja'`(source と同じ)なら原文をそのまま返す。DBアクセスもしない。
-2. キャッシュ照会: unique key で1件取得し、`translation_status = 'current'` かつ `source_text_hash` が現在の原文ハッシュと一致すれば `translated_text` を返す(**DeepL を呼ばない**)。
+2. キャッシュ照会: unique key で1件取得し、`translation_status = 'current'` かつ `source_text_hash` が現在の原文ハッシュと一致し、`translation_provider` が現在の provider と一致すれば `translated_text` を返す(**DeepL を呼ばない**)。
+   - `mock` で作成済みのキャッシュは、provider が `deepl` に変わった後は有効キャッシュとして扱わず、DeepL で再翻訳する。
 3. ミス時: provider で翻訳 → `INSERT ... ON DUPLICATE KEY UPDATE`(SQLite は `INSERT ... ON CONFLICT ... DO UPDATE`)で upsert して返す。
-4. 翻訳失敗時: 既存キャッシュがあれば古い翻訳を返す。なければ**原文を返す**(エラーでリクエストを落とさない)。`translation_status = 'failed'` と `error_message` を記録。
+4. 翻訳失敗時: 現在の provider で作成された既存キャッシュがあれば古い翻訳を返す。なければ**原文を返す**(エラーでリクエストを落とさない)。`translation_status = 'failed'` と `error_message` を記録。
 5. 空文字・null のフィールドは翻訳対象外。
 
 ### 4.3 DeepL provider 仕様

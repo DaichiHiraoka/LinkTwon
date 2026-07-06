@@ -574,9 +574,14 @@ const localizedContent = [
   { ja: "野菜セット引換券", en: "Demo Vegetable Coupon" },
 ] as const;
 
+function stripMockTranslationPrefix(value: string) {
+  return value.replace(/^\[[a-z]{2}\]\s*/i, "");
+}
+
 function localizeApiText(value: string, language: AppLanguage) {
-  const match = localizedContent.find((entry) => entry.ja === value || entry.en === value);
-  return match ? match[language] : value;
+  const normalizedValue = stripMockTranslationPrefix(value);
+  const match = localizedContent.find((entry) => entry.ja === normalizedValue || entry.en === normalizedValue);
+  return match ? match[language] : normalizedValue;
 }
 
 const legacyDemoLocationMap: Record<string, string> = {

@@ -15,7 +15,7 @@ process.env.TRANSLATION_PROVIDER = 'deepl';
 process.env.DEEPL_API_KEY = 'test-deepl-key';
 process.env.DEEPL_API_URL = 'https://api-free.deepl.com/v2/translate';
 
-const { translateText } = require('../services/translationService');
+const { hashSourceText, translateText } = require('../services/translationService');
 const pool = require('../config/db');
 
 async function main() {
@@ -66,6 +66,25 @@ async function main() {
 
   assert.strictEqual(changed.translatedText, 'deepl:地域清掃更新');
   assert.strictEqual(fetchBodies.length, 2, 'source hash change must call fetch again');
+
+  await pool.query(
+    `INSERT INTO content_translations
+     (content_type, content_id, field_name, source_locale, target_locale, source_text_hash,
+      translated_text, translation_provider, translation_status, translated_at, created_at, updated_at)
+     VALUES (?, ?, ?, 'ja', 'en', ?, ?, 'mock', 'current', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+    ['event', 'unit-provider', 'event_name', hashSourceText('子ども食堂サポート'), '[en] 子ども食堂サポート']
+  );
+
+  const providerChanged = await translateText({
+    contentType: 'event',
+    contentId: 'unit-provider',
+    fieldName: 'event_name',
+    sourceText: '子ども食堂サポート',
+    targetLocale: 'en'
+  });
+
+  assert.strictEqual(providerChanged.translatedText, 'deepl:子ども食堂サポート');
+  assert.strictEqual(fetchBodies.length, 3, 'provider change must ignore stale mock cache');
 
   global.fetch = async () => ({
     ok: false,
