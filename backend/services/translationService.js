@@ -12,6 +12,21 @@ const SOURCE_LOCALE_MAP = {
 };
 const DEEPL_BATCH_SIZE = 50;
 const CACHE_SELECT_BATCH_SIZE = 200;
+const MOCK_PROVIDER_VERSION = 'mock-v2';
+const MOCK_TRANSLATIONS = new Map([
+  ['地域清掃ボランティア', 'Community Cleanup Volunteer Event'],
+  ['見守りパトロール', 'Neighborhood Safety Patrol'],
+  ['子ども食堂サポート', "Community Children's Cafeteria Support"],
+  ['防災備蓄点検と地域案内', 'Disaster Stockpile Inspection and Community Guidance'],
+  ['商店街清掃ボランティア', 'Shopping District Cleanup Volunteer Event'],
+  ['コーヒー無料券', 'Free Coffee Voucher'],
+  ['ケーキセット割引', 'Cake Set Discount'],
+  ['焼きたてパン引換券', 'Fresh Bread Voucher'],
+  ['野菜セット引換券', 'Vegetable Set Voucher'],
+  ['季節の野菜セット', 'Seasonal Vegetable Set'],
+  ['焼き菓子詰め合わせ', 'Assorted Baked Sweets'],
+  ['日用品ミニセット', 'Daily Essentials Mini Set']
+]);
 const REFRESH_FIELD_CONFIG = [
   { tableName: 'events', contentType: 'event', idField: 'event_id', fields: ['event_name', 'location'] },
   { tableName: 'services', contentType: 'service', idField: 'service_id', fields: ['service_name'] },
@@ -56,7 +71,8 @@ function assertSupportedLocales(sourceLocale, targetLocale) {
 }
 
 function getProvider() {
-  return env.TRANSLATION_PROVIDER || (env.DEEPL_API_KEY ? 'deepl' : 'mock');
+  const configuredProvider = env.TRANSLATION_PROVIDER || (env.DEEPL_API_KEY ? 'deepl' : 'mock');
+  return configuredProvider === 'mock' ? MOCK_PROVIDER_VERSION : configuredProvider;
 }
 
 function getEntryKey(record, targetLocale) {
@@ -356,10 +372,10 @@ async function requestDeepL(texts, sourceLocale, targetLocale, retried = false) 
 async function translateBatch(texts, sourceLocale, targetLocale) {
   const provider = getProvider();
 
-  if (provider === 'mock') {
+  if (provider === MOCK_PROVIDER_VERSION) {
     return {
       provider,
-      translatedTexts: texts.map((text) => `[${targetLocale}] ${text}`)
+      translatedTexts: texts.map((text) => MOCK_TRANSLATIONS.get(text) || `[${targetLocale}] ${text}`)
     };
   }
 

@@ -48,6 +48,7 @@ import { Logo } from "./components/Logo";
 import {
   AccountIcon,
   ArrowIcon,
+  ChevronDownIcon,
   EventIcon,
   HelpIcon,
   HomeIcon,
@@ -552,6 +553,8 @@ const localizedContent = [
   { ja: "地域清掃ボランティア", en: "Demo Community Cleanup" },
   { ja: "見守りパトロール", en: "Demo Watch Patrol" },
   { ja: "子ども食堂サポート", en: "Demo Food Support" },
+  { ja: "防災備蓄点検と地域案内", en: "Disaster Stockpile Inspection and Community Guidance" },
+  { ja: "商店街清掃ボランティア", en: "Shopping District Cleanup Volunteer Event" },
   { ja: "中央公園", en: "Demo Park" },
   { ja: "駅前商店街", en: "Demo Station" },
   { ja: "市民センター", en: "Demo Community Center" },
@@ -572,6 +575,9 @@ const localizedContent = [
   { ja: "ケーキセット割引", en: "Demo Cake Coupon" },
   { ja: "焼きたてパン引換券", en: "Demo Bread Coupon" },
   { ja: "野菜セット引換券", en: "Demo Vegetable Coupon" },
+  { ja: "季節の野菜セット", en: "Seasonal Vegetable Set" },
+  { ja: "焼き菓子詰め合わせ", en: "Assorted Baked Sweets" },
+  { ja: "日用品ミニセット", en: "Daily Essentials Mini Set" },
 ] as const;
 
 function stripMockTranslationPrefix(value: string) {
@@ -669,7 +675,7 @@ function mapEvent(event: ApiEventItem, displayDate: string, language: AppLanguag
   return {
     id: String(event.event_id),
     date: parts.date,
-    title: displayApiText(event.event_name),
+    title: localizeApiText(event.event_name, language),
     points: event.grant_points,
     location,
     time: parts.time,
@@ -689,7 +695,7 @@ function mapParticipation(participation: Participation, displayDate: string, lan
   return {
     id: String(participation.event_id),
     date: parts.date,
-    title: displayApiText(participation.event_name),
+    title: localizeApiText(participation.event_name, language),
     points: participation.granted_points,
     location,
     time: parts.time,
@@ -698,11 +704,11 @@ function mapParticipation(participation: Participation, displayDate: string, lan
   };
 }
 
-function mapServices(services: ServiceItem[], _language: AppLanguage): ProductCategory[] {
+function mapServices(services: ServiceItem[], language: AppLanguage): ProductCategory[] {
   const grouped = new Map<number, ProductCategory>();
 
   for (const service of services) {
-    const serviceName = displayApiText(service.service_name);
+    const serviceName = localizeApiText(service.service_name, language);
     const storeName = service.store_name;
     const storeAddress = service.store_address || "";
     const mapQuery = service.map_query || [storeName, storeAddress].filter(Boolean).join(" ");
@@ -737,17 +743,17 @@ function mapServices(services: ServiceItem[], _language: AppLanguage): ProductCa
 function localizeDisplayEvent(event: DisplayEvent, language: AppLanguage): DisplayEvent {
   return {
     ...event,
-    title: event.rawEventId ? displayApiText(event.title) : localizeApiText(event.title, language),
+    title: localizeApiText(event.title, language),
     location: event.location,
   };
 }
 
-function localizeProduct(product: ProductItem, _language: AppLanguage): ProductItem {
+function localizeProduct(product: ProductItem, language: AppLanguage): ProductItem {
   const storeName = product.storeName;
 
   return {
     ...product,
-    name: displayApiText(product.name),
+    name: localizeApiText(product.name, language),
     storeName,
     description: displayApiText(product.description ?? ""),
   };
@@ -2554,6 +2560,7 @@ function WalletScreen({
   onPurchase: () => void;
   onProductSelect: (product: ProductItem) => void;
 }) {
+  const [historyExpanded, setHistoryExpanded] = useState(false);
   const visibleCategories = useMemo(() => {
     if (tab === "recommended") {
       return productCategories;
@@ -2584,34 +2591,45 @@ function WalletScreen({
             {translate("buyPoints", language)}
           </button>
         </article>
-        <section className="wallet-history-card" aria-labelledby="wallet-history-title">
-          <h2 id="wallet-history-title">{translate("walletHistory", language)}</h2>
-          {walletHistory.length === 0 ? (
-            <p className="wallet-history-empty">{translate("walletHistoryEmpty", language)}</p>
-          ) : (
-            <div className="wallet-history-list">
-              {walletHistory.map((group) => (
-                <section className="wallet-history-group" key={group.date}>
-                  <time dateTime={group.isoDate}>{group.date}</time>
-                  <div>
-                    {group.items.map((item) => (
-                      <article className="wallet-history-item" key={item.id}>
-                        <div className="wallet-history-item__main">
-                          <span className={`wallet-history-badge wallet-history-badge--${item.kind}`}>{item.label}</span>
-                          <strong>{item.title}</strong>
-                          <small>{item.meta}</small>
-                        </div>
-                        <span className={`wallet-history-delta wallet-history-delta--${item.delta > 0 ? "plus" : "minus"}`}>
-                          {item.delta > 0 ? "+" : "-"}
-                          {Math.abs(item.delta)}pt
-                        </span>
-                      </article>
-                    ))}
-                  </div>
-                </section>
-              ))}
-            </div>
-          )}
+        <section className={`wallet-history-card ${historyExpanded ? "is-expanded" : ""}`}>
+          <button
+            className="wallet-history-toggle"
+            type="button"
+            aria-expanded={historyExpanded}
+            aria-controls="wallet-history-content"
+            onClick={() => setHistoryExpanded((current) => !current)}
+          >
+            <h2>{translate("walletHistory", language)}</h2>
+            <ChevronDownIcon />
+          </button>
+          <div id="wallet-history-content" className="wallet-history-content" hidden={!historyExpanded}>
+            {walletHistory.length === 0 ? (
+              <p className="wallet-history-empty">{translate("walletHistoryEmpty", language)}</p>
+            ) : (
+              <div className="wallet-history-list">
+                {walletHistory.map((group) => (
+                  <section className="wallet-history-group" key={group.date}>
+                    <time dateTime={group.isoDate}>{group.date}</time>
+                    <div>
+                      {group.items.map((item) => (
+                        <article className="wallet-history-item" key={item.id}>
+                          <div className="wallet-history-item__main">
+                            <span className={`wallet-history-badge wallet-history-badge--${item.kind}`}>{item.label}</span>
+                            <strong>{item.title}</strong>
+                            <small>{item.meta}</small>
+                          </div>
+                          <span className={`wallet-history-delta wallet-history-delta--${item.delta > 0 ? "plus" : "minus"}`}>
+                            {item.delta > 0 ? "+" : "-"}
+                            {Math.abs(item.delta)}pt
+                          </span>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            )}
+          </div>
         </section>
       </section>
       <section className="section">
@@ -3270,7 +3288,7 @@ function HistoryScreen({
             {participations.map((entry) => (
               <li key={entry.participation_id} className="history-row">
                 <div>
-                  <strong>{displayApiText(entry.event_name)}</strong>
+                  <strong>{localizeApiText(entry.event_name, language)}</strong>
                   <small>{formatTimestamp(entry.participated_at)}</small>
                 </div>
                 <span className="history-row__delta history-row__delta--plus">+{entry.granted_points}pt</span>
@@ -3291,7 +3309,7 @@ function HistoryScreen({
                     {entry.type === "grant"
                       ? translate("eventPointGrant", language)
                       : entry.service_name
-                        ? displayApiText(entry.service_name)
+                        ? localizeApiText(entry.service_name, language)
                         : translate("pointExchangeTitle", language)}
                   </strong>
                   <small>{formatTimestamp(entry.created_at)}</small>
@@ -3657,7 +3675,7 @@ function buildWalletHistoryItems({
         id: `participation-${entry.participation_id}`,
         kind: "event" as const,
         label: translate("eventHistoryLabel", language),
-        title: displayApiText(entry.event_name),
+        title: localizeApiText(entry.event_name, language),
         meta: `${eventTime.date} ${eventTime.time}`,
         delta: entry.granted_points,
         date,
@@ -3683,7 +3701,7 @@ function buildWalletHistoryItems({
           id: `transaction-${entry.transaction_id}`,
           kind: "exchange" as const,
           label: translate("exchangeHistoryLabel", language),
-          title: entry.service_name ? displayApiText(entry.service_name) : translate("pointExchangeTitle", language),
+          title: entry.service_name ? localizeApiText(entry.service_name, language) : translate("pointExchangeTitle", language),
           meta: `${formatWalletHistoryDate(date)} ${formatWalletHistoryTime(date)}`,
           delta: -Math.abs(entry.points),
           date,

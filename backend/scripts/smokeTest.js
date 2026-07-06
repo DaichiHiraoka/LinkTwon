@@ -2,6 +2,17 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 
+const JAPANESE_TEXT_PATTERN = /[\u3040-\u30ff\u3400-\u9fff]/;
+
+function assertTranslatedName(translatedValue, sourceValue) {
+  assert.ok(translatedValue);
+  assert.notStrictEqual(translatedValue, sourceValue);
+
+  if (JAPANESE_TEXT_PATTERN.test(sourceValue)) {
+    assert.ok(!JAPANESE_TEXT_PATTERN.test(translatedValue.replace(/^\[en\]\s*/i, '')));
+  }
+}
+
 process.env.APP_ENV = 'test';
 process.env.NODE_ENV = 'test';
 process.env.DB_CLIENT = 'sqlite';
@@ -111,7 +122,7 @@ async function main() {
     const likedEvents = await request(`/users/${userId}/liked-events`, { headers: userAuth });
     assert.ok(likedEvents.length > 0);
     const localizedLikedEvents = await request(`/users/${userId}/liked-events?locale=en`, { headers: userAuth });
-    assert.ok(localizedLikedEvents[0].event_name.startsWith('[en] '));
+    assertTranslatedName(localizedLikedEvents[0].event_name, likedEvents[0].event_name);
     assert.strictEqual(localizedLikedEvents[0].location, likedEvents[0].location);
     assert.ok(localizedLikedEvents[0].description.startsWith('[en] '));
     const checkIn = await request('/events/check-in', {
@@ -141,14 +152,14 @@ async function main() {
     assert.ok(!services[0].service_name.startsWith('[en] '));
     const localizedServices = await request('/points/services?locale=en', { headers: userAuth });
     assert.ok(localizedServices.length > 0);
-    assert.ok(localizedServices[0].service_name.startsWith('[en] '));
+    assertTranslatedName(localizedServices[0].service_name, services[0].service_name);
     assert.ok(!localizedServices[0].store_name.startsWith('[en] '));
     assert.ok(localizedServices[0].description.startsWith('[en] '));
     await request(`/points/services/${services[0].service_id}/favorite`, { method: 'POST', headers: userAuth }, 201);
     const favorites = await request(`/users/${userId}/favorite-services`, { headers: userAuth });
     assert.ok(favorites.length > 0);
     const localizedFavorites = await request(`/users/${userId}/favorite-services?locale=en`, { headers: userAuth });
-    assert.ok(localizedFavorites[0].service_name.startsWith('[en] '));
+    assertTranslatedName(localizedFavorites[0].service_name, favorites[0].service_name);
     await request('/points/exchange', {
       method: 'POST',
       headers: userAuth,
@@ -156,7 +167,7 @@ async function main() {
     });
     const localizedHistory = await request(`/users/${userId}/history?locale=en`, { headers: userAuth });
     const localizedExchange = localizedHistory.transactions.find((entry) => entry.type === 'exchange');
-    assert.ok(localizedExchange.service_name.startsWith('[en] '));
+    assertTranslatedName(localizedExchange.service_name, services[0].service_name);
 
     const payment = await request(`/users/${userId}/payment-methods`, { headers: userAuth });
     const purchase = await request('/points/purchase', {

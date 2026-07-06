@@ -39,3 +39,7 @@ services:
         sync: false
       - key: TRANSLATION_REFRESH_KEY
         sync: false
+      - key: TRANSLATION_PROVIDER
+        sync: false
+      - key: DEEPL_API_KEY
+        sync: false

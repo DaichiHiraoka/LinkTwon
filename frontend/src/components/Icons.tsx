@@ -100,3 +100,11 @@ export function ArrowIcon() {
     </Svg>
   );
 }
+
+export function ChevronDownIcon() {
+  return (
+    <Svg>
+      <path d="m6 9 6 6 6-6" />
+    </Svg>
+  );
+}
