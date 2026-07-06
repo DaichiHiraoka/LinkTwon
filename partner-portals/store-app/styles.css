@@ -99,6 +99,13 @@ button {
   gap: 12px;
 }
 
+.header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
 .brand-mark,
 .login-logo {
   display: block;
@@ -125,7 +132,8 @@ button {
 }
 
 .icon-btn,
-.locale-btn {
+.locale-btn,
+.logout-btn {
   height: 40px;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -143,6 +151,12 @@ button {
 .locale-btn {
   min-width: 48px;
   padding: 0 12px;
+}
+
+.logout-btn {
+  padding: 0 10px;
+  color: var(--ink-soft);
+  font-size: 0.76rem;
 }
 
 .center-stage {

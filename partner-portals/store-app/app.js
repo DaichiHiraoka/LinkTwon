@@ -1,7 +1,20 @@
+const SESSION_KEY = 'linktown-store-portal-session';
+
+function readPortalSession() {
+  try {
+    const session = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null');
+    return session?.code && session?.password ? session : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+const savedSession = readPortalSession();
+
 const state = {
   locale: localStorage.getItem('store-portal-locale') || 'ja',
-  code: '',
-  password: '',
+  code: savedSession?.code || '',
+  password: savedSession?.password || '',
   payload: null,
   screen: 'access',
   selectedServiceId: '',
@@ -18,6 +31,7 @@ const ui = {
     product: 'Link Town',
     title: '店舗用',
     language: 'EN',
+    logout: 'ログアウト',
     accessCode: '店舗ID',
     accessPlaceholder: '店舗IDを入力',
     password: 'パスワード',
@@ -62,6 +76,7 @@ const ui = {
     product: 'Link Town',
     title: 'Store',
     language: 'JA',
+    logout: 'Log out',
     accessCode: 'Store ID',
     accessPlaceholder: 'Enter store ID',
     password: 'Password',
@@ -126,6 +141,39 @@ function setState(nextState) {
   Object.assign(state, nextState);
   localStorage.setItem('store-portal-locale', state.locale);
   render();
+}
+
+function savePortalSession() {
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({ code: state.code, password: state.password }));
+  } catch (error) {
+    // The portal still works without reload persistence when storage is unavailable.
+  }
+}
+
+function clearPortalSession() {
+  try {
+    sessionStorage.removeItem(SESSION_KEY);
+  } catch (error) {
+    // Ignore storage restrictions and clear the in-memory state below.
+  }
+}
+
+function logout() {
+  clearPortalSession();
+  setState({
+    code: '',
+    password: '',
+    payload: null,
+    screen: 'access',
+    selectedServiceId: '',
+    manualPayload: '',
+    pendingPayload: '',
+    pendingUser: null,
+    latestResult: null,
+    error: '',
+    errorKind: 'invalid'
+  });
 }
 
 function escapeHtml(value) {
@@ -206,8 +254,13 @@ async function loadPortal(event) {
     const payload = await response.json();
 
     if (!response.ok) {
+      if (response.status === 401) {
+        clearPortalSession();
+      }
       throw new Error(t('invalidCode'));
     }
+
+    savePortalSession();
 
     setState({
       payload,
@@ -355,7 +408,10 @@ function appHeaderTemplate(options = {}) {
           <div class="brand-sub">${escapeHtml(t('title'))}</div>
         </div>
       </div>
-      <button class="locale-btn" type="button" data-action="toggle-locale">${escapeHtml(t('language'))}</button>
+      <div class="header-actions">
+        <button class="logout-btn" type="button" data-action="logout">${escapeHtml(t('logout'))}</button>
+        <button class="locale-btn" type="button" data-action="toggle-locale">${escapeHtml(t('language'))}</button>
+      </div>
     </header>
   `;
 }
@@ -607,6 +663,11 @@ app.addEventListener('click', async (event) => {
     return;
   }
 
+  if (target.dataset.action === 'logout') {
+    logout();
+    return;
+  }
+
   if (target.dataset.action === 'open-products') {
     setState({ screen: 'products', selectedServiceId: '', error: '' });
     return;
@@ -669,3 +730,7 @@ app.addEventListener('input', (event) => {
 
 window.addEventListener('beforeunload', stopCamera);
 render();
+
+if (savedSession) {
+  loadPortal();
+}

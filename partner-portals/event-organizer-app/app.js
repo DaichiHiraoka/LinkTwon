@@ -1,7 +1,20 @@
+const SESSION_KEY = 'linktown-event-portal-session';
+
+function readPortalSession() {
+  try {
+    const session = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null');
+    return session?.code && session?.password ? session : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+const savedSession = readPortalSession();
+
 const state = {
   locale: localStorage.getItem('event-portal-locale') || 'ja',
-  code: '',
-  password: '',
+  code: savedSession?.code || '',
+  password: savedSession?.password || '',
   payload: null,
   screen: 'access',
   selectedEventId: '',
@@ -18,6 +31,7 @@ const ui = {
     title: 'イベント受付',
     product: 'Link Town',
     language: 'EN',
+    logout: 'ログアウト',
     accessCode: 'イベント主催者ID',
     accessPlaceholder: 'イベント主催者IDを入力',
     password: 'パスワード',
@@ -55,6 +69,7 @@ const ui = {
     title: 'Event Check-in',
     product: 'Link Town',
     language: 'JA',
+    logout: 'Log out',
     accessCode: 'Organizer ID',
     accessPlaceholder: 'Enter organizer ID',
     password: 'Password',
@@ -100,6 +115,39 @@ function setState(nextState) {
   Object.assign(state, nextState);
   localStorage.setItem('event-portal-locale', state.locale);
   render();
+}
+
+function savePortalSession() {
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({ code: state.code, password: state.password }));
+  } catch (error) {
+    // The portal still works without reload persistence when storage is unavailable.
+  }
+}
+
+function clearPortalSession() {
+  try {
+    sessionStorage.removeItem(SESSION_KEY);
+  } catch (error) {
+    // Ignore storage restrictions and clear the in-memory state below.
+  }
+}
+
+function logout() {
+  clearPortalSession();
+  setState({
+    code: '',
+    password: '',
+    payload: null,
+    screen: 'access',
+    selectedEventId: '',
+    manualPayload: '',
+    pendingPayload: '',
+    pendingUser: null,
+    latestResult: null,
+    resultById: {},
+    error: ''
+  });
 }
 
 function escapeHtml(value) {
@@ -206,8 +254,13 @@ async function loadPortal(event) {
     const payload = await response.json();
 
     if (!response.ok) {
+      if (response.status === 401) {
+        clearPortalSession();
+      }
       throw new Error(t('invalidCode'));
     }
+
+    savePortalSession();
 
     setState({
       payload,
@@ -364,6 +417,7 @@ function appHeaderTemplate(eventItem, options = {}) {
         </div>
       </div>
       <div class="header-actions">
+        <button class="logout-btn" type="button" data-action="logout">${escapeHtml(t('logout'))}</button>
         <button class="locale-btn" type="button" data-action="toggle-locale">${escapeHtml(t('language'))}</button>
         ${eventItem ? `<div class="counter"><div class="num">${escapeHtml(count)}</div><div class="lbl">${escapeHtml(t('accepted'))}</div></div>` : ''}
       </div>
@@ -620,6 +674,11 @@ app.addEventListener('click', async (event) => {
     return;
   }
 
+  if (target.dataset.action === 'logout') {
+    logout();
+    return;
+  }
+
   if (target.dataset.action === 'open-home') {
     setState({ screen: 'eventList', error: '' });
     return;
@@ -691,3 +750,7 @@ app.addEventListener('input', (event) => {
 });
 
 render();
+
+if (savedSession) {
+  loadPortal();
+}

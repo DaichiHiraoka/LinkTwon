@@ -122,7 +122,8 @@ button {
 }
 
 .icon-btn,
-.locale-btn {
+.locale-btn,
+.logout-btn {
   min-width: 44px;
   height: 44px;
   border: 1px solid var(--line);
@@ -134,6 +135,12 @@ button {
 
 .locale-btn {
   padding: 0 12px;
+}
+
+.logout-btn {
+  padding: 0 12px;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
 }
 
 .counter {
