@@ -9,21 +9,24 @@ const adminPassword = env.DEFAULT_ADMIN_PASSWORD;
 
 const demoEvents = [
   {
-    eventName: 'Demo Community Cleanup',
+    eventName: '地域清掃ボランティア',
+    legacyEventName: 'Demo Community Cleanup',
     eventDatetime: '2026-07-01 10:00:00',
-    location: 'Demo Park',
+    location: '中央公園',
     grantPoints: 60
   },
   {
-    eventName: 'Demo Watch Patrol',
+    eventName: '見守りパトロール',
+    legacyEventName: 'Demo Watch Patrol',
     eventDatetime: '2026-07-03 16:00:00',
-    location: 'Demo Station',
+    location: '駅前商店街',
     grantPoints: 80
   },
   {
-    eventName: 'Demo Food Support',
+    eventName: '子ども食堂サポート',
+    legacyEventName: 'Demo Food Support',
     eventDatetime: '2026-07-08 11:00:00',
-    location: 'Demo Community Center',
+    location: '市民センター',
     grantPoints: 120
   }
 ];
@@ -32,23 +35,29 @@ const demoStores = [
   {
     storeName: 'Link Cafe',
     services: [
-      { serviceName: 'Demo Coffee Coupon', requiredPoints: 120 },
-      { serviceName: 'Demo Cake Coupon', requiredPoints: 180 }
+      { serviceName: 'コーヒー無料券', legacyServiceName: 'Demo Coffee Coupon', requiredPoints: 120 },
+      { serviceName: 'ケーキセット割引', legacyServiceName: 'Demo Cake Coupon', requiredPoints: 180 }
     ]
   },
   {
-    storeName: 'Demo Bakery',
-    services: [{ serviceName: 'Demo Bread Coupon', requiredPoints: 150 }]
+    storeName: 'まちのパン屋',
+    legacyStoreName: 'Demo Bakery',
+    services: [{ serviceName: '焼きたてパン引換券', legacyServiceName: 'Demo Bread Coupon', requiredPoints: 150 }]
   },
   {
-    storeName: 'Demo Market',
-    services: [{ serviceName: 'Demo Vegetable Coupon', requiredPoints: 220 }]
+    storeName: '地域マルシェ',
+    legacyStoreName: 'Demo Market',
+    services: [{ serviceName: '野菜セット引換券', legacyServiceName: 'Demo Vegetable Coupon', requiredPoints: 220 }]
   }
 ];
 
 async function query(sql, params = []) {
   const [rows] = await pool.query(sql, params);
   return rows;
+}
+
+function buildNameLookup(name, legacyName) {
+  return [...new Set([name, legacyName].filter(Boolean))];
 }
 
 async function ensureDemoUser() {
@@ -148,16 +157,24 @@ async function ensureDemoEvents() {
   const eventIds = [];
 
   for (const event of demoEvents) {
-    const existingEvents = await query('SELECT event_id FROM events WHERE event_name = ?', [event.eventName]);
+    const names = buildNameLookup(event.eventName, event.legacyEventName);
+    const placeholders = names.map(() => '?').join(', ');
+    const existingEvents = await query(
+      `SELECT event_id
+       FROM events
+       WHERE event_name IN (${placeholders})
+       ORDER BY CASE WHEN event_name = ? THEN 0 ELSE 1 END, event_id ASC`,
+      [...names, event.eventName]
+    );
     let eventId;
 
     if (existingEvents.length > 0) {
       eventId = existingEvents[0].event_id;
       await query(
         `UPDATE events
-         SET event_datetime = ?, location = ?, grant_points = ?, status = 'active'
+         SET event_name = ?, event_datetime = ?, location = ?, grant_points = ?, status = 'active'
          WHERE event_id = ?`,
-        [event.eventDatetime, event.location, event.grantPoints, eventId]
+        [event.eventName, event.eventDatetime, event.location, event.grantPoints, eventId]
       );
     } else {
       const result = await query(
@@ -179,12 +196,20 @@ async function ensureDemoStoresAndServices() {
   const serviceIds = [];
 
   for (const store of demoStores) {
-    const existingStores = await query('SELECT store_id FROM stores WHERE store_name = ?', [store.storeName]);
+    const storeNames = buildNameLookup(store.storeName, store.legacyStoreName);
+    const storePlaceholders = storeNames.map(() => '?').join(', ');
+    const existingStores = await query(
+      `SELECT store_id
+       FROM stores
+       WHERE store_name IN (${storePlaceholders})
+       ORDER BY CASE WHEN store_name = ? THEN 0 ELSE 1 END, store_id ASC`,
+      [...storeNames, store.storeName]
+    );
     let storeId;
 
     if (existingStores.length > 0) {
       storeId = existingStores[0].store_id;
-      await query('UPDATE stores SET status = ? WHERE store_id = ?', ['active', storeId]);
+      await query('UPDATE stores SET store_name = ?, status = ? WHERE store_id = ?', [store.storeName, 'active', storeId]);
     } else {
       const result = await query(
         `INSERT INTO stores (store_name, status)
@@ -195,18 +220,23 @@ async function ensureDemoStoresAndServices() {
     }
 
     for (const service of store.services) {
+      const serviceNames = buildNameLookup(service.serviceName, service.legacyServiceName);
+      const servicePlaceholders = serviceNames.map(() => '?').join(', ');
       const existingServices = await query(
-        'SELECT service_id FROM services WHERE store_id = ? AND service_name = ?',
-        [storeId, service.serviceName]
+        `SELECT service_id
+         FROM services
+         WHERE store_id = ? AND service_name IN (${servicePlaceholders})
+         ORDER BY CASE WHEN service_name = ? THEN 0 ELSE 1 END, service_id ASC`,
+        [storeId, ...serviceNames, service.serviceName]
       );
 
       if (existingServices.length > 0) {
         const serviceId = existingServices[0].service_id;
         await query(
           `UPDATE services
-           SET required_points = ?, status = 'active'
+           SET service_name = ?, required_points = ?, status = 'active'
            WHERE service_id = ?`,
-          [service.requiredPoints, serviceId]
+          [service.serviceName, service.requiredPoints, serviceId]
         );
         serviceIds.push(serviceId);
       } else {

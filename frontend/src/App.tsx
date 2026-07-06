@@ -576,6 +576,20 @@ function localizeApiText(value: string, language: AppLanguage) {
   return match ? match[language] : value;
 }
 
+const legacyDemoLocationMap: Record<string, string> = {
+  "Demo Park": "中央公園",
+  "Demo Station": "駅前商店街",
+  "Demo Community Center": "市民センター",
+};
+
+function normalizeLocationText(value: string | null | undefined, language: AppLanguage) {
+  if (!value) {
+    return translate("notSet", language);
+  }
+
+  return legacyDemoLocationMap[value] ?? value;
+}
+
 function normalizeLanguage(value: string | undefined | null): AppLanguage {
   return value === "en" ? "en" : "ja";
 }
@@ -645,7 +659,7 @@ function withEventDisplayDate<T extends EventItem>(event: T, displayDate: string
 
 function mapEvent(event: ApiEventItem, displayDate: string, language: AppLanguage): DisplayEvent {
   const parts = formatDateTimeParts(event.event_datetime, displayDate);
-  const location = event.location || translate("notSet", language);
+  const location = normalizeLocationText(event.location, language);
   return {
     id: String(event.event_id),
     date: parts.date,
@@ -662,7 +676,7 @@ function mapEvent(event: ApiEventItem, displayDate: string, language: AppLanguag
 
 function mapParticipation(participation: Participation, displayDate: string, language: AppLanguage): DisplayEvent {
   const parts = formatDateTimeParts(participation.event_datetime, displayDate);
-  const location = participation.location || translate("notSet", language);
+  const location = normalizeLocationText(participation.location, language);
   return {
     id: String(participation.event_id),
     date: parts.date,
