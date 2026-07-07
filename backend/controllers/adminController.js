@@ -1,6 +1,9 @@
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const pool = require('../config/db');
+const { translateText } = require('../services/translationService');
+
+const TRANSLATION_CACHE_LOCALE = 'en';
 
 function isValidStatus(status) {
   return ['active', 'paused'].includes(status);
@@ -37,6 +40,30 @@ async function ensureEventCheckInCode(eventId) {
   };
 }
 
+async function prewarmTranslationCache(contentType, contentId, fields) {
+  const entries = Object.entries(fields).filter(([, value]) => typeof value === 'string' && value.trim() !== '');
+
+  if (entries.length === 0) {
+    return;
+  }
+
+  try {
+    await Promise.all(
+      entries.map(([fieldName, sourceText]) =>
+        translateText({
+          contentType,
+          contentId,
+          fieldName,
+          sourceText,
+          targetLocale: TRANSLATION_CACHE_LOCALE
+        })
+      )
+    );
+  } catch (error) {
+    console.warn(`Failed to prewarm ${contentType} translation cache for ${contentId}:`, error.message);
+  }
+}
+
 async function getEvents(req, res, next) {
   try {
     const [rows] = await pool.query(
@@ -71,6 +98,10 @@ async function createEvent(req, res, next) {
     );
 
     const token = await ensureEventCheckInCode(result.insertId);
+    await prewarmTranslationCache('event', result.insertId, {
+      event_name,
+      location
+    });
 
     res.status(201).json({
       message: 'Event created successfully.',
@@ -97,19 +128,31 @@ async function updateEvent(req, res, next) {
       return res.status(400).json({ message: 'Invalid event status.' });
     }
 
+    const nextEvent = {
+      event_name: event_name || events[0].event_name,
+      event_datetime: event_datetime || events[0].event_datetime,
+      location: location === undefined ? events[0].location : location,
+      grant_points: grant_points === undefined ? events[0].grant_points : Number(grant_points),
+      status: eventStatus
+    };
+
     await pool.query(
       `UPDATE events
        SET event_name = ?, event_datetime = ?, location = ?, grant_points = ?, status = ?
        WHERE event_id = ?`,
       [
-        event_name || events[0].event_name,
-        event_datetime || events[0].event_datetime,
-        location === undefined ? events[0].location : location,
-        grant_points === undefined ? events[0].grant_points : Number(grant_points),
-        eventStatus,
+        nextEvent.event_name,
+        nextEvent.event_datetime,
+        nextEvent.location,
+        nextEvent.grant_points,
+        nextEvent.status,
         id
       ]
     );
+    await prewarmTranslationCache('event', id, {
+      event_name: nextEvent.event_name,
+      location: nextEvent.location
+    });
 
     res.json({ message: 'Event updated successfully.' });
   } catch (error) {
@@ -267,6 +310,9 @@ async function createService(req, res, next) {
        VALUES (?, ?, ?, ?)`,
       [store_id, service_name, Number(required_points || 0), serviceStatus]
     );
+    await prewarmTranslationCache('service', result.insertId, {
+      service_name
+    });
 
     res.status(201).json({
       message: 'Service created successfully.',
@@ -299,18 +345,28 @@ async function updateService(req, res, next) {
       }
     }
 
+    const nextService = {
+      store_id: store_id || services[0].store_id,
+      service_name: service_name || services[0].service_name,
+      required_points: required_points === undefined ? services[0].required_points : Number(required_points),
+      status: serviceStatus
+    };
+
     await pool.query(
       `UPDATE services
        SET store_id = ?, service_name = ?, required_points = ?, status = ?
        WHERE service_id = ?`,
       [
-        store_id || services[0].store_id,
-        service_name || services[0].service_name,
-        required_points === undefined ? services[0].required_points : Number(required_points),
-        serviceStatus,
+        nextService.store_id,
+        nextService.service_name,
+        nextService.required_points,
+        nextService.status,
         id
       ]
     );
+    await prewarmTranslationCache('service', id, {
+      service_name: nextService.service_name
+    });
 
     res.json({ message: 'Service updated successfully.' });
   } catch (error) {

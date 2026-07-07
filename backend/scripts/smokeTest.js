@@ -21,6 +21,7 @@ if (fs.existsSync(process.env.MAIL_OUTBOX_DIR)) {
 }
 
 const app = require('../app');
+const pool = require('../config/db');
 
 async function main() {
   const server = app.listen(0);
@@ -201,6 +202,15 @@ async function main() {
       })
     }, 201);
     assert.ok(createdEvent.check_in_code);
+    const [createdEventTranslations] = await pool.query(
+      `SELECT field_name, translated_text
+       FROM content_translations
+       WHERE content_type = ? AND content_id = ? AND target_locale = ?
+       ORDER BY field_name`,
+      ['event', String(createdEvent.event_id), 'en']
+    );
+    assert.deepStrictEqual(createdEventTranslations.map((translation) => translation.field_name), ['event_name', 'location']);
+    assert.ok(createdEventTranslations.every((translation) => translation.translated_text.startsWith('[en] ')));
     await request(`/admin/events/${createdEvent.event_id}`, {
       method: 'PUT',
       headers: adminAuth,
@@ -217,6 +227,15 @@ async function main() {
       headers: adminAuth,
       body: JSON.stringify({ store_id: store.store_id, service_name: 'Smoke Coupon', required_points: 10 })
     }, 201);
+    const [createdServiceTranslations] = await pool.query(
+      `SELECT field_name, translated_text
+       FROM content_translations
+       WHERE content_type = ? AND content_id = ? AND target_locale = ?`,
+      ['service', String(createdService.service_id), 'en']
+    );
+    assert.strictEqual(createdServiceTranslations.length, 1);
+    assert.strictEqual(createdServiceTranslations[0].field_name, 'service_name');
+    assert.ok(createdServiceTranslations[0].translated_text.startsWith('[en] '));
     const servicesAfterAdminCreate = await request('/points/services', { headers: userAuth });
     assert.ok(servicesAfterAdminCreate.some((service) => service.service_id === createdService.service_id));
 
