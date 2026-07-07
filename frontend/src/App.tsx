@@ -57,7 +57,6 @@ import {
 } from "./components/Icons";
 import {
   events as fallbackEvents,
-  productCategories as fallbackProductCategories,
   scheduledEvent as fallbackScheduledEvent,
   user as fallbackUser,
   type EventItem,
@@ -590,6 +589,10 @@ function stripMockTranslationPrefix(value: string) {
   return value.replace(/^\[[a-z]{2}\]\s*/i, "");
 }
 
+function displayApiText(value: string) {
+  return stripMockTranslationPrefix(value);
+}
+
 function localizeApiText(value: string, language: AppLanguage) {
   const normalizedValue = stripMockTranslationPrefix(value);
   const match = localizedContent.find((entry) => entry.ja === normalizedValue || entry.en === normalizedValue);
@@ -607,7 +610,7 @@ function normalizeLocationText(value: string | null | undefined, language: AppLa
     return translate("notSet", language);
   }
 
-  const sourceText = language === "ja" ? legacyDemoLocationMap[value] ?? value : value;
+  const sourceText = displayApiText(language === "ja" ? legacyDemoLocationMap[value] ?? value : value);
   return localizeApiText(sourceText, language);
 }
 
@@ -684,7 +687,7 @@ function mapEvent(event: ApiEventItem, displayDate: string, language: AppLanguag
   return {
     id: String(event.event_id),
     date: parts.date,
-    title: localizeApiText(event.event_name, language),
+    title: displayApiText(event.event_name),
     points: event.grant_points,
     location,
     time: parts.time,
@@ -701,7 +704,7 @@ function mapParticipation(participation: Participation, displayDate: string, lan
   return {
     id: String(participation.event_id),
     date: parts.date,
-    title: localizeApiText(participation.event_name, language),
+    title: displayApiText(participation.event_name),
     points: participation.granted_points,
     location,
     time: parts.time,
@@ -715,7 +718,7 @@ function mapServices(services: ServiceItem[], language: AppLanguage): ProductCat
   const pickupMapQuery = `${PICKUP_LOCATION.lat},${PICKUP_LOCATION.lng}`;
 
   for (const service of services) {
-    const serviceName = localizeApiText(service.service_name, language);
+    const serviceName = displayApiText(service.service_name);
     const storeName = service.store_name;
     const storeAddress = language === "en" ? PICKUP_LOCATION.addressEn : PICKUP_LOCATION.addressJa;
     const product: ProductItem = {
@@ -748,7 +751,7 @@ function mapServices(services: ServiceItem[], language: AppLanguage): ProductCat
 function localizeDisplayEvent(event: DisplayEvent, language: AppLanguage): DisplayEvent {
   return {
     ...event,
-    title: localizeApiText(event.title, language),
+    title: event.rawEventId ? displayApiText(event.title) : localizeApiText(event.title, language),
     location: event.location,
   };
 }
@@ -759,7 +762,7 @@ function localizeProduct(product: ProductItem, language: AppLanguage): ProductIt
 
   return {
     ...product,
-    name: localizeApiText(product.name, language),
+    name: displayApiText(product.name),
     storeName,
     storeAddress,
     mapQuery: `${PICKUP_LOCATION.lat},${PICKUP_LOCATION.lng}`,
@@ -769,7 +772,7 @@ function localizeProduct(product: ProductItem, language: AppLanguage): ProductIt
 function localizeProductCategories(categories: ProductCategory[], language: AppLanguage): ProductCategory[] {
   return categories.map((category) => ({
     ...category,
-    name: localizeApiText(category.name, language),
+    name: displayApiText(category.name),
     products: category.products.map((product) => localizeProduct(product, language)),
   }));
 }
@@ -1346,10 +1349,11 @@ export function App() {
         },
         session.token,
       );
-      await loadApplicationData(session);
     } catch (error) {
       console.error(error);
     }
+
+    await loadApplicationData(session);
   }
 
   function handleSettingsChange(nextSettings: UserSettings) {
@@ -1416,7 +1420,7 @@ export function App() {
       return {
         ok: true,
         message: formatTranslation("exchangeSuccessMessage", appLanguage, {
-          serviceName: product.name || localizeApiText(response.service_name, appLanguage),
+          serviceName: product.name || displayApiText(response.service_name),
           points: response.used_points,
           balance: response.current_points,
         }),
@@ -3253,7 +3257,7 @@ function HistoryScreen({
             {participations.map((entry) => (
               <li key={entry.participation_id} className="history-row">
                 <div>
-                  <strong>{entry.event_name}</strong>
+                  <strong>{displayApiText(entry.event_name)}</strong>
                   <small>{formatTimestamp(entry.participated_at)}</small>
                 </div>
                 <span className="history-row__delta history-row__delta--plus">+{entry.granted_points}pt</span>
@@ -3274,7 +3278,7 @@ function HistoryScreen({
                     {entry.type === "grant"
                       ? translate("eventPointGrant", language)
                       : entry.service_name
-                        ? localizeApiText(entry.service_name, language)
+                        ? displayApiText(entry.service_name)
                         : translate("pointExchangeTitle", language)}
                   </strong>
                   <small>{formatTimestamp(entry.created_at)}</small>
@@ -3646,7 +3650,7 @@ function buildWalletHistoryItems({
         id: `participation-${entry.participation_id}`,
         kind: "event" as const,
         label: translate("eventHistoryLabel", language),
-        title: localizeApiText(entry.event_name, language),
+        title: displayApiText(entry.event_name),
         meta: `${eventTime.date} ${eventTime.time}`,
         delta: entry.granted_points,
         date,
@@ -3672,7 +3676,7 @@ function buildWalletHistoryItems({
           id: `transaction-${entry.transaction_id}`,
           kind: "exchange" as const,
           label: translate("exchangeHistoryLabel", language),
-          title: entry.service_name ? localizeApiText(entry.service_name, language) : translate("pointExchangeTitle", language),
+          title: entry.service_name ? displayApiText(entry.service_name) : translate("pointExchangeTitle", language),
           meta: `${formatWalletHistoryDate(date)} ${formatWalletHistoryTime(date)}`,
           delta: -Math.abs(entry.points),
           date,
