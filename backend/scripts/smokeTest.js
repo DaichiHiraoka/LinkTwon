@@ -112,7 +112,8 @@ async function main() {
     assert.ok(likedEvents.length > 0);
     const localizedLikedEvents = await request(`/users/${userId}/liked-events?locale=en`, { headers: userAuth });
     assert.ok(localizedLikedEvents[0].event_name.startsWith('[en] '));
-    assert.ok(localizedLikedEvents[0].location.startsWith('[en] '));
+    assert.strictEqual(localizedLikedEvents[0].location, likedEvents[0].location);
+    assert.ok(localizedLikedEvents[0].description.startsWith('[en] '));
     const checkIn = await request('/events/check-in', {
       method: 'POST',
       headers: userAuth,
@@ -142,6 +143,7 @@ async function main() {
     assert.ok(localizedServices.length > 0);
     assert.ok(localizedServices[0].service_name.startsWith('[en] '));
     assert.ok(!localizedServices[0].store_name.startsWith('[en] '));
+    assert.ok(localizedServices[0].description.startsWith('[en] '));
     await request(`/points/services/${services[0].service_id}/favorite`, { method: 'POST', headers: userAuth }, 201);
     const favorites = await request(`/users/${userId}/favorite-services`, { headers: userAuth });
     assert.ok(favorites.length > 0);
@@ -163,6 +165,20 @@ async function main() {
       body: JSON.stringify({ points: 50, payment_method_id: payment[0].payment_method_id, simulate_status: 'paid' })
     }, 201);
     assert.strictEqual(purchase.status, 'paid');
+
+    const pointsBeforeFailedPurchase = (await request(`/users/${userId}/points`, { headers: userAuth })).points;
+    const failedPaymentMethod = await request(`/users/${userId}/payment-methods`, {
+      method: 'POST',
+      headers: userAuth,
+      body: JSON.stringify({ label: 'Declined test card', brand: 'mock-fail', last4: '0002' })
+    }, 201);
+    const failedPurchase = await request('/points/purchase', {
+      method: 'POST',
+      headers: userAuth,
+      body: JSON.stringify({ points: 50, payment_method_id: failedPaymentMethod.payment_method_id })
+    }, 201);
+    assert.strictEqual(failedPurchase.status, 'failed');
+    assert.strictEqual(failedPurchase.current_points, pointsBeforeFailedPurchase);
 
     const settings = await request(`/users/${userId}/settings`, { headers: userAuth });
     assert.strictEqual(settings.language, 'ja');
@@ -198,12 +214,21 @@ async function main() {
         event_name: 'Smoke Event',
         event_datetime: '2026-07-01 10:00:00',
         location: 'Smoke Park',
-        grant_points: 40
+        grant_points: 40,
+        description: 'Smoke event description',
+        activity: 'Smoke event activity',
+        notes: 'Smoke event notes'
       })
     }, 201);
     assert.ok(createdEvent.check_in_code);
-    const [createdEventRows] = await pool.query('SELECT event_datetime FROM events WHERE event_id = ?', [createdEvent.event_id]);
+    const [createdEventRows] = await pool.query(
+      'SELECT event_datetime, description, activity, notes FROM events WHERE event_id = ?',
+      [createdEvent.event_id]
+    );
     assert.strictEqual(createdEventRows[0].event_datetime, '2026-07-01 10:00:00');
+    assert.strictEqual(createdEventRows[0].description, 'Smoke event description');
+    assert.strictEqual(createdEventRows[0].activity, 'Smoke event activity');
+    assert.strictEqual(createdEventRows[0].notes, 'Smoke event notes');
     const [createdEventTranslations] = await pool.query(
       `SELECT field_name, translated_text
        FROM content_translations
@@ -211,7 +236,7 @@ async function main() {
        ORDER BY field_name`,
       ['event', String(createdEvent.event_id), 'en']
     );
-    assert.deepStrictEqual(createdEventTranslations.map((translation) => translation.field_name), ['event_name', 'location']);
+    assert.deepStrictEqual(createdEventTranslations.map((translation) => translation.field_name), ['description', 'event_name']);
     assert.ok(createdEventTranslations.every((translation) => translation.translated_text.startsWith('[en] ')));
     const [createdEventOrganizerAssignments] = await pool.query(
       `SELECT organizer_id
@@ -229,12 +254,17 @@ async function main() {
     const store = await request('/admin/stores', {
       method: 'POST',
       headers: adminAuth,
-      body: JSON.stringify({ store_name: 'Smoke Store' })
+      body: JSON.stringify({ store_name: 'Smoke Store', store_address: 'Smoke Address', map_query: 'Smoke Map Query' })
     }, 201);
     const createdService = await request('/admin/services', {
       method: 'POST',
       headers: adminAuth,
-      body: JSON.stringify({ store_id: store.store_id, service_name: 'Smoke Coupon', required_points: 10 })
+      body: JSON.stringify({
+        store_id: store.store_id,
+        service_name: 'Smoke Coupon',
+        description: 'Smoke coupon description',
+        required_points: 10
+      })
     }, 201);
     const [createdServiceTranslations] = await pool.query(
       `SELECT field_name, translated_text
@@ -242,11 +272,15 @@ async function main() {
        WHERE content_type = ? AND content_id = ? AND target_locale = ?`,
       ['service', String(createdService.service_id), 'en']
     );
-    assert.strictEqual(createdServiceTranslations.length, 1);
-    assert.strictEqual(createdServiceTranslations[0].field_name, 'service_name');
-    assert.ok(createdServiceTranslations[0].translated_text.startsWith('[en] '));
+    assert.strictEqual(createdServiceTranslations.length, 2);
+    assert.deepStrictEqual(createdServiceTranslations.map((translation) => translation.field_name).sort(), ['description', 'service_name']);
+    assert.ok(createdServiceTranslations.every((translation) => translation.translated_text.startsWith('[en] ')));
     const servicesAfterAdminCreate = await request('/points/services', { headers: userAuth });
-    assert.ok(servicesAfterAdminCreate.some((service) => service.service_id === createdService.service_id));
+    const createdServiceForUser = servicesAfterAdminCreate.find((service) => service.service_id === createdService.service_id);
+    assert.ok(createdServiceForUser);
+    assert.strictEqual(createdServiceForUser.description, 'Smoke coupon description');
+    assert.strictEqual(createdServiceForUser.store_address, 'Smoke Address');
+    assert.strictEqual(createdServiceForUser.map_query, 'Smoke Map Query');
 
     const users = await request('/admin/users?search=demo', { headers: adminAuth });
     assert.ok(users.length > 0);

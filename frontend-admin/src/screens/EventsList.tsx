@@ -112,6 +112,9 @@ export function EventsList({
                 <dd>{detail.status === "paused" ? "停止中" : "公開中"}</dd>
               </div>
             </dl>
+            {detail.description ? <p>概要: {detail.description}</p> : null}
+            {detail.activity ? <p>活動内容: {detail.activity}</p> : null}
+            {detail.notes ? <p>注意事項: {detail.notes}</p> : null}
             <div className="detail__actions">
               <button type="button" className="btn btn--ghost" onClick={() => showCode(detail)}>
                 QR / Check-in code
@@ -201,6 +204,9 @@ type EventFormPayload = {
   event_datetime: string;
   location?: string;
   grant_points: number;
+  description?: string;
+  activity?: string;
+  notes?: string;
   status?: "active" | "paused";
 };
 
@@ -221,6 +227,9 @@ function EventFormModal({
   const [datetime, setDatetime] = useState(initial?.event_datetime ?? "");
   const [location, setLocation] = useState(initial?.location ?? "");
   const [points, setPoints] = useState(initial?.grant_points ?? 50);
+  const [description, setDescription] = useState(initial?.description ?? "");
+  const [activity, setActivity] = useState(initial?.activity ?? "");
+  const [notes, setNotes] = useState(initial?.notes ?? "");
   const [status, setStatus] = useState<"active" | "paused">(initial?.status ?? "active");
 
   // sync initial when changes
@@ -230,6 +239,9 @@ function EventFormModal({
     setDatetime(initial?.event_datetime ?? "");
     setLocation(initial?.location ?? "");
     setPoints(initial?.grant_points ?? 50);
+    setDescription(initial?.description ?? "");
+    setActivity(initial?.activity ?? "");
+    setNotes(initial?.notes ?? "");
     setStatus(initial?.status ?? "active");
   });
 
@@ -241,6 +253,9 @@ function EventFormModal({
         event_datetime: datetime,
         location: location.trim() || undefined,
         grant_points: Number(points),
+        description: description.trim() || undefined,
+        activity: activity.trim() || undefined,
+        notes: notes.trim() || undefined,
         status,
       },
       initial?.event_id,
@@ -265,6 +280,18 @@ function EventFormModal({
         <label className="form__field">
           <span>付与ポイント</span>
           <input type="number" min={0} value={points} onChange={(event) => setPoints(Number(event.target.value))} required />
+        </label>
+        <label className="form__field">
+          <span>概要</span>
+          <textarea value={description} onChange={(event) => setDescription(event.target.value)} />
+        </label>
+        <label className="form__field">
+          <span>活動内容</span>
+          <textarea value={activity} onChange={(event) => setActivity(event.target.value)} />
+        </label>
+        <label className="form__field">
+          <span>注意事項</span>
+          <textarea value={notes} onChange={(event) => setNotes(event.target.value)} />
         </label>
         <label className="form__field">
           <span>状態</span>

@@ -104,6 +104,8 @@ export function StoresList({
               <span>登録日: {formatDate(detail.created_at)}</span>
             </div>
             <h3 className="detail__title">{detail.store_name}</h3>
+            {detail.store_address ? <p>住所: {detail.store_address}</p> : null}
+            {detail.map_query ? <p>地図検索値: {detail.map_query}</p> : null}
             <p>
               取扱いサービス: {(serviceNamesByStore.get(detail.store_id) ?? []).join(" / ") || "なし"}
             </p>
@@ -173,20 +175,35 @@ function StoreFormModal({
   open: boolean;
   initial: StoreItem | null;
   onClose: () => void;
-  onSubmit: (payload: { store_name: string; status?: "active" | "paused" }, storeId?: number) => Promise<void>;
+  onSubmit: (
+    payload: { store_name: string; store_address?: string; map_query?: string; status?: "active" | "paused" },
+    storeId?: number,
+  ) => Promise<void>;
   submitting: boolean;
 }) {
   const [name, setName] = useState(initial?.store_name ?? "");
+  const [address, setAddress] = useState(initial?.store_address ?? "");
+  const [mapQuery, setMapQuery] = useState(initial?.map_query ?? "");
   const [status, setStatus] = useState<"active" | "paused">(initial?.status ?? "active");
 
   useResetForm(initial?.store_id ?? "new", () => {
     setName(initial?.store_name ?? "");
+    setAddress(initial?.store_address ?? "");
+    setMapQuery(initial?.map_query ?? "");
     setStatus(initial?.status ?? "active");
   });
 
   async function handle(event: FormEvent) {
     event.preventDefault();
-    await onSubmit({ store_name: name.trim(), status }, initial?.store_id);
+    await onSubmit(
+      {
+        store_name: name.trim(),
+        store_address: address.trim() || undefined,
+        map_query: mapQuery.trim() || undefined,
+        status,
+      },
+      initial?.store_id,
+    );
   }
 
   return (
@@ -195,6 +212,14 @@ function StoreFormModal({
         <label className="form__field">
           <span>店名</span>
           <input value={name} onChange={(event) => setName(event.target.value)} required />
+        </label>
+        <label className="form__field">
+          <span>住所</span>
+          <input value={address} onChange={(event) => setAddress(event.target.value)} />
+        </label>
+        <label className="form__field">
+          <span>地図検索値</span>
+          <input value={mapQuery} onChange={(event) => setMapQuery(event.target.value)} />
         </label>
         <label className="form__field">
           <span>状態</span>

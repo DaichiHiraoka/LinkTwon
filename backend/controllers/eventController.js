@@ -7,20 +7,21 @@ async function getEvents(req, res, next) {
     const locale = req.query.locale === 'en' ? 'en' : 'ja';
     const [rows] = await pool.query(
       `SELECT e.event_id, e.event_name, e.event_datetime, e.location, e.grant_points,
-              e.status,
+              e.description, e.activity, e.notes, e.status,
               CASE WHEN el_self.like_id IS NULL THEN 0 ELSE 1 END AS liked,
               COUNT(el_all.like_id) AS like_count
        FROM events e
        LEFT JOIN event_likes el_self ON e.event_id = el_self.event_id AND el_self.user_id = ?
        LEFT JOIN event_likes el_all ON e.event_id = el_all.event_id
        WHERE e.status = 'active'
-       GROUP BY e.event_id, e.event_name, e.event_datetime, e.location, e.grant_points, e.status, el_self.like_id
+       GROUP BY e.event_id, e.event_name, e.event_datetime, e.location, e.grant_points,
+                e.description, e.activity, e.notes, e.status, el_self.like_id
        ORDER BY e.event_datetime DESC`,
       [userId]
     );
     const localizedRows =
       locale === 'en'
-        ? await localizeRows(rows, { contentType: 'event', idField: 'event_id', fields: ['event_name', 'location'] }, locale)
+        ? await localizeRows(rows, { contentType: 'event', idField: 'event_id', fields: ['event_name', 'description'] }, locale)
         : rows;
 
     res.json(localizedRows);

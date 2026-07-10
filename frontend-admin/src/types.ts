@@ -15,6 +15,9 @@ export type EventItem = {
   event_datetime: string;
   location: string | null;
   grant_points: number;
+  description?: string | null;
+  activity?: string | null;
+  notes?: string | null;
   image_url?: string | null;
   status?: "active" | "paused";
   liked?: boolean | number;
@@ -26,6 +29,8 @@ export type EventItem = {
 export type StoreItem = {
   store_id: number;
   store_name: string;
+  store_address?: string | null;
+  map_query?: string | null;
   status: "active" | "paused";
   created_at: string;
 };
@@ -33,6 +38,7 @@ export type StoreItem = {
 export type ServiceItem = {
   service_id: number;
   service_name: string;
+  description?: string | null;
   required_points: number;
   store_id: number;
   store_name: string;

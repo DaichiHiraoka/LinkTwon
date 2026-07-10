@@ -163,6 +163,7 @@ ngrok-doc-share.*.log
 
 # Local private notes
 local-notes/
+DEMO_PASSWORDS.md
 
 # Codex local attachments
 .codex-remote-attachments/

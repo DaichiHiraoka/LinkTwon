@@ -18,6 +18,9 @@ export type EventItem = {
   points: number;
   location: string;
   time: string;
+  description?: string;
+  activity?: string;
+  notes?: string;
   imageUrl?: string;
 };
 
@@ -33,6 +36,7 @@ export type ProductItem = {
   storeName: string;
   storeAddress: string;
   mapQuery: string;
+  description?: string;
   requiredPoints?: number;
   imageUrl?: string;
   favorited?: boolean;

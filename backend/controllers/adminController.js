@@ -115,7 +115,7 @@ async function getEvents(req, res, next) {
 
 async function createEvent(req, res, next) {
   try {
-    const { event_name, event_datetime, location, grant_points, status } = req.body;
+    const { event_name, event_datetime, location, grant_points, description, activity, notes, status } = req.body;
     const eventStatus = status || 'active';
 
     if (!event_name || !event_datetime) {
@@ -128,16 +128,25 @@ async function createEvent(req, res, next) {
 
     const normalizedEventDatetime = normalizeEventDateTime(event_datetime);
     const [result] = await pool.query(
-      `INSERT INTO events (event_name, event_datetime, location, grant_points, status)
-       VALUES (?, ?, ?, ?, ?)`,
-      [event_name, normalizedEventDatetime, location || null, Number(grant_points || 0), eventStatus]
+      `INSERT INTO events (event_name, event_datetime, location, grant_points, description, activity, notes, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        event_name,
+        normalizedEventDatetime,
+        location || null,
+        Number(grant_points || 0),
+        description || null,
+        activity || null,
+        notes || null,
+        eventStatus
+      ]
     );
 
     const token = await ensureEventCheckInCode(result.insertId);
     await assignEventToExistingOrganizers(result.insertId);
     await prewarmTranslationCache('event', result.insertId, {
       event_name,
-      location
+      description
     });
 
     res.status(201).json({
@@ -153,7 +162,7 @@ async function createEvent(req, res, next) {
 async function updateEvent(req, res, next) {
   try {
     const { id } = req.params;
-    const { event_name, event_datetime, location, grant_points, status } = req.body;
+    const { event_name, event_datetime, location, grant_points, description, activity, notes, status } = req.body;
 
     const [events] = await pool.query('SELECT * FROM events WHERE event_id = ?', [id]);
     if (events.length === 0) {
@@ -170,25 +179,31 @@ async function updateEvent(req, res, next) {
       event_datetime: event_datetime ? normalizeEventDateTime(event_datetime) : events[0].event_datetime,
       location: location === undefined ? events[0].location : location,
       grant_points: grant_points === undefined ? events[0].grant_points : Number(grant_points),
+      description: description === undefined ? events[0].description : description,
+      activity: activity === undefined ? events[0].activity : activity,
+      notes: notes === undefined ? events[0].notes : notes,
       status: eventStatus
     };
 
     await pool.query(
       `UPDATE events
-       SET event_name = ?, event_datetime = ?, location = ?, grant_points = ?, status = ?
+       SET event_name = ?, event_datetime = ?, location = ?, grant_points = ?, description = ?, activity = ?, notes = ?, status = ?
        WHERE event_id = ?`,
       [
         nextEvent.event_name,
         nextEvent.event_datetime,
         nextEvent.location,
         nextEvent.grant_points,
+        nextEvent.description,
+        nextEvent.activity,
+        nextEvent.notes,
         nextEvent.status,
         id
       ]
     );
     await prewarmTranslationCache('event', id, {
       event_name: nextEvent.event_name,
-      location: nextEvent.location
+      description: nextEvent.description
     });
 
     res.json({ message: 'Event updated successfully.' });
@@ -243,7 +258,7 @@ async function getStores(req, res, next) {
 
 async function createStore(req, res, next) {
   try {
-    const { store_name, status } = req.body;
+    const { store_name, store_address, map_query, status } = req.body;
     const storeStatus = status || 'active';
 
     if (!store_name) {
@@ -255,8 +270,8 @@ async function createStore(req, res, next) {
     }
 
     const [result] = await pool.query(
-      `INSERT INTO stores (store_name, status) VALUES (?, ?)`,
-      [store_name, storeStatus]
+      `INSERT INTO stores (store_name, store_address, map_query, status) VALUES (?, ?, ?, ?)`,
+      [store_name, store_address || null, map_query || null, storeStatus]
     );
 
     res.status(201).json({
@@ -271,7 +286,7 @@ async function createStore(req, res, next) {
 async function updateStore(req, res, next) {
   try {
     const { id } = req.params;
-    const { store_name, status } = req.body;
+    const { store_name, store_address, map_query, status } = req.body;
 
     const [stores] = await pool.query('SELECT * FROM stores WHERE store_id = ?', [id]);
     if (stores.length === 0) {
@@ -284,8 +299,16 @@ async function updateStore(req, res, next) {
     }
 
     await pool.query(
-      `UPDATE stores SET store_name = ?, status = ? WHERE store_id = ?`,
-      [store_name || stores[0].store_name, storeStatus, id]
+      `UPDATE stores
+       SET store_name = ?, store_address = ?, map_query = ?, status = ?
+       WHERE store_id = ?`,
+      [
+        store_name || stores[0].store_name,
+        store_address === undefined ? stores[0].store_address : store_address || null,
+        map_query === undefined ? stores[0].map_query : map_query || null,
+        storeStatus,
+        id
+      ]
     );
 
     res.json({ message: 'Store updated successfully.' });
@@ -326,7 +349,7 @@ async function getServicesAdmin(req, res, next) {
 
 async function createService(req, res, next) {
   try {
-    const { store_id, service_name, required_points, status } = req.body;
+    const { store_id, service_name, description, required_points, status } = req.body;
     const serviceStatus = status || 'active';
 
     if (!store_id || !service_name) {
@@ -343,12 +366,13 @@ async function createService(req, res, next) {
     }
 
     const [result] = await pool.query(
-      `INSERT INTO services (store_id, service_name, required_points, status)
-       VALUES (?, ?, ?, ?)`,
-      [store_id, service_name, Number(required_points || 0), serviceStatus]
+      `INSERT INTO services (store_id, service_name, description, required_points, status)
+       VALUES (?, ?, ?, ?, ?)`,
+      [store_id, service_name, description || null, Number(required_points || 0), serviceStatus]
     );
     await prewarmTranslationCache('service', result.insertId, {
-      service_name
+      service_name,
+      description
     });
 
     res.status(201).json({
@@ -363,7 +387,7 @@ async function createService(req, res, next) {
 async function updateService(req, res, next) {
   try {
     const { id } = req.params;
-    const { store_id, service_name, required_points, status } = req.body;
+    const { store_id, service_name, description, required_points, status } = req.body;
 
     const [services] = await pool.query('SELECT * FROM services WHERE service_id = ?', [id]);
     if (services.length === 0) {
@@ -385,24 +409,27 @@ async function updateService(req, res, next) {
     const nextService = {
       store_id: store_id || services[0].store_id,
       service_name: service_name || services[0].service_name,
+      description: description === undefined ? services[0].description : description,
       required_points: required_points === undefined ? services[0].required_points : Number(required_points),
       status: serviceStatus
     };
 
     await pool.query(
       `UPDATE services
-       SET store_id = ?, service_name = ?, required_points = ?, status = ?
+       SET store_id = ?, service_name = ?, description = ?, required_points = ?, status = ?
        WHERE service_id = ?`,
       [
         nextService.store_id,
         nextService.service_name,
+        nextService.description,
         nextService.required_points,
         nextService.status,
         id
       ]
     );
     await prewarmTranslationCache('service', id, {
-      service_name: nextService.service_name
+      service_name: nextService.service_name,
+      description: nextService.description
     });
 
     res.json({ message: 'Service updated successfully.' });

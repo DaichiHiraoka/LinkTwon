@@ -31,13 +31,13 @@ function getRequestLocale(req) {
 
 async function localizeEventRows(rows, locale) {
   return locale === 'en'
-    ? localizeRows(rows, { contentType: 'event', idField: 'event_id', fields: ['event_name', 'location'] }, locale)
+    ? localizeRows(rows, { contentType: 'event', idField: 'event_id', fields: ['event_name', 'description'] }, locale)
     : rows;
 }
 
 async function localizeServiceRows(rows, locale) {
   return locale === 'en'
-    ? localizeRows(rows, { contentType: 'service', idField: 'service_id', fields: ['service_name'] }, locale)
+    ? localizeRows(rows, { contentType: 'service', idField: 'service_id', fields: ['service_name', 'description'] }, locale)
     : rows;
 }
 
@@ -155,12 +155,13 @@ async function getLikedEvents(req, res, next) {
 
     const [rows] = await pool.query(
       `SELECT e.event_id, e.event_name, e.event_datetime, e.location, e.grant_points,
-              e.status, 1 AS liked, COUNT(el_all.like_id) AS like_count
+              e.description, e.activity, e.notes, e.status, 1 AS liked, COUNT(el_all.like_id) AS like_count
        FROM event_likes el
        JOIN events e ON el.event_id = e.event_id
        LEFT JOIN event_likes el_all ON e.event_id = el_all.event_id
        WHERE el.user_id = ?
-       GROUP BY e.event_id, e.event_name, e.event_datetime, e.location, e.grant_points, e.status
+       GROUP BY e.event_id, e.event_name, e.event_datetime, e.location, e.grant_points,
+                e.description, e.activity, e.notes, e.status
        ORDER BY el.created_at DESC`,
       [id]
     );
@@ -181,8 +182,8 @@ async function getFavoriteServices(req, res, next) {
     }
 
     const [rows] = await pool.query(
-      `SELECT s.service_id, s.service_name, s.required_points, s.status,
-              st.store_id, st.store_name, 1 AS favorited
+      `SELECT s.service_id, s.service_name, s.description, s.required_points, s.status,
+              st.store_id, st.store_name, st.store_address, st.map_query, 1 AS favorited
        FROM service_favorites sf
        JOIN services s ON sf.service_id = s.service_id
        JOIN stores st ON s.store_id = st.store_id

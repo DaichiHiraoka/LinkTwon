@@ -56,8 +56,6 @@ import {
   WalletIcon,
 } from "./components/Icons";
 import {
-  events as fallbackEvents,
-  scheduledEvent as fallbackScheduledEvent,
   user as fallbackUser,
   type EventItem,
   type ProductCategory,
@@ -81,15 +79,6 @@ import type {
 const SESSION_STORAGE_KEY = "link-town-session";
 const DUMMY_EVENT_IMAGE_URL = "/dummy-event-image.svg";
 const DUMMY_PRODUCT_IMAGE_URL = "/dummy-product-image.svg";
-const PICKUP_LOCATION = {
-  labelJa: "大阪国際工科専門職大学",
-  labelEn: "International Professional University of Technology in Osaka",
-  addressJa: "〒530-0001 大阪府大阪市北区梅田3-3-1",
-  addressEn: "3-3-1 Umeda, Kita-ku, Osaka 530-0001, Japan",
-  lat: 34.699799,
-  lng: 135.49311,
-} as const;
-
 const SCREEN_ROUTES: Record<Screen, string> = {
   login: "/login",
   home: "/app",
@@ -599,19 +588,12 @@ function localizeApiText(value: string, language: AppLanguage) {
   return match ? match[language] : normalizedValue;
 }
 
-const legacyDemoLocationMap: Record<string, string> = {
-  "Demo Park": "中央公園",
-  "Demo Station": "駅前商店街",
-  "Demo Community Center": "市民センター",
-};
-
 function normalizeLocationText(value: string | null | undefined, language: AppLanguage) {
   if (!value) {
     return translate("notSet", language);
   }
 
-  const sourceText = displayApiText(language === "ja" ? legacyDemoLocationMap[value] ?? value : value);
-  return localizeApiText(sourceText, language);
+  return displayApiText(value);
 }
 
 function normalizeLanguage(value: string | undefined | null): AppLanguage {
@@ -695,6 +677,9 @@ function mapEvent(event: ApiEventItem, displayDate: string, language: AppLanguag
     rawEventId: event.event_id,
     liked: toBoolean(event.liked),
     likeCount: event.like_count,
+    description: displayApiText(event.description ?? ""),
+    activity: displayApiText(event.activity ?? ""),
+    notes: displayApiText(event.notes ?? ""),
   };
 }
 
@@ -713,20 +698,21 @@ function mapParticipation(participation: Participation, displayDate: string, lan
   };
 }
 
-function mapServices(services: ServiceItem[], language: AppLanguage): ProductCategory[] {
+function mapServices(services: ServiceItem[], _language: AppLanguage): ProductCategory[] {
   const grouped = new Map<number, ProductCategory>();
-  const pickupMapQuery = `${PICKUP_LOCATION.lat},${PICKUP_LOCATION.lng}`;
 
   for (const service of services) {
     const serviceName = displayApiText(service.service_name);
     const storeName = service.store_name;
-    const storeAddress = language === "en" ? PICKUP_LOCATION.addressEn : PICKUP_LOCATION.addressJa;
+    const storeAddress = service.store_address || "";
+    const mapQuery = service.map_query || [storeName, storeAddress].filter(Boolean).join(" ");
     const product: ProductItem = {
       id: String(service.service_id),
       name: serviceName,
       storeName,
       storeAddress,
-      mapQuery: pickupMapQuery,
+      mapQuery,
+      description: displayApiText(service.description ?? ""),
       requiredPoints: service.required_points,
       imageUrl: service.image_url || DUMMY_PRODUCT_IMAGE_URL,
       favorited: toBoolean(service.favorited),
@@ -756,16 +742,14 @@ function localizeDisplayEvent(event: DisplayEvent, language: AppLanguage): Displ
   };
 }
 
-function localizeProduct(product: ProductItem, language: AppLanguage): ProductItem {
+function localizeProduct(product: ProductItem, _language: AppLanguage): ProductItem {
   const storeName = product.storeName;
-  const storeAddress = language === "en" ? PICKUP_LOCATION.addressEn : PICKUP_LOCATION.addressJa;
 
   return {
     ...product,
     name: displayApiText(product.name),
     storeName,
-    storeAddress,
-    mapQuery: `${PICKUP_LOCATION.lat},${PICKUP_LOCATION.lng}`,
+    description: displayApiText(product.description ?? ""),
   };
 }
 
@@ -1133,14 +1117,10 @@ export function App() {
   const [session, setSession] = useState<Session | null>(initialSession);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [settings, setSettings] = useState<UserSettings | null>(null);
-  const [recommendedEvents, setRecommendedEvents] = useState<DisplayEvent[]>(() =>
-    fallbackEvents.map((event) => withEventDisplayDate(event, eventDisplayDate)),
-  );
-  const [likedEvents, setLikedEvents] = useState<DisplayEvent[]>(() =>
-    fallbackEvents.slice(0, 1).map((event) => withEventDisplayDate(event, eventDisplayDate)),
-  );
+  const [recommendedEvents, setRecommendedEvents] = useState<DisplayEvent[]>([]);
+  const [likedEvents, setLikedEvents] = useState<DisplayEvent[]>([]);
   const [participatedEvents, setParticipatedEvents] = useState<DisplayEvent[]>([]);
-  const [scheduledEvent, setScheduledEvent] = useState<DisplayEvent>(() => withEventDisplayDate(fallbackScheduledEvent, eventDisplayDate));
+  const [scheduledEvent, setScheduledEvent] = useState<DisplayEvent | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<DisplayEvent | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<ProductItem | null>(null);
   const [participatedEventIds, setParticipatedEventIds] = useState<Set<number>>(new Set());
@@ -1242,10 +1222,10 @@ export function App() {
       setSettings(nextSettings);
       setAppLanguage(nextLanguage);
       setAccountEmail(nextProfile.email);
-      setRecommendedEvents(mappedEvents.length > 0 ? mappedEvents : fallbackEvents.map((event) => localizeDisplayEvent(withEventDisplayDate(event, eventDisplayDate), nextLanguage)));
+      setRecommendedEvents(mappedEvents);
       setLikedEvents(mappedLikedEvents);
       setParticipatedEvents(mappedParticipatedEvents);
-      setScheduledEvent(mappedParticipatedEvents[0] ?? mappedEvents[0] ?? localizeDisplayEvent(withEventDisplayDate(fallbackScheduledEvent, eventDisplayDate), nextLanguage));
+      setScheduledEvent(mappedParticipatedEvents[0] ?? mappedEvents[0] ?? null);
       setParticipatedEventIds(new Set(nextHistory.participations.map((participation) => participation.event_id)));
       setProductCategories(mappedProducts);
       setSelectedEvent((current) => (current?.rawEventId ? mappedEventsByAnyId.get(current.rawEventId) ?? localizeDisplayEvent(current, nextLanguage) : current ? localizeDisplayEvent(current, nextLanguage) : current));
@@ -1321,7 +1301,7 @@ export function App() {
     setRecommendedEvents((current) => current.map((event) => localizeDisplayEvent(event, nextLanguage)));
     setLikedEvents((current) => current.map((event) => localizeDisplayEvent(event, nextLanguage)));
     setParticipatedEvents((current) => current.map((event) => localizeDisplayEvent(event, nextLanguage)));
-    setScheduledEvent((current) => localizeDisplayEvent(current, nextLanguage));
+    setScheduledEvent((current) => (current ? localizeDisplayEvent(current, nextLanguage) : current));
     setSelectedEvent((current) => (current ? localizeDisplayEvent(current, nextLanguage) : current));
     setProductCategories((current) => localizeProductCategories(current, nextLanguage));
     setSelectedProduct((current) => (current ? localizeProduct(current, nextLanguage) : current));
@@ -1495,13 +1475,13 @@ export function App() {
     }
   }
 
-  async function handlePurchasePoints(points: number): Promise<ActionResult> {
+  async function handlePurchasePoints(points: number, paymentMethodId: number): Promise<ActionResult> {
     if (!session) {
       return { ok: false, message: translate("loginRequired", appLanguage) };
     }
 
     try {
-      const response = await purchasePoints({ points }, session.token);
+      const response = await purchasePoints({ points, payment_method_id: paymentMethodId }, session.token);
       await loadApplicationData(session);
       return {
         ok: true,
@@ -1675,6 +1655,7 @@ export function App() {
               language={appLanguage}
               onLanguageToggle={handleToggleLanguage}
               points={displayUser.walletPoints}
+              paymentMethods={paymentMethods}
               onPurchase={handlePurchasePoints}
             />
           ) : null}
@@ -2442,7 +2423,7 @@ function HomeScreen({
 }: {
   user: typeof fallbackUser;
   events: DisplayEvent[];
-  scheduledEvent: DisplayEvent;
+  scheduledEvent: DisplayEvent | null;
   language: AppLanguage;
   onLanguageToggle: () => void;
   onNavigate: (screen: Screen) => void;
@@ -2475,7 +2456,11 @@ function HomeScreen({
 
       <section className="section">
         <SectionHeading>{translate("upcomingEvent", language)}</SectionHeading>
-        <EventCard event={scheduledEvent} compact language={language} onSelect={onEventSelect} />
+        {scheduledEvent ? (
+          <EventCard event={scheduledEvent} compact language={language} onSelect={onEventSelect} />
+        ) : (
+          <p className="event-empty-message">{translate("eventsEmpty", language)}</p>
+        )}
       </section>
       <section className="section">
         <SectionHeading>{translate("recommendedEventsTitle", language)}</SectionHeading>
@@ -2668,28 +2653,45 @@ const PURCHASE_AMOUNT_OPTIONS = [100, 500, 1000, 3000, 5000] as const;
 
 function PurchaseScreen({
   points,
+  paymentMethods,
   language,
   onLanguageToggle,
   onPurchase,
 }: {
   points: number;
+  paymentMethods: PaymentMethod[];
   language: AppLanguage;
   onLanguageToggle: () => void;
-  onPurchase: (points: number) => Promise<ActionResult>;
+  onPurchase: (points: number, paymentMethodId: number) => Promise<ActionResult>;
 }) {
   const [selectedAmount, setSelectedAmount] = useState<number>(500);
+  const [paymentMethodId, setPaymentMethodId] = useState<number | "">(() => {
+    return paymentMethods.find((method) => toBoolean(method.is_default))?.payment_method_id ?? paymentMethods[0]?.payment_method_id ?? "";
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<ActionResult | null>(null);
+
+  useEffect(() => {
+    if (paymentMethods.some((method) => method.payment_method_id === paymentMethodId)) {
+      return;
+    }
+    setPaymentMethodId(paymentMethods.find((method) => toBoolean(method.is_default))?.payment_method_id ?? paymentMethods[0]?.payment_method_id ?? "");
+  }, [paymentMethodId, paymentMethods]);
 
   async function handleSubmit() {
     if (isSubmitting) {
       return;
     }
 
+    if (!paymentMethodId) {
+      setResult({ ok: false, message: "支払い方法を登録してから購入してください。" });
+      return;
+    }
+
     setIsSubmitting(true);
     setResult(null);
 
-    const next = await onPurchase(selectedAmount);
+    const next = await onPurchase(selectedAmount, Number(paymentMethodId));
     setResult(next);
     setIsSubmitting(false);
   }
@@ -2730,11 +2732,22 @@ function PurchaseScreen({
             </button>
           ))}
         </div>
-        <article className="payment-method">
+        <label className="payment-method">
           <span className="payment-method__avatar" />
-          <p>{translate("paymentMethodPlaceholder", language)}</p>
-          <ArrowIcon />
-        </article>
+          <select
+            aria-label={translate("paymentMethodPlaceholder", language)}
+            value={paymentMethodId}
+            onChange={(event) => setPaymentMethodId(event.target.value ? Number(event.target.value) : "")}
+            disabled={isSubmitting || paymentMethods.length === 0}
+          >
+            {paymentMethods.length === 0 ? <option value="">支払い方法が未登録です</option> : null}
+            {paymentMethods.map((method) => (
+              <option key={method.payment_method_id} value={method.payment_method_id}>
+                {method.label} ({method.brand} **** {method.last4})
+              </option>
+            ))}
+          </select>
+        </label>
         {result ? (
           <p className={`action-banner ${result.ok ? "action-banner--success" : "action-banner--error"}`} role={result.ok ? "status" : "alert"}>
             {result.message}
@@ -2744,7 +2757,7 @@ function PurchaseScreen({
           type="button"
           className="primary-button purchase-execute-button"
           onClick={handleSubmit}
-          disabled={isSubmitting}
+          disabled={isSubmitting || !paymentMethodId}
         >
           {isSubmitting ? translate("purchasing", language) : `${translate("executePurchase", language)} (${selectedAmount}pt)`}
         </button>
@@ -3477,18 +3490,12 @@ function EventDetailScreen({
           <strong className="event-detail__points">{event.points}pt</strong>
           <section>
             <h2>{translate("activityContent", language)}</h2>
-            <h3>{translate("mainActivityContent", language)}</h3>
-            <p>
-              {translate("activityItemTrash", language)}
-              <br />
-              {translate("activityItemStones", language)}
-              <br />
-              {translate("activityItemCleaning", language)}
-            </p>
-            <p>{translate("eventQuestionHint", language)}</p>
+            <h3>{event.description || translate("mainActivityContent", language)}</h3>
+            <p>{event.activity || translate("eventQuestionHint", language)}</p>
           </section>
           <section>
             <h2>{translate("eventNotes", language)}</h2>
+            <p>{event.notes || translate("eventQuestionHint", language)}</p>
           </section>
         </article>
         <footer className="event-detail__footer">
@@ -3795,6 +3802,12 @@ function ProductMapModal({
             <dt>{translate("providedBy", language)}</dt>
             <dd>{product.storeName}</dd>
           </div>
+          {product.description ? (
+            <div>
+              <dt>{translate("activityContent", language)}</dt>
+              <dd>{product.description}</dd>
+            </div>
+          ) : null}
           <div>
             <dt>{translate("address", language)}</dt>
             <dd>{product.storeAddress}</dd>

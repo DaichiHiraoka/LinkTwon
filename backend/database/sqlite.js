@@ -371,26 +371,28 @@ function ensurePartnerPortalDemoData(db) {
   );
   eventDetails.forEach(([eventName, description, activity, notes]) => updateEvent.run(description, activity, notes, eventName));
 
+  const organizerWithDemoCode = db.prepare('SELECT organizer_id FROM event_organizers WHERE login_code = ?').get('event-demo');
+  const demoOrganizerId = organizerWithDemoCode?.organizer_id || 'org-demo';
   db.prepare(
     `INSERT INTO event_organizers (organizer_id, login_code, login_password, organizer_name, contact_email)
-     VALUES ('org-demo', 'event-demo', 'event-demo-pass', 'LinkTwon地域活動事務局', 'event@example.com')
+     VALUES (?, 'event-demo', 'event-demo-pass', 'LinkTwon地域活動事務局', 'event@example.com')
      ON CONFLICT(organizer_id) DO UPDATE SET
-       login_code = excluded.login_code,
        login_password = excluded.login_password,
        organizer_name = excluded.organizer_name,
        contact_email = excluded.contact_email,
        updated_at = CURRENT_TIMESTAMP`
-  ).run();
+  ).run(demoOrganizerId);
 
   const assignEvent = db.prepare(
     `INSERT OR IGNORE INTO event_organizer_events (organizer_id, event_id)
-     VALUES ('org-demo', ?)`
+     VALUES (?, ?)`
   );
   db.prepare("SELECT event_id FROM events WHERE status = 'active' ORDER BY event_id ASC")
     .all()
-    .forEach((event) => assignEvent.run(event.event_id));
+    .forEach((event) => assignEvent.run(demoOrganizerId, event.event_id));
 
   const demoStore =
+    db.prepare('SELECT store_id FROM stores WHERE login_code = ?').get('store-demo') ||
     db.prepare("SELECT store_id FROM stores WHERE store_name = '地域マルシェ'").get() ||
     db.prepare('SELECT store_id FROM stores ORDER BY store_id ASC LIMIT 1').get();
 

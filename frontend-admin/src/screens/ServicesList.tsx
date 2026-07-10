@@ -94,6 +94,7 @@ export function ServicesList({
               <span>登録日：{formatDate(detail.created_at)}</span>
             </div>
             <h3 className="service-detail__title">サービス・商品：{detail.service_name}</h3>
+            {detail.description ? <p>{detail.description}</p> : null}
             <div className="service-detail__body">
               <div className="service-detail__photo">写真</div>
               <dl className="service-detail__info">
@@ -187,18 +188,20 @@ function ServiceFormModal({
   stores: StoreItem[];
   onClose: () => void;
   onSubmit: (
-    payload: { store_id: number; service_name: string; required_points: number; status?: "active" | "paused" },
+    payload: { store_id: number; service_name: string; description?: string; required_points: number; status?: "active" | "paused" },
     serviceId?: number,
   ) => Promise<void>;
   submitting: boolean;
 }) {
   const [name, setName] = useState(initial?.service_name ?? "");
+  const [description, setDescription] = useState(initial?.description ?? "");
   const [storeId, setStoreId] = useState<number | "">(initial?.store_id ?? "");
   const [points, setPoints] = useState(initial?.required_points ?? 100);
   const [status, setStatus] = useState<"active" | "paused">(initial?.status ?? "active");
 
   useResetForm(initial?.service_id ?? "new", () => {
     setName(initial?.service_name ?? "");
+    setDescription(initial?.description ?? "");
     setStoreId(initial?.store_id ?? "");
     setPoints(initial?.required_points ?? 100);
     setStatus(initial?.status ?? "active");
@@ -211,6 +214,7 @@ function ServiceFormModal({
       {
         store_id: Number(storeId),
         service_name: name.trim(),
+        description: description.trim() || undefined,
         required_points: Number(points),
         status,
       },
@@ -235,6 +239,10 @@ function ServiceFormModal({
         <label className="form__field">
           <span>サービス・商品名</span>
           <input value={name} onChange={(event) => setName(event.target.value)} required />
+        </label>
+        <label className="form__field">
+          <span>説明</span>
+          <textarea value={description} onChange={(event) => setDescription(event.target.value)} />
         </label>
         <label className="form__field">
           <span>消費ポイント</span>

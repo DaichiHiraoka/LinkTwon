@@ -6,8 +6,8 @@ async function getServices(req, res, next) {
     const userId = req.user.id;
     const locale = req.query.locale === 'en' ? 'en' : 'ja';
     const [rows] = await pool.query(
-      `SELECT s.service_id, s.service_name, s.required_points, s.status,
-              st.store_id, st.store_name,
+      `SELECT s.service_id, s.service_name, s.description, s.required_points, s.status,
+              st.store_id, st.store_name, st.store_address, st.map_query,
               CASE WHEN sf.favorite_id IS NULL THEN 0 ELSE 1 END AS favorited
        FROM services s
        JOIN stores st ON s.store_id = st.store_id
@@ -18,7 +18,7 @@ async function getServices(req, res, next) {
     );
     const localizedRows =
       locale === 'en'
-        ? await localizeRows(rows, { contentType: 'service', idField: 'service_id', fields: ['service_name'] }, locale)
+        ? await localizeRows(rows, { contentType: 'service', idField: 'service_id', fields: ['service_name', 'description'] }, locale)
         : rows;
 
     res.json(localizedRows);
@@ -116,7 +116,7 @@ async function purchasePoints(req, res, next) {
     const userId = req.user.id;
     const { points, payment_method_id, simulate_status } = req.body;
     const purchasePointsValue = Number(points);
-    const status = simulate_status || 'paid';
+    let status = simulate_status || 'paid';
 
     if (!Number.isInteger(purchasePointsValue) || purchasePointsValue <= 0) {
       return res.status(400).json({ message: 'Positive integer points are required.' });
@@ -130,13 +130,17 @@ async function purchasePoints(req, res, next) {
 
     if (payment_method_id) {
       const [paymentMethods] = await connection.query(
-        'SELECT payment_method_id FROM payment_methods WHERE payment_method_id = ? AND user_id = ?',
+        'SELECT payment_method_id, brand FROM payment_methods WHERE payment_method_id = ? AND user_id = ?',
         [payment_method_id, userId]
       );
 
       if (paymentMethods.length === 0) {
         await connection.rollback();
         return res.status(400).json({ message: 'Invalid payment method.' });
+      }
+
+      if (!simulate_status && paymentMethods[0].brand === 'mock-fail') {
+        status = 'failed';
       }
     }
 

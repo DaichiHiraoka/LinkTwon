@@ -62,7 +62,16 @@ export function getEvents(token: string) {
 }
 
 export function createEvent(
-  payload: { event_name: string; event_datetime: string; location?: string; grant_points: number; status?: "active" | "paused" },
+  payload: {
+    event_name: string;
+    event_datetime: string;
+    location?: string;
+    grant_points: number;
+    description?: string;
+    activity?: string;
+    notes?: string;
+    status?: "active" | "paused";
+  },
   token: string,
 ) {
   return request<{ message: string; event_id: number; check_in_code: string }>("/admin/events", {
@@ -94,7 +103,10 @@ export function getStores(token: string) {
   return request<StoreItem[]>("/admin/stores", {}, token);
 }
 
-export function createStore(payload: { store_name: string; status?: "active" | "paused" }, token: string) {
+export function createStore(
+  payload: { store_name: string; store_address?: string; map_query?: string; status?: "active" | "paused" },
+  token: string,
+) {
   return request<{ message: string; store_id: number }>("/admin/stores", {
     method: "POST",
     body: JSON.stringify(payload),
@@ -117,7 +129,7 @@ export function getServices(token: string) {
 }
 
 export function createService(
-  payload: { store_id: number; service_name: string; required_points: number; status?: "active" | "paused" },
+  payload: { store_id: number; service_name: string; description?: string; required_points: number; status?: "active" | "paused" },
   token: string,
 ) {
   return request<{ message: string; service_id: number }>("/admin/services", {
