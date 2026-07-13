@@ -1,0 +1,14 @@
+{
+  "testId": "T-047",
+  "executedAt": "2026-07-14",
+  "environment": "deployed event organizer portal and deployed user app",
+  "precondition": "Windows reported no present Camera/Image device.",
+  "action": "Open QR scanning, observe camera-unavailable handling, switch to manual input, paste a newly generated user QR payload, and confirm reception.",
+  "expected": "The camera-unavailable state offers manual entry and a valid manually entered QR completes reception.",
+  "actual": "The portal displayed the camera-unavailable message, accepted the manual QR payload for user ID 1, incremented the reception count from 12 to 13, and displayed 受付しました with +90 pt.",
+  "result": "PASS",
+  "screenshots": [
+    "../screenshots/T-047-camera-unavailable-live-20260714.png",
+    "../screenshots/T-047-manual-checkin-success-live-20260714.png"
+  ]
+}

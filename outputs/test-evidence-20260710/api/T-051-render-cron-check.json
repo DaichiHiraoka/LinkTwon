@@ -1,0 +1,11 @@
+{
+  "testId": "T-051",
+  "configuredSchedule": "*/30 * * * *",
+  "configuredJobName": "linktwon-translation-refresh",
+  "configuredEndpoint": "https://linktwon-backend.onrender.com/api/translations/refresh",
+  "liveDashboardResult": "LOGIN_REQUIRED",
+  "liveUrl": "https://dashboard.render.com/login",
+  "result": "PARTIAL",
+  "reason": "Renderの実行履歴は未認証セッションから参照不可。render.yamlの30分間隔設定のみ確認。",
+  "executedAt": "2026-07-13T16:42:15.860Z"
+}

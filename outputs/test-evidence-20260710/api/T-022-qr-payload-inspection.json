@@ -1,0 +1,28 @@
+{
+  "testId": "T-022",
+  "scheme": "linktown:",
+  "path": "user-present",
+  "keys": [
+    "v",
+    "type",
+    "user_id",
+    "name",
+    "issued_at",
+    "expires_at",
+    "nonce"
+  ],
+  "allowedKeys": [
+    "v",
+    "type",
+    "user_id",
+    "name",
+    "issued_at",
+    "expires_at",
+    "nonce"
+  ],
+  "exactAllowedKeySet": true,
+  "forbiddenKeysPresent": [],
+  "containsForbiddenData": false,
+  "result": "PASS",
+  "executedAt": "2026-07-13T16:41:20.929Z"
+}

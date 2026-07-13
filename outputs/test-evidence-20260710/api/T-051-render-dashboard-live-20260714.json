@@ -1,0 +1,27 @@
+{
+  "testId": "T-051",
+  "executedAt": "2026-07-14",
+  "renderProject": "My project / Production",
+  "authenticatedDashboardCheck": {
+    "resourceCount": 1,
+    "resources": [
+      {
+        "name": "linktwon-backend",
+        "type": "Web Service",
+        "status": "Deployed"
+      }
+    ],
+    "configuredCronResourceFound": false,
+    "expectedCronName": "linktwon-translation-refresh"
+  },
+  "manualRefresh": {
+    "url": "https://linktwon-backend.onrender.com/api/translations/refresh?force=1",
+    "httpStatus": 200,
+    "records": 40,
+    "translated": 40,
+    "skipped": 0,
+    "failed": 0
+  },
+  "result": "PARTIAL",
+  "reason": "Translation extraction and cache refresh succeeded, but the 30-minute Render Cron Job is not deployed."
+}

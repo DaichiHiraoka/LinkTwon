@@ -1,0 +1,10 @@
+{
+  "testId": "T-010",
+  "executedAt": "2026-07-14",
+  "environment": "local frontend with VITE_API_BASE_URL=http://127.0.0.1:9",
+  "action": "Submit the demo-user login form while the configured API endpoint is unreachable.",
+  "expected": "The UI remains usable and displays an explicit API connection error instead of a blank page or credential error.",
+  "actual": "The login screen remained visible and displayed: APIサーバーに接続できません。しばらく待って再試行するか、公開URLとAPI URLの設定を確認してください。",
+  "result": "PASS",
+  "screenshot": "../screenshots/T-010-api-unreachable-live-20260714.png"
+}

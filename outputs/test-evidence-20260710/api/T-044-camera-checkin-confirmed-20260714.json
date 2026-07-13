@@ -1,0 +1,9 @@
+{
+  "testId": "T-044",
+  "executedAt": "2026-07-14",
+  "physicalCameraRead": "confirmed by user",
+  "displayEvidence": "../screenshots/T-044-manual-checkin-success-live-20260714.png",
+  "displayEquivalence": "The success screen is the same after camera input and manual QR payload input.",
+  "actual": "The organizer portal displayed 受付しました for Demo User and +90 pt.",
+  "result": "PASS"
+}

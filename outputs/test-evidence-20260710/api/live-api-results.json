@@ -1,0 +1,218 @@
+﻿[
+    {
+        "test_id":  "ENV-001",
+        "name":  "Backend health",
+        "status_code":  200,
+        "expected_status":  "200",
+        "passed":  true,
+        "observed":  "response received",
+        "executed_at":  "2026-07-10T17:20:00+09:00"
+    },
+    {
+        "test_id":  "T-003",
+        "name":  "Invalid user login is rejected",
+        "status_code":  401,
+        "expected_status":  "400,401",
+        "passed":  true,
+        "observed":  "Invalid email or password.",
+        "executed_at":  "2026-07-10T17:20:01+09:00"
+    },
+    {
+        "test_id":  "T-002",
+        "name":  "Valid user login",
+        "status_code":  200,
+        "expected_status":  "200",
+        "passed":  true,
+        "observed":  "Login successful.",
+        "executed_at":  "2026-07-10T17:20:02+09:00"
+    },
+    {
+        "test_id":  "T-007",
+        "name":  "Invalid or expired token is rejected",
+        "status_code":  401,
+        "expected_status":  "401,403",
+        "passed":  true,
+        "observed":  "Invalid or expired token.",
+        "executed_at":  "2026-07-10T17:20:02+09:00"
+    },
+    {
+        "test_id":  "T-011",
+        "name":  "Event list API",
+        "status_code":  200,
+        "expected_status":  "200",
+        "passed":  true,
+        "observed":  "    ",
+        "executed_at":  "2026-07-10T17:20:03+09:00"
+    },
+    {
+        "test_id":  "T-024",
+        "name":  "Point balance API",
+        "status_code":  200,
+        "expected_status":  "200",
+        "passed":  true,
+        "observed":  "response received",
+        "executed_at":  "2026-07-10T17:20:03+09:00"
+    },
+    {
+        "test_id":  "T-024",
+        "name":  "Point history API",
+        "status_code":  200,
+        "expected_status":  "200",
+        "passed":  true,
+        "observed":  "response received",
+        "executed_at":  "2026-07-10T17:20:04+09:00"
+    },
+    {
+        "test_id":  "T-027",
+        "name":  "Service list API",
+        "status_code":  200,
+        "expected_status":  "200",
+        "passed":  true,
+        "observed":  "    ",
+        "executed_at":  "2026-07-10T17:20:04+09:00"
+    },
+    {
+        "test_id":  "T-032",
+        "name":  "Account settings API",
+        "status_code":  200,
+        "expected_status":  "200",
+        "passed":  true,
+        "observed":  "response received",
+        "executed_at":  "2026-07-10T17:20:05+09:00"
+    },
+    {
+        "test_id":  "T-039",
+        "name":  "Notification list API",
+        "status_code":  200,
+        "expected_status":  "200",
+        "passed":  true,
+        "observed":  "response received",
+        "executed_at":  "2026-07-10T17:20:05+09:00"
+    },
+    {
+        "test_id":  "T-041",
+        "name":  "Support ticket list API",
+        "status_code":  200,
+        "expected_status":  "200",
+        "passed":  true,
+        "observed":  "response received",
+        "executed_at":  "2026-07-10T17:20:05+09:00"
+    },
+    {
+        "test_id":  "T-055",
+        "name":  "Regular user cannot access admin API",
+        "status_code":  403,
+        "expected_status":  "403",
+        "passed":  true,
+        "observed":  "You do not have permission to access this resource.",
+        "executed_at":  "2026-07-10T17:20:06+09:00"
+    },
+    {
+        "test_id":  "T-026",
+        "name":  "Failed mock purchase does not change balance",
+        "status_code":  201,
+        "expected_status":  "201 with failed status",
+        "passed":  true,
+        "observed":  "purchase status=failed, balance unchanged=True",
+        "executed_at":  "2026-07-10T17:20:08+09:00"
+    },
+    {
+        "test_id":  "T-054",
+        "name":  "Valid admin login",
+        "status_code":  200,
+        "expected_status":  "200",
+        "passed":  true,
+        "observed":  "Admin login successful.",
+        "executed_at":  "2026-07-10T17:20:09+09:00"
+    },
+    {
+        "test_id":  "T-056",
+        "name":  "Admin event list API",
+        "status_code":  200,
+        "expected_status":  "200",
+        "passed":  true,
+        "observed":  "    ",
+        "executed_at":  "2026-07-10T17:20:09+09:00"
+    },
+    {
+        "test_id":  "T-057",
+        "name":  "Admin store list API",
+        "status_code":  200,
+        "expected_status":  "200",
+        "passed":  true,
+        "observed":  "   ",
+        "executed_at":  "2026-07-10T17:20:09+09:00"
+    },
+    {
+        "test_id":  "T-057",
+        "name":  "Admin service list API",
+        "status_code":  200,
+        "expected_status":  "200",
+        "passed":  true,
+        "observed":  "    ",
+        "executed_at":  "2026-07-10T17:20:10+09:00"
+    },
+    {
+        "test_id":  "T-058",
+        "name":  "Admin user list API",
+        "status_code":  200,
+        "expected_status":  "200",
+        "passed":  true,
+        "observed":  "    ",
+        "executed_at":  "2026-07-10T17:20:10+09:00"
+    },
+    {
+        "test_id":  "T-060",
+        "name":  "Admin support list API",
+        "status_code":  200,
+        "expected_status":  "200",
+        "passed":  true,
+        "observed":  "response received",
+        "executed_at":  "2026-07-10T17:20:11+09:00"
+    },
+    {
+        "test_id":  "ADMIN-STATS",
+        "name":  "Admin statistics API",
+        "status_code":  200,
+        "expected_status":  "200",
+        "passed":  true,
+        "observed":  "response received",
+        "executed_at":  "2026-07-10T17:20:12+09:00"
+    },
+    {
+        "test_id":  "T-042",
+        "name":  "Event organizer portal login API",
+        "status_code":  200,
+        "expected_status":  "200",
+        "passed":  true,
+        "observed":  "response received",
+        "executed_at":  "2026-07-10T17:20:16+09:00"
+    },
+    {
+        "test_id":  "T-043",
+        "name":  "Invalid event organizer login is rejected",
+        "status_code":  401,
+        "expected_status":  "401",
+        "passed":  true,
+        "observed":  "Invalid event organizer credentials.",
+        "executed_at":  "2026-07-10T17:20:18+09:00"
+    },
+    {
+        "test_id":  "T-048",
+        "name":  "Store portal login API",
+        "status_code":  200,
+        "expected_status":  "200",
+        "passed":  true,
+        "observed":  "response received",
+        "executed_at":  "2026-07-10T17:20:21+09:00"
+    },
+    {
+        "test_id":  "T-048",
+        "name":  "Invalid store login is rejected",
+        "status_code":  401,
+        "expected_status":  "401",
+        "passed":  true,
+        "observed":  "Invalid store credentials.",
+        "executed_at":  "2026-07-10T17:20:23+09:00"
+    }
+]

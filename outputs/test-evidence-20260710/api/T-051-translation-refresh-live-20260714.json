@@ -1,0 +1,14 @@
+﻿{
+    "testId":  "T-051",
+    "executedAt":  "2026-07-13T21:56:59.2675304Z",
+    "url":  "https://linktwon-backend.onrender.com/api/translations/refresh?force=1",
+    "force":  true,
+    "httpStatus":  200,
+    "response":  {
+                     "records":  40,
+                     "translated":  40,
+                     "skipped":  0,
+                     "failed":  0
+                 },
+    "result":  "PASS"
+}

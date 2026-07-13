@@ -1,0 +1,26 @@
+{
+  "testId": "T-052",
+  "executedAt": "2026-07-14T07:50:00+09:00",
+  "endpoint": "https://linktwon-backend.onrender.com/api/translations/refresh",
+  "unauthenticatedRequest": {
+    "httpStatus": 403,
+    "result": "PASS"
+  },
+  "authenticatedRequest": {
+    "httpStatus": 200,
+    "records": 40,
+    "translated": 0,
+    "skipped": 40,
+    "failed": 0,
+    "result": "PASS"
+  },
+  "githubActions": {
+    "workflow": "Translation Cache Refresh",
+    "runId": 29291316444,
+    "event": "workflow_dispatch",
+    "conclusion": "success",
+    "durationSeconds": 7,
+    "url": "https://github.com/DaichiHiraoka/LinkTwon/actions/runs/29291316444"
+  },
+  "secretValueRecorded": false
+}

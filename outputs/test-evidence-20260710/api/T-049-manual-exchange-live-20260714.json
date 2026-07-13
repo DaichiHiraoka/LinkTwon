@@ -1,0 +1,9 @@
+{
+  "testId": "T-049",
+  "executedAt": "2026-07-14",
+  "physicalCameraRead": "confirmed by user",
+  "displayEvidence": "../screenshots/T-049-manual-exchange-success-live-20260714.png",
+  "action": "Paste a newly generated QR payload for user ID 1 into the deployed store portal and execute the exchange.",
+  "actual": "The portal displayed 交換完了, Demo User (1), and 220pt.",
+  "result": "PASS"
+}

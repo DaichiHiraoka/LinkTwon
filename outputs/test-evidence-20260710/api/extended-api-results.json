@@ -1,0 +1,65 @@
+﻿[
+    {
+        "test_id":  "T-020",
+        "name":  "Unlike event and remove it from liked list",
+        "passed":  true,
+        "observed":  "status=200, still_liked=False",
+        "executed_at":  "2026-07-14T01:36:00+09:00"
+    },
+    {
+        "test_id":  "T-017",
+        "name":  "Reject participation in paused event",
+        "passed":  true,
+        "observed":  "create=201, participate=400, points_unchanged=True",
+        "executed_at":  "2026-07-14T01:36:03+09:00"
+    },
+    {
+        "test_id":  "T-030",
+        "name":  "Reject exchange when points are insufficient",
+        "passed":  true,
+        "observed":  "status=400, points=0, message=Not enough points.",
+        "executed_at":  "2026-07-14T01:36:05+09:00"
+    },
+    {
+        "test_id":  "T-037",
+        "name":  "Change and restore login email",
+        "passed":  true,
+        "observed":  "changed=200, new_login=200, old_rejected=401, restored_login=200",
+        "executed_at":  "2026-07-14T01:36:09+09:00"
+    },
+    {
+        "test_id":  "T-038",
+        "name":  "Change password and restore original credential",
+        "passed":  true,
+        "observed":  "changed=200, old_rejected=401, new_login=200, restored_login=200",
+        "executed_at":  "2026-07-14T01:36:15+09:00"
+    },
+    {
+        "test_id":  "T-050",
+        "name":  "Reject malformed QR in store exchange",
+        "passed":  true,
+        "observed":  "bootstrap=200, exchange=400, message=Invalid URL",
+        "executed_at":  "2026-07-14T01:36:18+09:00"
+    },
+    {
+        "test_id":  "T-058",
+        "name":  "Admin updates and restores a user",
+        "passed":  true,
+        "observed":  "updated=True, restored=True",
+        "executed_at":  "2026-07-14T01:36:21+09:00"
+    },
+    {
+        "test_id":  "T-052",
+        "name":  "Reject translation refresh without key",
+        "passed":  false,
+        "observed":  "status=200, message=",
+        "executed_at":  "2026-07-14T01:36:26+09:00"
+    },
+    {
+        "test_id":  "RESTORE",
+        "name":  "Demo user restored after evidence tests",
+        "passed":  true,
+        "observed":  "status=200, email_restored=True, points_restored=True, name_restored=True",
+        "executed_at":  "2026-07-14T01:36:29+09:00"
+    }
+]
