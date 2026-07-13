@@ -39,18 +39,3 @@ services:
         sync: false
       - key: TRANSLATION_REFRESH_KEY
         sync: false
-  - type: cron
-    name: linktwon-translation-refresh
-    runtime: node
-    rootDir: backend
-    plan: starter
-    schedule: '*/30 * * * *'
-    buildCommand: npm install
-    startCommand: npm run translations:trigger
-    envVars:
-      - key: APP_ENV
-        value: production
-      - key: TRANSLATION_REFRESH_URL
-        value: https://linktwon-backend.onrender.com/api/translations/refresh
-      - key: TRANSLATION_REFRESH_KEY
-        sync: false

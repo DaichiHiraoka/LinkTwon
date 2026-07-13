@@ -1,0 +1,49 @@
+name: Translation Cache Refresh
+
+on:
+  schedule:
+    - cron: "13,43 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: translation-cache-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TRANSLATION_REFRESH_URL: https://linktwon-backend.onrender.com/api/translations/refresh
+      TRANSLATION_REFRESH_KEY: ${{ secrets.TRANSLATION_REFRESH_KEY }}
+    steps:
+      - name: Refresh translation cache
+        shell: bash
+        run: |
+          if [[ -z "$TRANSLATION_REFRESH_KEY" ]]; then
+            echo "::error::TRANSLATION_REFRESH_KEY secret is not configured."
+            exit 1
+          fi
+
+          response_file="$(mktemp)"
+          http_status="$(
+            curl --silent --show-error \
+              --output "$response_file" \
+              --write-out "%{http_code}" \
+              --request POST \
+              --header "Accept: application/json" \
+              --header "x-refresh-key: $TRANSLATION_REFRESH_KEY" \
+              --max-time 180 \
+              "$TRANSLATION_REFRESH_URL"
+          )"
+
+          cat "$response_file"
+          echo
+
+          if [[ "$http_status" -lt 200 || "$http_status" -ge 300 ]]; then
+            echo "::error::Translation refresh failed with HTTP $http_status."
+            exit 1
+          fi
