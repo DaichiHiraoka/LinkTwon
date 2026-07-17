@@ -1,5 +1,6 @@
 const fs = require('fs');
 const mysql = require('mysql2/promise');
+const { ensureRuntimeSchema } = require('../database/runtimeMigrations');
 const { env } = require('../config/env');
 
 function safeDecode(value) {
@@ -374,6 +375,7 @@ async function migrate() {
       )`
     );
 
+    await ensureRuntimeSchema(pool);
     console.log('mysql migration completed');
   } finally {
     await pool.end();

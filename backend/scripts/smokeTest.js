@@ -125,27 +125,36 @@ async function main() {
     assertTranslatedName(localizedLikedEvents[0].event_name, likedEvents[0].event_name);
     assert.strictEqual(localizedLikedEvents[0].location, likedEvents[0].location);
     assert.ok(localizedLikedEvents[0].description.startsWith('[en] '));
-    const checkIn = await request('/events/check-in', {
+    const pointsBeforeApplication = login.user.points;
+    const application = await request('/events/participate', {
       method: 'POST',
       headers: userAuth,
-      body: JSON.stringify({ check_in_code: 'EVENT-1' })
+      body: JSON.stringify({ event_id: events[0].event_id })
     }, 201);
-    assert.ok(checkIn.current_points > login.user.points);
-    await request('/events/check-in', {
+    assert.strictEqual(application.participation_status, 'applied');
+    const pointsAfterApplication = (await request(`/users/${userId}/points`, { headers: userAuth })).points;
+    assert.strictEqual(pointsAfterApplication, pointsBeforeApplication);
+    await request('/events/participate', {
       method: 'POST',
       headers: userAuth,
-      body: JSON.stringify({ check_in_code: 'EVENT-1' })
-    }, 400);
-    const cancelledParticipation = await request(`/events/${checkIn.event_id}/participation`, {
+      body: JSON.stringify({ event_id: events[0].event_id })
+    }, 409);
+    const cancelledParticipation = await request(`/events/${application.event_id}/participation`, {
       method: 'DELETE',
       headers: userAuth
     });
-    assert.strictEqual(cancelledParticipation.event_id, checkIn.event_id);
-    assert.strictEqual(cancelledParticipation.revoked_points, checkIn.granted_points);
-    await request(`/events/${checkIn.event_id}/participation`, {
+    assert.strictEqual(cancelledParticipation.event_id, application.event_id);
+    assert.strictEqual(cancelledParticipation.participation_status, 'cancelled');
+    await request(`/events/${application.event_id}/participation`, {
       method: 'DELETE',
       headers: userAuth
-    }, 404);
+    }, 409);
+    const reapplied = await request('/events/participate', {
+      method: 'POST',
+      headers: userAuth,
+      body: JSON.stringify({ event_id: events[0].event_id })
+    }, 201);
+    assert.strictEqual(reapplied.participation_id, application.participation_id);
 
     const services = await request('/points/services', { headers: userAuth });
     assert.ok(services.length > 0);
@@ -218,12 +227,46 @@ async function main() {
     assert.ok(localizedNotifications[0].body.startsWith('[en] '));
     await request(`/notifications/${notifications[0].notification_id}/read`, { method: 'PUT', headers: userAuth });
 
+    const [organizers] = await pool.query('SELECT organizer_id FROM event_organizers ORDER BY organizer_id LIMIT 1');
+    const [submissionInsert] = await pool.query(
+      `INSERT INTO event_submissions
+         (organizer_id, event_name, event_datetime, event_end_datetime, location,
+          requested_grant_points, status)
+       VALUES (?, 'Smoke Submitted Event', '2026-08-01 10:00:00', '2026-08-01 12:00:00',
+               'Smoke Hall', 30, 'pending')`,
+      [organizers[0].organizer_id]
+    );
+    const approvedSubmission = await request(
+      `/admin/event-submissions/${submissionInsert.insertId}/approve`,
+      {
+        method: 'POST',
+        headers: adminAuth,
+        body: JSON.stringify({ grant_points: 35, review_note: 'Smoke approved' })
+      },
+      201
+    );
+    assert.ok(approvedSubmission.event_id);
+    await request(
+      `/admin/event-submissions/${submissionInsert.insertId}/approve`,
+      { method: 'POST', headers: adminAuth, body: JSON.stringify({}) },
+      409
+    );
+    const [approvedAssignments] = await pool.query(
+      'SELECT organizer_id FROM event_organizer_events WHERE event_id = ?',
+      [approvedSubmission.event_id]
+    );
+    assert.deepStrictEqual(
+      approvedAssignments.map((row) => row.organizer_id),
+      [organizers[0].organizer_id]
+    );
+
     const createdEvent = await request('/admin/events', {
       method: 'POST',
       headers: adminAuth,
       body: JSON.stringify({
         event_name: 'Smoke Event',
         event_datetime: '2026-07-01 10:00:00',
+        event_end_datetime: '2026-07-01 12:00:00',
         location: 'Smoke Park',
         grant_points: 40,
         description: 'Smoke event description',
@@ -231,7 +274,7 @@ async function main() {
         notes: 'Smoke event notes'
       })
     }, 201);
-    assert.ok(createdEvent.check_in_code);
+    assert.ok(createdEvent.event_id);
     const [createdEventRows] = await pool.query(
       'SELECT event_datetime, description, activity, notes FROM events WHERE event_id = ?',
       [createdEvent.event_id]
@@ -255,7 +298,7 @@ async function main() {
        WHERE event_id = ?`,
       [createdEvent.event_id]
     );
-    assert.ok(createdEventOrganizerAssignments.length > 0);
+    assert.strictEqual(createdEventOrganizerAssignments.length, 0);
     await request(`/admin/events/${createdEvent.event_id}`, {
       method: 'PUT',
       headers: adminAuth,

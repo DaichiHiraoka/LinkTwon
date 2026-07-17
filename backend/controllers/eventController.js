@@ -1,23 +1,28 @@
 const pool = require('../config/db');
 const { localizeRows } = require('../services/translationService');
+const { addParticipationHistory } = require('../services/eventLifecycleService');
 
 async function getEvents(req, res, next) {
   try {
     const userId = req.user.id;
     const locale = req.query.locale === 'en' ? 'en' : 'ja';
     const [rows] = await pool.query(
-      `SELECT e.event_id, e.event_name, e.event_datetime, e.location, e.grant_points,
+      `SELECT e.event_id, e.event_name, e.event_datetime, e.event_end_datetime, e.location, e.grant_points,
               e.description, e.activity, e.notes, e.status,
+              p.status AS participation_status,
+              p.applied_at, p.checked_in_at, p.completed_at, p.granted_points,
               CASE WHEN el_self.like_id IS NULL THEN 0 ELSE 1 END AS liked,
               COUNT(el_all.like_id) AS like_count
        FROM events e
+       LEFT JOIN participations p ON e.event_id = p.event_id AND p.user_id = ?
        LEFT JOIN event_likes el_self ON e.event_id = el_self.event_id AND el_self.user_id = ?
        LEFT JOIN event_likes el_all ON e.event_id = el_all.event_id
-       WHERE e.status = 'active'
-       GROUP BY e.event_id, e.event_name, e.event_datetime, e.location, e.grant_points,
-                e.description, e.activity, e.notes, e.status, el_self.like_id
+       WHERE e.status = 'active' OR p.participation_id IS NOT NULL
+       GROUP BY e.event_id, e.event_name, e.event_datetime, e.event_end_datetime, e.location, e.grant_points,
+                e.description, e.activity, e.notes, e.status, p.status, p.applied_at,
+                p.checked_in_at, p.completed_at, p.granted_points, el_self.like_id
        ORDER BY e.event_datetime DESC`,
-      [userId]
+      [userId, userId]
     );
     const localizedRows =
       locale === 'en'
@@ -28,56 +33,6 @@ async function getEvents(req, res, next) {
   } catch (error) {
     next(error);
   }
-}
-
-async function completeParticipation(connection, userId, event) {
-  const [existing] = await connection.query(
-    `SELECT participation_id
-     FROM participations
-     WHERE user_id = ? AND event_id = ?`,
-    [userId, event.event_id]
-  );
-
-  if (existing.length > 0) {
-    return {
-      status: 400,
-      body: { message: 'You have already participated in this event.' }
-    };
-  }
-
-  await connection.query(
-    `INSERT INTO participations (user_id, event_id, granted_points)
-     VALUES (?, ?, ?)`,
-    [userId, event.event_id, event.grant_points]
-  );
-
-  await connection.query(
-    `UPDATE users
-     SET points = points + ?
-     WHERE user_id = ?`,
-    [event.grant_points, userId]
-  );
-
-  await connection.query(
-    `INSERT INTO point_transactions (user_id, type, points, description)
-     VALUES (?, 'grant', ?, ?)`,
-    [userId, event.grant_points, `Points granted for event: ${event.event_name}`]
-  );
-
-  const [updatedUsers] = await connection.query(
-    'SELECT user_id, points FROM users WHERE user_id = ?',
-    [userId]
-  );
-
-  return {
-    status: 201,
-    body: {
-      message: 'Event participation registered successfully.',
-      event_id: event.event_id,
-      granted_points: event.grant_points,
-      current_points: updatedUsers[0].points
-    }
-  };
 }
 
 async function participateInEvent(req, res, next) {
@@ -105,15 +60,52 @@ async function participateInEvent(req, res, next) {
       return res.status(400).json({ message: 'Invalid event ID.' });
     }
 
-    const result = await completeParticipation(connection, userId, events[0]);
-
-    if (result.status >= 400) {
+    const [existing] = await connection.query(
+      'SELECT participation_id, status FROM participations WHERE user_id = ? AND event_id = ? FOR UPDATE',
+      [userId, event_id]
+    );
+    if (existing.length > 0 && existing[0].status !== 'cancelled') {
       await connection.rollback();
-      return res.status(result.status).json(result.body);
+      return res.status(409).json({ message: 'You have already applied for this event.' });
+    }
+
+    let participationId;
+    if (existing.length > 0) {
+      participationId = existing[0].participation_id;
+      await connection.query(
+        `UPDATE participations
+         SET status = 'applied', grant_points_snapshot = ?, granted_points = 0,
+             applied_at = CURRENT_TIMESTAMP, cancelled_at = NULL
+         WHERE participation_id = ?`,
+        [events[0].grant_points, participationId]
+      );
+      await addParticipationHistory(connection, participationId, 'cancelled', 'applied', {
+        reason: 'User reapplied',
+        actorType: 'user',
+        actorId: userId
+      });
+    } else {
+      const [insertResult] = await connection.query(
+        `INSERT INTO participations
+           (user_id, event_id, status, grant_points_snapshot, granted_points, applied_at)
+         VALUES (?, ?, 'applied', ?, 0, CURRENT_TIMESTAMP)`,
+        [userId, event_id, events[0].grant_points]
+      );
+      participationId = insertResult.insertId;
+      await addParticipationHistory(connection, participationId, null, 'applied', {
+        reason: 'User applied',
+        actorType: 'user',
+        actorId: userId
+      });
     }
 
     await connection.commit();
-    res.status(result.status).json(result.body);
+    res.status(201).json({
+      message: 'Event application registered successfully.',
+      event_id: Number(event_id),
+      participation_id: participationId,
+      participation_status: 'applied'
+    });
   } catch (error) {
     await connection.rollback();
     next(error);
@@ -132,9 +124,8 @@ async function cancelEventParticipation(req, res, next) {
     await connection.beginTransaction();
 
     const [participations] = await connection.query(
-      `SELECT p.participation_id, p.granted_points, e.event_name
+      `SELECT p.participation_id, p.status
        FROM participations p
-       JOIN events e ON p.event_id = e.event_id
        WHERE p.user_id = ? AND p.event_id = ?`,
       [userId, id]
     );
@@ -145,86 +136,27 @@ async function cancelEventParticipation(req, res, next) {
     }
 
     const participation = participations[0];
-
+    if (participation.status !== 'applied') {
+      await connection.rollback();
+      return res.status(409).json({ message: 'Only an applied event can be cancelled.' });
+    }
     await connection.query(
-      `DELETE FROM participations
+      `UPDATE participations
+       SET status = 'cancelled', cancelled_at = CURRENT_TIMESTAMP
        WHERE participation_id = ?`,
       [participation.participation_id]
     );
-
-    await connection.query(
-      `UPDATE users
-       SET points = CASE WHEN points >= ? THEN points - ? ELSE 0 END
-       WHERE user_id = ?`,
-      [participation.granted_points, participation.granted_points, userId]
-    );
-
-    await connection.query(
-      `INSERT INTO point_transactions (user_id, type, points, description)
-       VALUES (?, 'grant', ?, ?)`,
-      [userId, -participation.granted_points, `Points revoked for cancelled event: ${participation.event_name}`]
-    );
-
-    const [updatedUsers] = await connection.query(
-      'SELECT user_id, points FROM users WHERE user_id = ?',
-      [userId]
-    );
+    await addParticipationHistory(connection, participation.participation_id, 'applied', 'cancelled', {
+      reason: 'User cancelled application',
+      actorType: 'user',
+      actorId: userId
+    });
 
     await connection.commit();
     res.json({
       message: 'Event participation cancelled successfully.',
       event_id: Number(id),
-      revoked_points: participation.granted_points,
-      current_points: updatedUsers[0].points
-    });
-  } catch (error) {
-    await connection.rollback();
-    next(error);
-  } finally {
-    connection.release();
-  }
-}
-
-async function checkInEvent(req, res, next) {
-  const connection = await pool.getConnection();
-
-  try {
-    const userId = req.user.id;
-    const { check_in_code } = req.body;
-
-    if (!check_in_code) {
-      return res.status(400).json({ message: 'Check-in code is required.' });
-    }
-
-    await connection.beginTransaction();
-
-    const [tokens] = await connection.query(
-      `SELECT t.token_id, t.event_id, e.event_name, e.event_datetime, e.location, e.grant_points, e.status
-       FROM event_checkin_tokens t
-       JOIN events e ON t.event_id = e.event_id
-       WHERE t.check_in_code = ?
-         AND t.is_active = 1
-         AND t.expires_at >= CURRENT_TIMESTAMP
-         AND e.status = 'active'`,
-      [check_in_code]
-    );
-
-    if (tokens.length === 0) {
-      await connection.rollback();
-      return res.status(400).json({ message: 'Invalid or expired check-in code.' });
-    }
-
-    const result = await completeParticipation(connection, userId, tokens[0]);
-
-    if (result.status >= 400) {
-      await connection.rollback();
-      return res.status(result.status).json(result.body);
-    }
-
-    await connection.commit();
-    res.status(result.status).json({
-      ...result.body,
-      check_in_code
+      participation_status: 'cancelled'
     });
   } catch (error) {
     await connection.rollback();
@@ -289,7 +221,6 @@ module.exports = {
   getEvents,
   participateInEvent,
   cancelEventParticipation,
-  checkInEvent,
   likeEvent,
   unlikeEvent
 };

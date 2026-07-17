@@ -44,6 +44,7 @@ const schemaStatements = [
     event_id INTEGER PRIMARY KEY AUTOINCREMENT,
     event_name TEXT NOT NULL,
     event_datetime TEXT NOT NULL,
+    event_end_datetime TEXT,
     location TEXT,
     grant_points INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'active',
@@ -79,7 +80,16 @@ const schemaStatements = [
     participation_id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     event_id INTEGER NOT NULL,
-    granted_points INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'applied',
+    grant_points_snapshot INTEGER NOT NULL DEFAULT 0,
+    granted_points INTEGER NOT NULL DEFAULT 0,
+    applied_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    checked_in_at TEXT,
+    completed_at TEXT,
+    cancelled_at TEXT,
+    completion_method TEXT,
+    completion_note TEXT,
+    completed_by_admin_id TEXT,
     participated_at TEXT DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (user_id, event_id),
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
@@ -89,12 +99,14 @@ const schemaStatements = [
     transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     service_id INTEGER,
+    participation_id INTEGER,
     type TEXT NOT NULL,
     points INTEGER NOT NULL,
     description TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-    FOREIGN KEY (service_id) REFERENCES services(service_id) ON DELETE SET NULL
+    FOREIGN KEY (service_id) REFERENCES services(service_id) ON DELETE SET NULL,
+    FOREIGN KEY (participation_id) REFERENCES participations(participation_id) ON DELETE SET NULL
   )`,
   `CREATE TABLE IF NOT EXISTS event_organizer_events (
     organizer_id TEXT NOT NULL,
@@ -135,11 +147,57 @@ const schemaStatements = [
     FOREIGN KEY (store_id) REFERENCES stores(store_id) ON DELETE CASCADE,
     FOREIGN KEY (service_id) REFERENCES services(service_id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS event_submissions (
+    submission_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    organizer_id TEXT NOT NULL,
+    event_name TEXT NOT NULL,
+    event_datetime TEXT NOT NULL,
+    event_end_datetime TEXT NOT NULL,
+    location TEXT,
+    description TEXT,
+    activity TEXT,
+    notes TEXT,
+    requested_grant_points INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending',
+    review_note TEXT,
+    reviewed_by TEXT,
+    reviewed_at TEXT,
+    approved_event_id INTEGER,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (organizer_id) REFERENCES event_organizers(organizer_id) ON DELETE CASCADE,
+    FOREIGN KEY (approved_event_id) REFERENCES events(event_id) ON DELETE SET NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS event_participation_status_history (
+    history_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    participation_id INTEGER NOT NULL,
+    from_status TEXT,
+    to_status TEXT NOT NULL,
+    reason TEXT,
+    actor_type TEXT NOT NULL,
+    actor_id TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (participation_id) REFERENCES participations(participation_id) ON DELETE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS event_attendance_scans (
+    scan_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    participation_id INTEGER NOT NULL,
+    organizer_id TEXT NOT NULL,
+    scan_type TEXT NOT NULL,
+    nonce TEXT NOT NULL UNIQUE,
+    qr_issued_at TEXT,
+    qr_expires_at TEXT NOT NULL,
+    processed_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (participation_id, scan_type),
+    FOREIGN KEY (participation_id) REFERENCES participations(participation_id) ON DELETE CASCADE,
+    FOREIGN KEY (organizer_id) REFERENCES event_organizers(organizer_id) ON DELETE CASCADE
   )`
 ];
 
 const columnMigrations = [
   ['events', 'status', "TEXT NOT NULL DEFAULT 'active'"],
+  ['events', 'event_end_datetime', 'TEXT'],
   ['events', 'description', 'TEXT'],
   ['events', 'activity', 'TEXT'],
   ['events', 'notes', 'TEXT'],
@@ -151,7 +209,17 @@ const columnMigrations = [
   ['stores', 'status', "TEXT NOT NULL DEFAULT 'active'"],
   ['services', 'category_id', 'TEXT'],
   ['services', 'description', 'TEXT'],
-  ['services', 'status', "TEXT NOT NULL DEFAULT 'active'"]
+  ['services', 'status', "TEXT NOT NULL DEFAULT 'active'"],
+  ['participations', 'status', 'TEXT'],
+  ['participations', 'grant_points_snapshot', 'INTEGER'],
+  ['participations', 'applied_at', 'TEXT'],
+  ['participations', 'checked_in_at', 'TEXT'],
+  ['participations', 'completed_at', 'TEXT'],
+  ['participations', 'cancelled_at', 'TEXT'],
+  ['participations', 'completion_method', 'TEXT'],
+  ['participations', 'completion_note', 'TEXT'],
+  ['participations', 'completed_by_admin_id', 'TEXT'],
+  ['point_transactions', 'participation_id', 'INTEGER']
 ];
 
 const indexStatements = [
@@ -160,6 +228,8 @@ const indexStatements = [
   'CREATE INDEX IF NOT EXISTS idx_event_organizer_events_event_id ON event_organizer_events(event_id)',
   'CREATE INDEX IF NOT EXISTS idx_portal_event_check_ins_user_id ON portal_event_check_ins(user_id)',
   'CREATE INDEX IF NOT EXISTS idx_portal_store_exchanges_user_id ON portal_store_exchanges(user_id)'
+  ,'CREATE UNIQUE INDEX IF NOT EXISTS idx_point_transactions_participation ON point_transactions(participation_id) WHERE participation_id IS NOT NULL'
+  ,'CREATE INDEX IF NOT EXISTS idx_event_submissions_status ON event_submissions(status, created_at)'
 ];
 
 function safeDecode(value) {
@@ -202,6 +272,15 @@ function applySchema(db) {
   for (const statement of indexStatements) {
     db.prepare(statement).run();
   }
+  db.prepare(
+    `UPDATE participations
+     SET status = COALESCE(status, 'completed'),
+         grant_points_snapshot = COALESCE(grant_points_snapshot, granted_points),
+         applied_at = COALESCE(applied_at, participated_at),
+         completed_at = COALESCE(completed_at, participated_at),
+         completion_method = COALESCE(completion_method, 'legacy')
+     WHERE status IS NULL OR grant_points_snapshot IS NULL OR applied_at IS NULL`
+  ).run();
 }
 
 function getOrCreateEvent(db, event) {
@@ -491,11 +570,17 @@ function mapEvent(row) {
     event_id: asId(row.event_id),
     event_name: asOptionalString(row.event_name),
     event_datetime: asDateTime(row.event_datetime),
+    event_end_datetime: row.event_end_datetime ? asDateTime(row.event_end_datetime) : null,
     location: asOptionalString(row.location),
     grant_points: Number(row.grant_points || 0),
     description: asOptionalString(row.description),
     activity: asOptionalString(row.activity),
-    notes: asOptionalString(row.notes)
+    notes: asOptionalString(row.notes),
+    status: asOptionalString(row.status || 'active'),
+    application_count: Number(row.application_count || 0),
+    checked_in_count: Number(row.checked_in_count || 0),
+    completed_count: Number(row.completed_count || 0),
+    incomplete_count: Number(row.incomplete_count || 0)
   };
 }
 
@@ -511,9 +596,8 @@ function mapService(row) {
   };
 }
 
-function buildPartnerData({ organizers, assignments, stores, events, categories, services }) {
+function buildPartnerData({ organizers, assignments, stores, events, categories, services, submissions = [] }) {
   const eventIdsByOrganizer = new Map();
-  const assignedEventIds = new Set();
   for (const assignment of assignments) {
     const organizerId = asId(assignment.organizer_id);
     const eventId = asId(assignment.event_id);
@@ -521,16 +605,6 @@ function buildPartnerData({ organizers, assignments, stores, events, categories,
       eventIdsByOrganizer.set(organizerId, []);
     }
     eventIdsByOrganizer.get(organizerId).push(eventId);
-    assignedEventIds.add(eventId);
-  }
-
-  const unassignedEventIds = events.map((event) => asId(event.event_id)).filter((eventId) => !assignedEventIds.has(eventId));
-  if (unassignedEventIds.length > 0) {
-    for (const organizer of organizers) {
-      const organizerId = asId(organizer.organizer_id);
-      const eventIds = eventIdsByOrganizer.get(organizerId) || [];
-      eventIdsByOrganizer.set(organizerId, [...eventIds, ...unassignedEventIds]);
-    }
   }
 
   const serviceIdsByStore = new Map();
@@ -560,7 +634,8 @@ function buildPartnerData({ organizers, assignments, stores, events, categories,
     stores: stores.map((store) => mapStore(store, serviceIdsByStore)),
     events: events.map(mapEvent),
     serviceCategories: mappedCategories,
-    services: mappedServices
+    services: mappedServices,
+    eventSubmissions: submissions
   };
 }
 
@@ -597,15 +672,22 @@ function readSqlitePartnerData(options = {}) {
       .all();
     const events = db
       .prepare(
-        `SELECT event_id, event_name, event_datetime, location, grant_points,
+        `SELECT e.event_id, e.event_name, e.event_datetime, e.event_end_datetime, e.location, e.grant_points,
                 COALESCE(description, '') AS description,
                 COALESCE(activity, '') AS activity,
-                COALESCE(notes, '') AS notes
-         FROM events
-         WHERE COALESCE(status, 'active') = 'active'
-         ORDER BY event_datetime DESC, event_id DESC`
+                COALESCE(notes, '') AS notes, e.status,
+                SUM(CASE WHEN p.status IN ('applied','checked_in','completed','absent','incomplete') THEN 1 ELSE 0 END) AS application_count,
+                SUM(CASE WHEN p.status IN ('checked_in','completed','incomplete') THEN 1 ELSE 0 END) AS checked_in_count,
+                SUM(CASE WHEN p.status = 'completed' THEN 1 ELSE 0 END) AS completed_count,
+                SUM(CASE WHEN p.status = 'incomplete' THEN 1 ELSE 0 END) AS incomplete_count
+         FROM events e
+         LEFT JOIN participations p ON e.event_id = p.event_id
+         WHERE COALESCE(e.status, 'active') IN ('active', 'paused')
+         GROUP BY e.event_id
+         ORDER BY e.event_datetime DESC, e.event_id DESC`
       )
       .all();
+    const submissions = db.prepare('SELECT * FROM event_submissions ORDER BY created_at DESC').all();
     const categories = db.prepare('SELECT category_id, category_name FROM service_categories ORDER BY category_id ASC').all();
     const services = db
       .prepare(
@@ -621,7 +703,7 @@ function readSqlitePartnerData(options = {}) {
       )
       .all(DEFAULT_CATEGORY_ID, DEFAULT_CATEGORY_NAME);
 
-    return buildPartnerData({ organizers, assignments, stores, events, categories, services });
+    return buildPartnerData({ organizers, assignments, stores, events, categories, services, submissions });
   } finally {
     db.close();
   }
@@ -651,14 +733,21 @@ async function readMysqlPartnerData() {
      ORDER BY store_id ASC`
   );
   const [events] = await pool.query(
-    `SELECT event_id, event_name, event_datetime, location, grant_points,
+    `SELECT e.event_id, e.event_name, e.event_datetime, e.event_end_datetime, e.location, e.grant_points,
             COALESCE(description, '') AS description,
             COALESCE(activity, '') AS activity,
-            COALESCE(notes, '') AS notes
-     FROM events
-     WHERE COALESCE(status, 'active') = 'active'
-     ORDER BY event_datetime DESC, event_id DESC`
+            COALESCE(notes, '') AS notes, e.status,
+            SUM(CASE WHEN p.status IN ('applied','checked_in','completed','absent','incomplete') THEN 1 ELSE 0 END) AS application_count,
+            SUM(CASE WHEN p.status IN ('checked_in','completed','incomplete') THEN 1 ELSE 0 END) AS checked_in_count,
+            SUM(CASE WHEN p.status = 'completed' THEN 1 ELSE 0 END) AS completed_count,
+            SUM(CASE WHEN p.status = 'incomplete' THEN 1 ELSE 0 END) AS incomplete_count
+     FROM events e
+     LEFT JOIN participations p ON e.event_id = p.event_id
+     WHERE COALESCE(e.status, 'active') IN ('active', 'paused')
+     GROUP BY e.event_id
+     ORDER BY e.event_datetime DESC, e.event_id DESC`
   );
+  const [submissions] = await pool.query('SELECT * FROM event_submissions ORDER BY created_at DESC');
   const [categories] = await pool.query('SELECT category_id, category_name FROM service_categories ORDER BY category_id ASC');
   const [services] = await pool.query(
     `SELECT s.service_id, s.store_id, COALESCE(s.category_id, ?) AS category_id,
@@ -673,7 +762,7 @@ async function readMysqlPartnerData() {
     [DEFAULT_CATEGORY_ID, DEFAULT_CATEGORY_NAME]
   );
 
-  return buildPartnerData({ organizers, assignments, stores, events, categories, services });
+  return buildPartnerData({ organizers, assignments, stores, events, categories, services, submissions });
 }
 
 async function readPartnerData(options = {}) {
@@ -682,67 +771,6 @@ async function readPartnerData(options = {}) {
   }
 
   return readSqlitePartnerData(options);
-}
-
-function recordSqliteEventCheckIn({ organizer, event, user }, options = {}) {
-  const db = openDatabase(options);
-
-  try {
-    const write = db.transaction(() => {
-      const dbUser = db.prepare('SELECT user_id, name, points FROM users WHERE user_id = ?').get(user.user_id);
-      if (!dbUser) {
-        return { userNotFound: true };
-      }
-
-      const duplicate = db
-        .prepare('SELECT check_in_id FROM portal_event_check_ins WHERE event_id = ? AND user_id = ? AND nonce = ?')
-        .get(event.event_id, user.user_id, user.nonce);
-      if (duplicate) {
-        return { duplicate: true };
-      }
-
-      const participation = db
-        .prepare('SELECT participation_id FROM participations WHERE event_id = ? AND user_id = ?')
-        .get(event.event_id, user.user_id);
-      if (participation) {
-        return { alreadyParticipated: true };
-      }
-
-      db.prepare(
-        `INSERT INTO participations (user_id, event_id, granted_points)
-         VALUES (?, ?, ?)`
-      ).run(user.user_id, event.event_id, event.grant_points);
-      db.prepare('UPDATE users SET points = points + ? WHERE user_id = ?').run(event.grant_points, user.user_id);
-      db.prepare(
-        `INSERT INTO point_transactions (user_id, type, points, description)
-         VALUES (?, 'grant', ?, ?)`
-      ).run(user.user_id, event.grant_points, `Points granted for event: ${event.event_name}`);
-      const result = db.prepare(
-        `INSERT INTO portal_event_check_ins
-          (organizer_id, event_id, user_id, user_name, nonce, qr_issued_at, qr_expires_at, granted_points)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(
-        organizer.organizer_id,
-        event.event_id,
-        user.user_id,
-        user.name,
-        user.nonce,
-        user.issued_at,
-        user.expires_at,
-        event.grant_points
-      );
-
-      return {
-        duplicate: false,
-        id: Number(result.lastInsertRowid),
-        current_points: Number(dbUser.points || 0) + Number(event.grant_points || 0)
-      };
-    });
-
-    return write();
-  } finally {
-    db.close();
-  }
 }
 
 function recordSqliteStoreExchange({ store, service, user }, options = {}) {
@@ -820,64 +848,6 @@ async function withMysqlTransaction(callback) {
   }
 }
 
-async function recordMysqlEventCheckIn({ organizer, event, user }) {
-  return withMysqlTransaction(async (connection) => {
-    const [users] = await connection.query('SELECT user_id, name, points FROM users WHERE user_id = ? FOR UPDATE', [user.user_id]);
-    if (users.length === 0) {
-      return { userNotFound: true };
-    }
-
-    const [duplicates] = await connection.query(
-      'SELECT check_in_id FROM portal_event_check_ins WHERE event_id = ? AND user_id = ? AND nonce = ?',
-      [event.event_id, user.user_id, user.nonce]
-    );
-    if (duplicates.length > 0) {
-      return { duplicate: true };
-    }
-
-    const [participations] = await connection.query(
-      'SELECT participation_id FROM participations WHERE event_id = ? AND user_id = ?',
-      [event.event_id, user.user_id]
-    );
-    if (participations.length > 0) {
-      return { alreadyParticipated: true };
-    }
-
-    await connection.query(
-      `INSERT INTO participations (user_id, event_id, granted_points)
-       VALUES (?, ?, ?)`,
-      [user.user_id, event.event_id, event.grant_points]
-    );
-    await connection.query('UPDATE users SET points = points + ? WHERE user_id = ?', [event.grant_points, user.user_id]);
-    await connection.query(
-      `INSERT INTO point_transactions (user_id, type, points, description)
-       VALUES (?, 'grant', ?, ?)`,
-      [user.user_id, event.grant_points, `Points granted for event: ${event.event_name}`]
-    );
-    const [result] = await connection.query(
-      `INSERT INTO portal_event_check_ins
-        (organizer_id, event_id, user_id, user_name, nonce, qr_issued_at, qr_expires_at, granted_points)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        organizer.organizer_id,
-        event.event_id,
-        user.user_id,
-        user.name,
-        user.nonce,
-        user.issued_at,
-        user.expires_at,
-        event.grant_points
-      ]
-    );
-
-    return {
-      duplicate: false,
-      id: result.insertId,
-      current_points: Number(users[0].points || 0) + Number(event.grant_points || 0)
-    };
-  });
-}
-
 async function recordMysqlStoreExchange({ store, service, user }) {
   return withMysqlTransaction(async (connection) => {
     const [duplicates] = await connection.query(
@@ -931,12 +901,478 @@ async function recordMysqlStoreExchange({ store, service, user }) {
   });
 }
 
+function recordSqliteEventAttendance({ organizer, event, user }, scanType, options = {}) {
+  const db = openDatabase(options);
+  try {
+    return db.transaction(() => {
+      const dbEvent = db
+        .prepare('SELECT event_id, event_name, event_end_datetime, status FROM events WHERE event_id = ?')
+        .get(event.event_id);
+      if (!dbEvent || !['active', 'paused'].includes(dbEvent.status)) {
+        return { eventClosed: true };
+      }
+      const dbUser = db.prepare('SELECT user_id, name, points FROM users WHERE user_id = ?').get(user.user_id);
+      if (!dbUser) {
+        return { userNotFound: true };
+      }
+      if (db.prepare('SELECT scan_id FROM event_attendance_scans WHERE nonce = ?').get(user.nonce)) {
+        return { duplicate: true };
+      }
+      const participation = db
+        .prepare(
+          `SELECT participation_id, user_id, status, grant_points_snapshot, granted_points
+           FROM participations WHERE event_id = ? AND user_id = ?`
+        )
+        .get(event.event_id, user.user_id);
+      if (!participation) {
+        return { notApplied: true };
+      }
+
+      const expectedStatus = scanType === 'check_in' ? 'applied' : 'checked_in';
+      if (participation.status !== expectedStatus) {
+        return { invalidStatus: true, participation_status: participation.status };
+      }
+      if (
+        scanType === 'completion' &&
+        (!dbEvent.event_end_datetime || Date.now() < new Date(dbEvent.event_end_datetime).getTime())
+      ) {
+        return { tooEarly: true, event_end_datetime: dbEvent.event_end_datetime };
+      }
+
+      if (scanType === 'check_in') {
+        db.prepare(
+          "UPDATE participations SET status = 'checked_in', checked_in_at = CURRENT_TIMESTAMP WHERE participation_id = ?"
+        ).run(participation.participation_id);
+      } else {
+        const points = Number(participation.grant_points_snapshot || 0);
+        db.prepare(
+          `UPDATE participations
+           SET status = 'completed', granted_points = ?, completed_at = CURRENT_TIMESTAMP,
+               completion_method = 'qr'
+           WHERE participation_id = ?`
+        ).run(points, participation.participation_id);
+        db.prepare('UPDATE users SET points = points + ? WHERE user_id = ?').run(points, user.user_id);
+        db.prepare(
+          `INSERT INTO point_transactions
+             (user_id, participation_id, type, points, description)
+           VALUES (?, ?, 'grant', ?, ?)`
+        ).run(
+          user.user_id,
+          participation.participation_id,
+          points,
+          `Points granted for event: ${dbEvent.event_name}`
+        );
+      }
+      const result = db.prepare(
+        `INSERT INTO event_attendance_scans
+           (participation_id, organizer_id, scan_type, nonce, qr_issued_at, qr_expires_at)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      ).run(
+        participation.participation_id,
+        organizer.organizer_id,
+        scanType,
+        user.nonce,
+        user.issued_at,
+        user.expires_at
+      );
+      db.prepare(
+        `INSERT INTO event_participation_status_history
+           (participation_id, from_status, to_status, reason, actor_type, actor_id)
+         VALUES (?, ?, ?, ?, 'organizer', ?)`
+      ).run(
+        participation.participation_id,
+        expectedStatus,
+        scanType === 'check_in' ? 'checked_in' : 'completed',
+        scanType === 'check_in' ? 'QR check-in' : 'QR completion',
+        organizer.organizer_id
+      );
+
+      const grantedPoints =
+        scanType === 'completion' ? Number(participation.grant_points_snapshot || 0) : 0;
+      return {
+        duplicate: false,
+        id: Number(result.lastInsertRowid),
+        participation_status: scanType === 'check_in' ? 'checked_in' : 'completed',
+        granted_points: grantedPoints,
+        current_points: Number(dbUser.points || 0) + grantedPoints
+      };
+    })();
+  } catch (error) {
+    if (String(error.message).includes('UNIQUE constraint failed')) {
+      return { duplicate: true };
+    }
+    throw error;
+  } finally {
+    db.close();
+  }
+}
+
+async function recordMysqlEventAttendance({ organizer, event, user }, scanType) {
+  return withMysqlTransaction(async (connection) => {
+    const [events] = await connection.query(
+      'SELECT event_id, event_name, event_end_datetime, status FROM events WHERE event_id = ? FOR UPDATE',
+      [event.event_id]
+    );
+    if (events.length === 0 || !['active', 'paused'].includes(events[0].status)) {
+      return { eventClosed: true };
+    }
+    const [users] = await connection.query(
+      'SELECT user_id, name, points FROM users WHERE user_id = ? FOR UPDATE',
+      [user.user_id]
+    );
+    if (users.length === 0) {
+      return { userNotFound: true };
+    }
+    const [duplicates] = await connection.query(
+      'SELECT scan_id FROM event_attendance_scans WHERE nonce = ?',
+      [user.nonce]
+    );
+    if (duplicates.length > 0) {
+      return { duplicate: true };
+    }
+    const [participations] = await connection.query(
+      `SELECT participation_id, user_id, status, grant_points_snapshot, granted_points
+       FROM participations WHERE event_id = ? AND user_id = ? FOR UPDATE`,
+      [event.event_id, user.user_id]
+    );
+    if (participations.length === 0) {
+      return { notApplied: true };
+    }
+    const participation = participations[0];
+    const expectedStatus = scanType === 'check_in' ? 'applied' : 'checked_in';
+    if (participation.status !== expectedStatus) {
+      return { invalidStatus: true, participation_status: participation.status };
+    }
+    if (
+      scanType === 'completion' &&
+      (!events[0].event_end_datetime ||
+        Date.now() < new Date(events[0].event_end_datetime).getTime())
+    ) {
+      return { tooEarly: true, event_end_datetime: events[0].event_end_datetime };
+    }
+    let grantedPoints = 0;
+    if (scanType === 'check_in') {
+      await connection.query(
+        "UPDATE participations SET status = 'checked_in', checked_in_at = CURRENT_TIMESTAMP WHERE participation_id = ?",
+        [participation.participation_id]
+      );
+    } else {
+      grantedPoints = Number(participation.grant_points_snapshot || 0);
+      await connection.query(
+        `UPDATE participations
+         SET status = 'completed', granted_points = ?, completed_at = CURRENT_TIMESTAMP,
+             completion_method = 'qr'
+         WHERE participation_id = ?`,
+        [grantedPoints, participation.participation_id]
+      );
+      await connection.query('UPDATE users SET points = points + ? WHERE user_id = ?', [
+        grantedPoints,
+        user.user_id
+      ]);
+      await connection.query(
+        `INSERT INTO point_transactions
+           (user_id, participation_id, type, points, description)
+         VALUES (?, ?, 'grant', ?, ?)`,
+        [
+          user.user_id,
+          participation.participation_id,
+          grantedPoints,
+          `Points granted for event: ${events[0].event_name}`
+        ]
+      );
+    }
+    const [result] = await connection.query(
+      `INSERT INTO event_attendance_scans
+         (participation_id, organizer_id, scan_type, nonce, qr_issued_at, qr_expires_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        participation.participation_id,
+        organizer.organizer_id,
+        scanType,
+        user.nonce,
+        user.issued_at,
+        user.expires_at
+      ]
+    );
+    await connection.query(
+      `INSERT INTO event_participation_status_history
+         (participation_id, from_status, to_status, reason, actor_type, actor_id)
+       VALUES (?, ?, ?, ?, 'organizer', ?)`,
+      [
+        participation.participation_id,
+        expectedStatus,
+        scanType === 'check_in' ? 'checked_in' : 'completed',
+        scanType === 'check_in' ? 'QR check-in' : 'QR completion',
+        organizer.organizer_id
+      ]
+    );
+    return {
+      duplicate: false,
+      id: result.insertId,
+      participation_status: scanType === 'check_in' ? 'checked_in' : 'completed',
+      granted_points: grantedPoints,
+      current_points: Number(users[0].points || 0) + grantedPoints
+    };
+  });
+}
+
 async function recordEventCheckIn(payload, options = {}) {
   if (getDbClient(options) === 'mysql') {
-    return recordMysqlEventCheckIn(payload);
+    return recordMysqlEventAttendance(payload, 'check_in');
   }
 
-  return recordSqliteEventCheckIn(payload, options);
+  return recordSqliteEventAttendance(payload, 'check_in', options);
+}
+
+async function recordEventCompletion(payload, options = {}) {
+  if (getDbClient(options) === 'mysql') {
+    return recordMysqlEventAttendance(payload, 'completion');
+  }
+  return recordSqliteEventAttendance(payload, 'completion', options);
+}
+
+function validateSubmissionPayload(data) {
+  const normalized = {
+    event_name: String(data.event_name || '').trim(),
+    event_datetime: String(data.event_datetime || '').trim().replace('T', ' '),
+    event_end_datetime: String(data.event_end_datetime || '').trim().replace('T', ' '),
+    location: String(data.location || '').trim() || null,
+    description: String(data.description || '').trim() || null,
+    activity: String(data.activity || '').trim() || null,
+    notes: String(data.notes || '').trim() || null,
+    requested_grant_points: Number(data.requested_grant_points || 0)
+  };
+  if (!normalized.event_name || !normalized.event_datetime || !normalized.event_end_datetime) {
+    return { error: 'Event name, start datetime and end datetime are required.' };
+  }
+  if (
+    !Number.isFinite(normalized.requested_grant_points) ||
+    normalized.requested_grant_points < 0
+  ) {
+    return { error: 'Requested points must be zero or greater.' };
+  }
+  if (new Date(normalized.event_end_datetime) <= new Date(normalized.event_datetime)) {
+    return { error: 'Event end datetime must be after the start datetime.' };
+  }
+  return { value: normalized };
+}
+
+function saveSqliteEventSubmission({ organizer, submissionId, action, data }, options = {}) {
+  const db = openDatabase(options);
+  try {
+    return db.transaction(() => {
+      if (action === 'create') {
+        const validated = validateSubmissionPayload(data);
+        if (validated.error) return validated;
+        const value = validated.value;
+        const result = db.prepare(
+          `INSERT INTO event_submissions
+             (organizer_id, event_name, event_datetime, event_end_datetime, location,
+              description, activity, notes, requested_grant_points, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`
+        ).run(
+          organizer.organizer_id,
+          value.event_name,
+          value.event_datetime,
+          value.event_end_datetime,
+          value.location,
+          value.description,
+          value.activity,
+          value.notes,
+          value.requested_grant_points
+        );
+        return { submission_id: Number(result.lastInsertRowid), status: 'pending' };
+      }
+      const current = db
+        .prepare('SELECT * FROM event_submissions WHERE submission_id = ? AND organizer_id = ?')
+        .get(submissionId, organizer.organizer_id);
+      if (!current) return { notFound: true };
+      if (action === 'withdraw') {
+        if (current.status !== 'pending') return { conflict: true };
+        db.prepare(
+          "UPDATE event_submissions SET status = 'withdrawn', updated_at = CURRENT_TIMESTAMP WHERE submission_id = ?"
+        ).run(submissionId);
+        return { submission_id: Number(submissionId), status: 'withdrawn' };
+      }
+      if (!['pending', 'rejected'].includes(current.status)) return { conflict: true };
+      const validated = validateSubmissionPayload({ ...current, ...data });
+      if (validated.error) return validated;
+      const value = validated.value;
+      db.prepare(
+        `UPDATE event_submissions
+         SET event_name = ?, event_datetime = ?, event_end_datetime = ?, location = ?,
+             description = ?, activity = ?, notes = ?, requested_grant_points = ?,
+             status = 'pending', review_note = NULL, reviewed_by = NULL, reviewed_at = NULL,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE submission_id = ?`
+      ).run(
+        value.event_name,
+        value.event_datetime,
+        value.event_end_datetime,
+        value.location,
+        value.description,
+        value.activity,
+        value.notes,
+        value.requested_grant_points,
+        submissionId
+      );
+      return { submission_id: Number(submissionId), status: 'pending' };
+    })();
+  } finally {
+    db.close();
+  }
+}
+
+async function saveMysqlEventSubmission({ organizer, submissionId, action, data }) {
+  return withMysqlTransaction(async (connection) => {
+    if (action === 'create') {
+      const validated = validateSubmissionPayload(data);
+      if (validated.error) return validated;
+      const value = validated.value;
+      const [result] = await connection.query(
+        `INSERT INTO event_submissions
+           (organizer_id, event_name, event_datetime, event_end_datetime, location,
+            description, activity, notes, requested_grant_points, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+        [
+          organizer.organizer_id,
+          value.event_name,
+          value.event_datetime,
+          value.event_end_datetime,
+          value.location,
+          value.description,
+          value.activity,
+          value.notes,
+          value.requested_grant_points
+        ]
+      );
+      return { submission_id: result.insertId, status: 'pending' };
+    }
+    const [rows] = await connection.query(
+      'SELECT * FROM event_submissions WHERE submission_id = ? AND organizer_id = ? FOR UPDATE',
+      [submissionId, organizer.organizer_id]
+    );
+    if (rows.length === 0) return { notFound: true };
+    const current = rows[0];
+    if (action === 'withdraw') {
+      if (current.status !== 'pending') return { conflict: true };
+      await connection.query(
+        "UPDATE event_submissions SET status = 'withdrawn', updated_at = CURRENT_TIMESTAMP WHERE submission_id = ?",
+        [submissionId]
+      );
+      return { submission_id: Number(submissionId), status: 'withdrawn' };
+    }
+    if (!['pending', 'rejected'].includes(current.status)) return { conflict: true };
+    const validated = validateSubmissionPayload({ ...current, ...data });
+    if (validated.error) return validated;
+    const value = validated.value;
+    await connection.query(
+      `UPDATE event_submissions
+       SET event_name = ?, event_datetime = ?, event_end_datetime = ?, location = ?,
+           description = ?, activity = ?, notes = ?, requested_grant_points = ?,
+           status = 'pending', review_note = NULL, reviewed_by = NULL, reviewed_at = NULL,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE submission_id = ?`,
+      [
+        value.event_name,
+        value.event_datetime,
+        value.event_end_datetime,
+        value.location,
+        value.description,
+        value.activity,
+        value.notes,
+        value.requested_grant_points,
+        submissionId
+      ]
+    );
+    return { submission_id: Number(submissionId), status: 'pending' };
+  });
+}
+
+async function saveEventSubmission(payload, options = {}) {
+  if (getDbClient(options) === 'mysql') {
+    return saveMysqlEventSubmission(payload);
+  }
+  return saveSqliteEventSubmission(payload, options);
+}
+
+function closeSqliteOrganizerEvent({ organizer, eventId }, options = {}) {
+  const db = openDatabase(options);
+  try {
+    return db.transaction(() => {
+      const event = db.prepare(
+        `SELECT e.event_id, e.status
+         FROM events e
+         JOIN event_organizer_events eoe ON e.event_id = eoe.event_id
+         WHERE e.event_id = ? AND eoe.organizer_id = ?`
+      ).get(eventId, organizer.organizer_id);
+      if (!event) return { notFound: true };
+      if (!['active', 'paused'].includes(event.status)) return { conflict: true };
+      const participations = db
+        .prepare("SELECT participation_id, status FROM participations WHERE event_id = ? AND status IN ('applied','checked_in')")
+        .all(eventId);
+      db.prepare("UPDATE events SET status = 'completed' WHERE event_id = ?").run(eventId);
+      const update = db.prepare('UPDATE participations SET status = ? WHERE participation_id = ?');
+      const history = db.prepare(
+        `INSERT INTO event_participation_status_history
+           (participation_id, from_status, to_status, reason, actor_type, actor_id)
+         VALUES (?, ?, ?, 'Event closed', 'organizer', ?)`
+      );
+      for (const item of participations) {
+        const next = item.status === 'applied' ? 'absent' : 'incomplete';
+        update.run(next, item.participation_id);
+        history.run(item.participation_id, item.status, next, organizer.organizer_id);
+      }
+      return {
+        event_id: Number(eventId),
+        absent_count: participations.filter((item) => item.status === 'applied').length,
+        incomplete_count: participations.filter((item) => item.status === 'checked_in').length
+      };
+    })();
+  } finally {
+    db.close();
+  }
+}
+
+async function closeMysqlOrganizerEvent({ organizer, eventId }) {
+  return withMysqlTransaction(async (connection) => {
+    const [events] = await connection.query(
+      `SELECT e.event_id, e.status
+       FROM events e JOIN event_organizer_events eoe ON e.event_id = eoe.event_id
+       WHERE e.event_id = ? AND eoe.organizer_id = ? FOR UPDATE`,
+      [eventId, organizer.organizer_id]
+    );
+    if (events.length === 0) return { notFound: true };
+    if (!['active', 'paused'].includes(events[0].status)) return { conflict: true };
+    const [participations] = await connection.query(
+      "SELECT participation_id, status FROM participations WHERE event_id = ? AND status IN ('applied','checked_in') FOR UPDATE",
+      [eventId]
+    );
+    await connection.query("UPDATE events SET status = 'completed' WHERE event_id = ?", [eventId]);
+    for (const item of participations) {
+      const next = item.status === 'applied' ? 'absent' : 'incomplete';
+      await connection.query('UPDATE participations SET status = ? WHERE participation_id = ?', [
+        next,
+        item.participation_id
+      ]);
+      await connection.query(
+        `INSERT INTO event_participation_status_history
+           (participation_id, from_status, to_status, reason, actor_type, actor_id)
+         VALUES (?, ?, ?, 'Event closed', 'organizer', ?)`,
+        [item.participation_id, item.status, next, organizer.organizer_id]
+      );
+    }
+    return {
+      event_id: Number(eventId),
+      absent_count: participations.filter((item) => item.status === 'applied').length,
+      incomplete_count: participations.filter((item) => item.status === 'checked_in').length
+    };
+  });
+}
+
+async function closeOrganizerEvent(payload, options = {}) {
+  if (getDbClient(options) === 'mysql') return closeMysqlOrganizerEvent(payload);
+  return closeSqliteOrganizerEvent(payload, options);
 }
 
 async function recordStoreExchange(payload, options = {}) {
@@ -953,6 +1389,9 @@ module.exports = {
   openDatabase,
   readPartnerData,
   recordEventCheckIn,
+  recordEventCompletion,
+  saveEventSubmission,
+  closeOrganizerEvent,
   recordStoreExchange,
   resolveDbPath
 };

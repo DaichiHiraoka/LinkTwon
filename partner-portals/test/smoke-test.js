@@ -15,7 +15,14 @@ const {
   loadTranslationCache,
   refreshTranslationCache
 } = require('../lib/translationCache');
-const { buildEventPayload, buildStorePayload, parseUserQrPayload, processEventCheckIn, processStoreExchange } = require('../server');
+const {
+  buildEventPayload,
+  buildStorePayload,
+  parseUserQrPayload,
+  processEventCheckIn,
+  processEventCompletion,
+  processStoreExchange
+} = require('../server');
 const { openDatabase, readPartnerData } = require('../lib/partnerRepository');
 
 async function prepareTempTranslationCache(dbPath) {
@@ -58,6 +65,15 @@ async function prepareTempPartnerDb() {
         ('管理者作成イベント', '2026-07-20T10:00:00+09:00', '市民ホール', 40, 'active',
          '管理画面から作成された未割当イベントです。', '受付確認を行います。', '割当がなくても主催者アプリに表示します。')`
     ).run();
+    db.prepare(
+      "UPDATE events SET event_end_datetime = '2000-01-01 12:00:00' WHERE grant_points = 100"
+    ).run();
+    db.prepare(
+      `INSERT OR IGNORE INTO participations
+         (user_id, event_id, status, grant_points_snapshot, granted_points, applied_at)
+       SELECT 1, event_id, 'applied', grant_points, 0, CURRENT_TIMESTAMP
+       FROM events WHERE grant_points = 100`
+    ).run();
     const eventCount = db.prepare('SELECT COUNT(*) AS count FROM events').get().count;
     const storeCount = db.prepare('SELECT COUNT(*) AS count FROM stores').get().count;
     const organizerCount = db.prepare('SELECT COUNT(*) AS count FROM event_organizers').get().count;
@@ -79,9 +95,8 @@ async function testPortalPayloads(cachePath, dbPath) {
   const translatedService = storePayload.services.find((serviceItem) => serviceItem.required_points === 220);
 
   assert.equal(eventPayload.role, 'event');
-  assert.equal(eventPayload.events.length, 3);
+  assert.equal(eventPayload.events.length, 2);
   assert.ok(translatedEvent);
-  assert.ok(unassignedEvent);
   assert.equal(translatedEvent.event_name, 'Disaster Supply Check and Local Guidance');
   assert.equal(await buildEventPayload('event-demo', 'wrong-password', 'en', { cachePath, dbPath }), null);
 
@@ -190,7 +205,8 @@ async function testUserQrProcessing(cachePath, dbPath, ids) {
     { cachePath, dbPath }
   );
   assert.equal(eventResult.status, 201);
-  assert.equal(eventResult.body.granted_points, 100);
+  assert.equal(eventResult.body.participation_status, 'checked_in');
+  assert.equal('granted_points' in eventResult.body, false);
   assert.equal(eventResult.body.user.user_id, '1');
 
   const duplicateResult = await processEventCheckIn(
@@ -204,6 +220,40 @@ async function testUserQrProcessing(cachePath, dbPath, ids) {
     { cachePath, dbPath }
   );
   assert.equal(duplicateResult.status, 409);
+
+  const timingDb = openDatabase({ dbPath });
+  timingDb.prepare("UPDATE events SET event_end_datetime = '2099-01-01 12:00:00' WHERE event_id = ?").run(ids.eventId);
+  timingDb.close();
+  const completionQr = createUserQrPayload(`smoke-completion-${Date.now()}`);
+  const tooEarlyResult = await processEventCompletion(
+    {
+      code: 'event-demo',
+      password: 'event-demo-pass',
+      event_id: ids.eventId,
+      user_qr_payload: completionQr
+    },
+    'en',
+    { cachePath, dbPath }
+  );
+  assert.equal(tooEarlyResult.status, 409);
+  assert.match(tooEarlyResult.body.message, /before the event end/);
+  const finishedDb = openDatabase({ dbPath });
+  finishedDb.prepare("UPDATE events SET event_end_datetime = '2000-01-01 12:00:00' WHERE event_id = ?").run(ids.eventId);
+  finishedDb.close();
+
+  const completionResult = await processEventCompletion(
+    {
+      code: 'event-demo',
+      password: 'event-demo-pass',
+      event_id: ids.eventId,
+      user_qr_payload: completionQr
+    },
+    'en',
+    { cachePath, dbPath }
+  );
+  assert.equal(completionResult.status, 201);
+  assert.equal(completionResult.body.participation_status, 'completed');
+  assert.equal(completionResult.body.granted_points, 100);
 
   const exchangeResult = await processStoreExchange(
     {
@@ -221,7 +271,11 @@ async function testUserQrProcessing(cachePath, dbPath, ids) {
 
   const db = openDatabase({ dbPath });
   try {
-    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM portal_event_check_ins').get().count, 1);
+    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM event_attendance_scans').get().count, 2);
+    assert.equal(
+      db.prepare('SELECT COUNT(*) AS count FROM point_transactions WHERE participation_id IS NOT NULL').get().count,
+      1
+    );
     assert.equal(db.prepare('SELECT COUNT(*) AS count FROM portal_store_exchanges').get().count, 1);
     assert.equal(db.prepare('SELECT points FROM users WHERE user_id = ?').get('1').points, 180);
   } finally {

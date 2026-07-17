@@ -42,9 +42,10 @@ const schemaStatements = [
     event_id INTEGER PRIMARY KEY AUTOINCREMENT,
     event_name TEXT NOT NULL,
     event_datetime TEXT NOT NULL,
+    event_end_datetime TEXT,
     location TEXT,
     grant_points INTEGER NOT NULL DEFAULT 0,
-    status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'paused')),
+    status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'paused', 'completed', 'cancelled')),
     description TEXT,
     activity TEXT,
     notes TEXT,
@@ -100,7 +101,16 @@ const schemaStatements = [
     participation_id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     event_id INTEGER NOT NULL,
-    granted_points INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'applied' CHECK(status IN ('applied', 'checked_in', 'completed', 'cancelled', 'absent', 'incomplete')),
+    grant_points_snapshot INTEGER NOT NULL DEFAULT 0,
+    granted_points INTEGER NOT NULL DEFAULT 0,
+    applied_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    checked_in_at TEXT,
+    completed_at TEXT,
+    cancelled_at TEXT,
+    completion_method TEXT CHECK(completion_method IN ('qr', 'admin', 'legacy')),
+    completion_note TEXT,
+    completed_by_admin_id TEXT,
     participated_at TEXT DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (user_id, event_id),
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
@@ -110,12 +120,59 @@ const schemaStatements = [
     transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     service_id INTEGER,
+    participation_id INTEGER,
     type TEXT NOT NULL CHECK(type IN ('grant', 'exchange')),
     points INTEGER NOT NULL,
     description TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-    FOREIGN KEY (service_id) REFERENCES services(service_id) ON DELETE SET NULL
+    FOREIGN KEY (service_id) REFERENCES services(service_id) ON DELETE SET NULL,
+    FOREIGN KEY (participation_id) REFERENCES participations(participation_id) ON DELETE SET NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS event_submissions (
+    submission_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    organizer_id TEXT NOT NULL,
+    event_name TEXT NOT NULL,
+    event_datetime TEXT NOT NULL,
+    event_end_datetime TEXT NOT NULL,
+    location TEXT,
+    description TEXT,
+    activity TEXT,
+    notes TEXT,
+    requested_grant_points INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected', 'withdrawn')),
+    review_note TEXT,
+    reviewed_by TEXT,
+    reviewed_at TEXT,
+    approved_event_id INTEGER,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (organizer_id) REFERENCES event_organizers(organizer_id) ON DELETE CASCADE,
+    FOREIGN KEY (approved_event_id) REFERENCES events(event_id) ON DELETE SET NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS event_participation_status_history (
+    history_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    participation_id INTEGER NOT NULL,
+    from_status TEXT,
+    to_status TEXT NOT NULL,
+    reason TEXT,
+    actor_type TEXT NOT NULL CHECK(actor_type IN ('user', 'organizer', 'admin', 'system')),
+    actor_id TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (participation_id) REFERENCES participations(participation_id) ON DELETE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS event_attendance_scans (
+    scan_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    participation_id INTEGER NOT NULL,
+    organizer_id TEXT NOT NULL,
+    scan_type TEXT NOT NULL CHECK(scan_type IN ('check_in', 'completion')),
+    nonce TEXT NOT NULL UNIQUE,
+    qr_issued_at TEXT,
+    qr_expires_at TEXT NOT NULL,
+    processed_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (participation_id, scan_type),
+    FOREIGN KEY (participation_id) REFERENCES participations(participation_id) ON DELETE CASCADE,
+    FOREIGN KEY (organizer_id) REFERENCES event_organizers(organizer_id) ON DELETE CASCADE
   )`,
   `CREATE TABLE IF NOT EXISTS portal_event_check_ins (
     check_in_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -268,6 +325,7 @@ const columnMigrations = [
   ['users', 'login_password_plaintext', 'TEXT'],
   ['users', 'email_verified_at', 'TEXT'],
   ['events', 'status', "TEXT NOT NULL DEFAULT 'active'"],
+  ['events', 'event_end_datetime', 'TEXT'],
   ['events', 'description', 'TEXT'],
   ['events', 'activity', 'TEXT'],
   ['events', 'notes', 'TEXT'],
@@ -279,14 +337,66 @@ const columnMigrations = [
   ['stores', 'status', "TEXT NOT NULL DEFAULT 'active'"],
   ['services', 'category_id', 'TEXT'],
   ['services', 'description', 'TEXT'],
-  ['services', 'status', "TEXT NOT NULL DEFAULT 'active'"]
+  ['services', 'status', "TEXT NOT NULL DEFAULT 'active'"],
+  ['participations', 'status', 'TEXT'],
+  ['participations', 'grant_points_snapshot', 'INTEGER'],
+  ['participations', 'applied_at', 'TEXT'],
+  ['participations', 'checked_in_at', 'TEXT'],
+  ['participations', 'completed_at', 'TEXT'],
+  ['participations', 'cancelled_at', 'TEXT'],
+  ['participations', 'completion_method', 'TEXT'],
+  ['participations', 'completion_note', 'TEXT'],
+  ['participations', 'completed_by_admin_id', 'TEXT'],
+  ['point_transactions', 'participation_id', 'INTEGER']
 ];
 
 function ensureDirectory(filePath) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
 }
 
+function ensureEventLifecycleSchema(db) {
+  const table = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'events'").get();
+  if (!table?.sql || table.sql.includes("'completed'")) {
+    return;
+  }
+
+  const columns = db.prepare('PRAGMA table_info(events)').all();
+  const hasEndDate = columns.some((column) => column.name === 'event_end_datetime');
+  db.pragma('foreign_keys = OFF');
+  try {
+    db.prepare(
+      `CREATE TABLE events_lifecycle_migration (
+        event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_name TEXT NOT NULL,
+        event_datetime TEXT NOT NULL,
+        event_end_datetime TEXT,
+        location TEXT,
+        grant_points INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'paused', 'completed', 'cancelled')),
+        description TEXT,
+        activity TEXT,
+        notes TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`
+    ).run();
+    db.prepare(
+      `INSERT INTO events_lifecycle_migration
+        (event_id, event_name, event_datetime, event_end_datetime, location, grant_points, status,
+         description, activity, notes, created_at)
+       SELECT event_id, event_name, event_datetime, ${hasEndDate ? 'event_end_datetime' : 'NULL'}, location,
+              grant_points, status, description, activity, notes, created_at
+       FROM events`
+    ).run();
+    db.prepare('DROP TABLE events').run();
+    db.prepare('ALTER TABLE events_lifecycle_migration RENAME TO events').run();
+  } finally {
+    db.pragma('foreign_keys = ON');
+  }
+}
+
 function applySchema(db) {
+  ensureEventLifecycleSchema(db);
+
   for (const statement of schemaStatements) {
     db.prepare(statement).run();
   }
@@ -304,6 +414,20 @@ function applySchema(db) {
 
   db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_event_organizers_login_code ON event_organizers(login_code)').run();
   db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_stores_login_code ON stores(login_code) WHERE login_code IS NOT NULL').run();
+  db.prepare(
+    `UPDATE participations
+     SET status = COALESCE(status, 'completed'),
+         grant_points_snapshot = COALESCE(grant_points_snapshot, granted_points),
+         applied_at = COALESCE(applied_at, participated_at),
+         completed_at = COALESCE(completed_at, participated_at),
+         completion_method = COALESCE(completion_method, 'legacy')
+     WHERE status IS NULL OR grant_points_snapshot IS NULL OR applied_at IS NULL`
+  ).run();
+  db.prepare(
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_point_transactions_participation ON point_transactions(participation_id) WHERE participation_id IS NOT NULL'
+  ).run();
+  db.prepare('CREATE INDEX IF NOT EXISTS idx_participations_event_status ON participations(event_id, status)').run();
+  db.prepare('CREATE INDEX IF NOT EXISTS idx_event_submissions_status ON event_submissions(status, created_at)').run();
 }
 
 function ensureUserSettings(db) {

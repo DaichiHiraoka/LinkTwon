@@ -10,7 +10,7 @@ export type Screen =
   | "account"
   | "admin";
 
-export type EventTab = "all" | "liked" | "history";
+export type EventTab = "recommended" | "liked" | "applied" | "completed";
 export type ExchangeTab = "services" | "favorites" | "history";
 export type AdminTab = "dashboard" | "events" | "stores" | "services" | "users" | "support";
 
@@ -77,13 +77,19 @@ export type EventItem = {
   event_id: number;
   event_name: string;
   event_datetime: string;
+  event_end_datetime?: string | null;
   location: string | null;
   grant_points: number;
   description?: string | null;
   activity?: string | null;
   notes?: string | null;
   image_url?: string | null;
-  status?: "active" | "paused";
+  status?: "active" | "paused" | "completed" | "cancelled";
+  participation_status?: ParticipationStatus | null;
+  applied_at?: string | null;
+  checked_in_at?: string | null;
+  completed_at?: string | null;
+  granted_points?: number;
   liked?: boolean | number;
   like_count?: number;
   check_in_code?: string | null;
@@ -92,7 +98,11 @@ export type EventItem = {
 
 export type Participation = {
   participation_id: number;
-  participated_at: string;
+  status: ParticipationStatus;
+  applied_at: string;
+  checked_in_at?: string | null;
+  completed_at?: string | null;
+  cancelled_at?: string | null;
   granted_points: number;
   event_id: number;
   event_name: string;
@@ -100,6 +110,14 @@ export type Participation = {
   location: string | null;
   image_url?: string | null;
 };
+
+export type ParticipationStatus =
+  | "applied"
+  | "checked_in"
+  | "completed"
+  | "cancelled"
+  | "absent"
+  | "incomplete";
 
 export type ServiceItem = {
   service_id: number;
@@ -145,16 +163,14 @@ export type UserHistory = {
 export type ParticipationResponse = {
   message: string;
   event_id: number;
-  granted_points: number;
-  current_points: number;
-  check_in_code?: string;
+  participation_id: number;
+  participation_status: "applied";
 };
 
 export type ParticipationCancellationResponse = {
   message: string;
   event_id: number;
-  revoked_points: number;
-  current_points: number;
+  participation_status: "cancelled";
 };
 
 export type ExchangeResponse = {

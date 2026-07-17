@@ -13,13 +13,18 @@ export type EventItem = {
   event_id: number;
   event_name: string;
   event_datetime: string;
+  event_end_datetime?: string | null;
   location: string | null;
   grant_points: number;
   description?: string | null;
   activity?: string | null;
   notes?: string | null;
   image_url?: string | null;
-  status?: "active" | "paused";
+  status?: "active" | "paused" | "completed" | "cancelled";
+  application_count?: number;
+  checked_in_count?: number;
+  completed_count?: number;
+  incomplete_count?: number;
   liked?: boolean | number;
   like_count?: number;
   check_in_code?: string | null;
@@ -66,10 +71,39 @@ export type ManagedUser = {
 
 export type Participation = {
   participation_id: number;
-  participated_at: string;
+  status: "applied" | "checked_in" | "completed" | "cancelled" | "absent" | "incomplete";
+  applied_at: string;
+  checked_in_at?: string | null;
+  completed_at?: string | null;
   granted_points: number;
   event_id: number;
   event_name: string;
+};
+
+export type EventParticipation = Participation & {
+  user_id: number;
+  user_name: string;
+  email: string;
+  grant_points_snapshot: number;
+};
+
+export type EventSubmission = {
+  submission_id: number;
+  organizer_id: string;
+  organizer_name: string;
+  contact_email: string;
+  event_name: string;
+  event_datetime: string;
+  event_end_datetime: string;
+  location: string | null;
+  description: string | null;
+  activity: string | null;
+  notes: string | null;
+  requested_grant_points: number;
+  status: "pending" | "approved" | "rejected" | "withdrawn";
+  review_note: string | null;
+  approved_event_id: number | null;
+  created_at: string;
 };
 
 export type Transaction = {

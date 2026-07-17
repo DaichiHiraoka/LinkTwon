@@ -18,6 +18,7 @@ const state = {
   payload: null,
   screen: 'access',
   selectedEventId: '',
+  scanType: 'check_in',
   manualPayload: '',
   pendingPayload: '',
   pendingUser: null,
@@ -192,7 +193,8 @@ function currentEvent() {
 }
 
 function checkinCount(eventId) {
-  return 12 + Number(Boolean(state.resultById[eventId]));
+  const eventItem = state.payload?.events.find((item) => item.event_id === eventId);
+  return Number(eventItem?.checked_in_count || 0);
 }
 
 function parseUserPreview(rawPayload) {
@@ -361,7 +363,8 @@ async function submitEventScan() {
   }
 
   try {
-    const response = await fetch(`/api/event/check-ins?locale=${encodeURIComponent(state.locale)}`, {
+    const endpoint = state.scanType === 'completion' ? 'completions' : 'check-ins';
+    const response = await fetch(`/api/event/${endpoint}?locale=${encodeURIComponent(state.locale)}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -473,13 +476,50 @@ function eventListTemplate() {
             ${state.payload.events.map(eventCardTemplate).join('')}
           </div>
         </section>
+        <section class="event-list">
+          <h1>${state.locale === 'en' ? 'Event submissions' : 'イベント申請'}</h1>
+          <form class="submission-form">
+            <input class="input" name="event_name" required placeholder="${state.locale === 'en' ? 'Event name' : 'イベント名'}" />
+            <div class="split-actions">
+              <input class="input" name="event_datetime" type="datetime-local" required />
+              <input class="input" name="event_end_datetime" type="datetime-local" required />
+            </div>
+            <input class="input" name="location" placeholder="${state.locale === 'en' ? 'Location' : '会場'}" />
+            <input class="input" name="requested_grant_points" type="number" min="0" value="0" />
+            <textarea class="input" name="description" placeholder="${state.locale === 'en' ? 'Description' : '概要'}"></textarea>
+            <button class="btn btn-primary" type="submit">${state.locale === 'en' ? 'Submit for review' : '審査へ申請'}</button>
+          </form>
+          <div class="event-grid">
+            ${(state.payload.submissions || []).map(submissionCardTemplate).join('') ||
+              `<p>${state.locale === 'en' ? 'No submissions yet.' : '申請はまだありません。'}</p>`}
+          </div>
+        </section>
       </main>
       <div class="frame-id">E-03</div>
     </div>
   `;
 }
 
+function submissionCardTemplate(item) {
+  return `
+    <article class="event-card">
+      <div class="event-card-main">
+        <h2>${escapeHtml(item.event_name)}</h2>
+        <p>${escapeHtml(item.status)} · ${escapeHtml(formatDateTime(item.event_datetime))}</p>
+        ${item.review_note ? `<p>${escapeHtml(item.review_note)}</p>` : ''}
+      </div>
+      ${['pending', 'rejected'].includes(item.status)
+        ? `<div class="detail__actions">
+            <button class="btn btn-outline" type="button" data-action="edit-submission" data-submission-id="${escapeHtml(item.submission_id)}">${state.locale === 'en' ? 'Edit / resubmit' : '編集・再申請'}</button>
+            ${item.status === 'pending' ? `<button class="btn btn-outline" type="button" data-action="withdraw-submission" data-submission-id="${escapeHtml(item.submission_id)}">${state.locale === 'en' ? 'Withdraw' : '取り下げ'}</button>` : ''}
+          </div>`
+        : ''}
+    </article>`;
+}
+
 function eventCardTemplate(eventItem) {
+  const completionReady =
+    eventItem.event_end_datetime && Date.now() >= new Date(eventItem.event_end_datetime).getTime();
   return `
     <article class="event-card">
       <div class="event-card-main">
@@ -493,10 +533,12 @@ function eventCardTemplate(eventItem) {
       </div>
       <div class="event-card-side">
         <div class="counter counter--large">
-          <div class="num">${escapeHtml(checkinCount(eventItem.event_id))}</div>
-          <div class="lbl">${escapeHtml(t('accepted'))}</div>
+          <div class="num">${escapeHtml(eventItem.application_count || 0)} / ${escapeHtml(eventItem.checked_in_count || 0)} / ${escapeHtml(eventItem.completed_count || 0)}</div>
+          <div class="lbl">${state.locale === 'en' ? 'Applied / checked in / completed' : '申込 / 受付 / 完了'}</div>
         </div>
-        <button class="btn btn-primary btn-xl" type="button" data-action="open-scan" data-event-id="${escapeHtml(eventItem.event_id)}">${escapeHtml(t('startScan'))}</button>
+        <button class="btn btn-primary" type="button" data-action="open-scan" data-scan-type="check_in" data-event-id="${escapeHtml(eventItem.event_id)}">${state.locale === 'en' ? 'Check-in QR' : '開始受付QR'}</button>
+        <button class="btn btn-primary" type="button" data-action="open-scan" data-scan-type="completion" data-event-id="${escapeHtml(eventItem.event_id)}" ${completionReady ? '' : 'disabled'}>${state.locale === 'en' ? 'Completion QR' : '完了確認QR'}</button>
+        <button class="btn btn-outline" type="button" data-action="close-event" data-event-id="${escapeHtml(eventItem.event_id)}">${state.locale === 'en' ? 'Close event' : 'イベント受付終了'}</button>
       </div>
     </article>
   `;
@@ -583,18 +625,18 @@ function confirmTemplate() {
       ${scanStageTemplate({ dimmed: true })}
       <div class="modal-overlay">
         <section class="modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(t('confirmTitle'))}">
-          <h1>${escapeHtml(t('confirmTitle'))}</h1>
+          <h1>${state.scanType === 'completion' ? (state.locale === 'en' ? 'Confirm completion?' : '参加完了にしますか？') : escapeHtml(t('confirmTitle'))}</h1>
           <div class="recipient">
             <div class="name">${escapeHtml(user?.name || '-')}</div>
           </div>
-          <div class="delta">
+          <div class="delta" ${state.scanType === 'check_in' ? 'hidden' : ''}>
             <div class="label">${escapeHtml(t('points'))}</div>
             <div class="value">+${escapeHtml(eventItem.grant_points)}<span>pt</span></div>
             <div class="for">${escapeHtml(eventItem.event_name)}</div>
           </div>
           <div class="actions">
             <button class="btn btn-outline btn-xl" type="button" data-action="cancel-confirm">${escapeHtml(t('cancel'))}</button>
-            <button class="btn btn-primary btn-xl" type="button" data-action="submit-checkin">${escapeHtml(t('checkIn'))}</button>
+            <button class="btn btn-primary btn-xl" type="button" data-action="submit-checkin">${state.scanType === 'completion' ? (state.locale === 'en' ? 'Complete and grant points' : '完了してポイント付与') : escapeHtml(t('checkIn'))}</button>
           </div>
         </section>
       </div>
@@ -612,9 +654,9 @@ function successTemplate() {
       ${appHeaderTemplate(eventItem)}
       <main class="success-stage">
         <div class="check">✓</div>
-        <div class="msg">${escapeHtml(t('completed'))}</div>
+        <div class="msg">${state.scanType === 'completion' ? (state.locale === 'en' ? 'Completion confirmed' : '参加完了を確認しました') : escapeHtml(t('completed'))}</div>
         <div class="name-line"><strong>${escapeHtml(result?.user?.name || '')}</strong> さん</div>
-        <div class="delta">+${escapeHtml(result?.granted_points || eventItem.grant_points)} pt ${escapeHtml(t('granted'))}</div>
+        ${state.scanType === 'completion' ? `<div class="delta">+${escapeHtml(result?.granted_points || 0)} pt ${escapeHtml(t('granted'))}</div>` : ''}
         <button class="btn btn-primary btn-xl" type="button" data-action="open-scan-current">${escapeHtml(t('continueScan'))}</button>
       </main>
       <div class="frame-id">E-07</div>
@@ -685,7 +727,12 @@ app.addEventListener('click', async (event) => {
   }
 
   if (target.dataset.action === 'open-scan') {
-    setState({ screen: 'scan', selectedEventId: target.dataset.eventId, error: '' });
+    setState({
+      screen: 'scan',
+      selectedEventId: target.dataset.eventId,
+      scanType: target.dataset.scanType || 'check_in',
+      error: ''
+    });
     return;
   }
 
@@ -706,6 +753,55 @@ app.addEventListener('click', async (event) => {
 
   if (target.dataset.action === 'submit-checkin') {
     await submitEventScan();
+    return;
+  }
+
+  if (target.dataset.action === 'withdraw-submission') {
+    const response = await fetch(`/api/event/submissions/${target.dataset.submissionId}/withdraw`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code: state.code, password: state.password })
+    });
+    const result = await response.json();
+    if (!response.ok) return showError(result.message);
+    await loadPortal();
+    return;
+  }
+
+  if (target.dataset.action === 'edit-submission') {
+    const current = (state.payload.submissions || []).find(
+      (item) => String(item.submission_id) === String(target.dataset.submissionId)
+    );
+    if (!current) return;
+    const form = document.querySelector('.submission-form');
+    if (!form) return;
+    form.dataset.submissionId = String(current.submission_id);
+    form.elements.event_name.value = current.event_name || '';
+    form.elements.event_datetime.value = String(current.event_datetime || '').replace(' ', 'T').slice(0, 16);
+    form.elements.event_end_datetime.value = String(current.event_end_datetime || '').replace(' ', 'T').slice(0, 16);
+    form.elements.location.value = current.location || '';
+    form.elements.requested_grant_points.value = String(current.requested_grant_points || 0);
+    form.elements.description.value = current.description || '';
+    form.querySelector('button[type="submit"]').textContent =
+      state.locale === 'en' ? 'Save and resubmit' : '保存して再申請';
+    form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+
+  if (target.dataset.action === 'close-event') {
+    if (target.dataset.confirming !== 'true') {
+      target.dataset.confirming = 'true';
+      target.textContent = state.locale === 'en' ? 'Click again to confirm close' : 'もう一度押して受付終了を確定';
+      return;
+    }
+    const response = await fetch(`/api/event/events/${target.dataset.eventId}/close`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code: state.code, password: state.password })
+    });
+    const result = await response.json();
+    if (!response.ok) return showError(result.message);
+    await loadPortal();
     return;
   }
 
@@ -740,6 +836,23 @@ app.addEventListener('submit', (event) => {
     const form = new FormData(event.target);
     state.manualPayload = String(form.get('user_qr_payload') || '');
     prepareConfirmation(state.manualPayload);
+  }
+
+  if (event.target.classList.contains('submission-form')) {
+    event.preventDefault();
+    const form = Object.fromEntries(new FormData(event.target).entries());
+    const submissionId = event.target.dataset.submissionId;
+    fetch(submissionId ? `/api/event/submissions/${submissionId}` : '/api/event/submissions', {
+      method: submissionId ? 'PUT' : 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...form, code: state.code, password: state.password })
+    })
+      .then(async (response) => ({ response, result: await response.json() }))
+      .then(({ response, result }) => {
+        if (!response.ok) throw new Error(result.message);
+        return loadPortal();
+      })
+      .catch((error) => showError(error.message));
   }
 });
 

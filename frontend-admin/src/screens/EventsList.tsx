@@ -2,29 +2,49 @@ import { useState, type FormEvent } from "react";
 import { CalendarIcon } from "../components/Icons";
 import { DataTable, type Column } from "../components/DataTable";
 import { DeleteConfirmModal, Modal } from "../components/Modal";
-import { createEvent, deleteEvent, getErrorMessage, getEventCheckInCode, updateEvent } from "../api";
+import {
+  approveEventSubmission,
+  closeEvent,
+  completeParticipation,
+  createEvent,
+  deleteEvent,
+  getErrorMessage,
+  getEventParticipations,
+  rejectEventSubmission,
+  updateEvent,
+} from "../api";
 import { formatDateTime, padId, toDateTimeLocal } from "../format";
-import type { EventItem } from "../types";
+import type { EventItem, EventParticipation, EventSubmission } from "../types";
 
 type FeedbackSetter = (ok: boolean, message: string) => void;
 
 export function EventsList({
   events,
+  submissions,
   token,
   onReload,
   notify,
 }: {
   events: EventItem[];
+  submissions: EventSubmission[];
   token: string;
   onReload: () => Promise<void>;
   notify: FeedbackSetter;
 }) {
   const [search, setSearch] = useState("");
+  const [view, setView] = useState<"published" | "submissions">("published");
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<EventItem | null>(null);
   const [detail, setDetail] = useState<EventItem | null>(null);
-  const [code, setCode] = useState<{ event_id: number; code: string; expires_at: string } | null>(null);
+  const [eventParticipations, setEventParticipations] = useState<EventParticipation[]>([]);
   const [deleting, setDeleting] = useState<EventItem | null>(null);
+  const [reviewing, setReviewing] = useState<{ submission: EventSubmission; approved: boolean } | null>(null);
+  const [reviewPoints, setReviewPoints] = useState(0);
+  const [reviewNote, setReviewNote] = useState("");
+  const [correcting, setCorrecting] = useState<EventParticipation | null>(null);
+  const [correctionReason, setCorrectionReason] = useState("");
+  const [closing, setClosing] = useState<EventItem | null>(null);
+  const [closeReason, setCloseReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const filtered = search.trim()
@@ -51,12 +71,76 @@ export function EventsList({
     },
   ];
 
-  async function showCode(event: EventItem) {
+  async function showDetail(event: EventItem) {
+    setDetail(event);
     try {
-      const response = await getEventCheckInCode(event.event_id, token);
-      setCode({ event_id: response.event_id, code: response.check_in_code, expires_at: response.expires_at });
+      setEventParticipations(await getEventParticipations(event.event_id, token));
     } catch (error) {
       notify(false, getErrorMessage(error));
+    }
+  }
+
+  function openReview(submission: EventSubmission, approved: boolean) {
+    setReviewing({ submission, approved });
+    setReviewPoints(submission.requested_grant_points);
+    setReviewNote(submission.review_note || "");
+  }
+
+  async function submitReview() {
+    if (!reviewing || submitting || (!reviewing.approved && !reviewNote.trim())) return;
+    setSubmitting(true);
+    try {
+      if (reviewing.approved) {
+        await approveEventSubmission(
+          reviewing.submission.submission_id,
+          { grant_points: reviewPoints, review_note: reviewNote },
+          token,
+        );
+        notify(true, "イベント申請を承認しました。");
+      } else {
+        await rejectEventSubmission(reviewing.submission.submission_id, reviewNote, token);
+        notify(true, "イベント申請を却下しました。");
+      }
+      setReviewing(null);
+      await onReload();
+    } catch (error) {
+      notify(false, getErrorMessage(error));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitCorrection() {
+    if (!correcting || !detail || submitting || !correctionReason.trim()) return;
+    setSubmitting(true);
+    try {
+      await completeParticipation(correcting.participation_id, correctionReason, token);
+      notify(true, "参加完了へ補正しました。");
+      setCorrecting(null);
+      setCorrectionReason("");
+      await showDetail(detail);
+      await onReload();
+    } catch (error) {
+      notify(false, getErrorMessage(error));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitClose() {
+    if (!closing || submitting) return;
+    setSubmitting(true);
+    try {
+      await closeEvent(closing.event_id, token, closeReason.trim() || "管理画面から受付終了");
+      notify(true, "イベントを終了しました。");
+      setClosing(null);
+      setCloseReason("");
+      setDetail(null);
+      await onReload();
+    } catch (error) {
+      notify(false, getErrorMessage(error));
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -77,7 +161,15 @@ export function EventsList({
 
   return (
     <section className="page">
-      <DataTable
+      <div className="detail__actions">
+        <button className={`btn ${view === "published" ? "btn--primary" : "btn--ghost"}`} onClick={() => setView("published")}>
+          公開イベント
+        </button>
+        <button className={`btn ${view === "submissions" ? "btn--primary" : "btn--ghost"}`} onClick={() => setView("submissions")}>
+          承認待ち申請 ({submissions.filter((item) => item.status === "pending").length})
+        </button>
+      </div>
+      {view === "published" ? <DataTable
         title="イベント一覧"
         titleIcon={<CalendarIcon size={22} />}
         rows={filtered}
@@ -87,11 +179,41 @@ export function EventsList({
         onSearch={setSearch}
         addCta={{ label: "イベント追加", onClick: () => setAdding(true) }}
         rowActions={[
-          { kind: "view", onClick: (row) => setDetail(row) },
-          { kind: "edit", onClick: (row) => setEditing({ ...row, event_datetime: toDateTimeLocal(row.event_datetime) }) },
+          { kind: "view", onClick: (row) => void showDetail(row) },
+          {
+            kind: "edit",
+            onClick: (row) =>
+              setEditing({
+                ...row,
+                event_datetime: toDateTimeLocal(row.event_datetime),
+                event_end_datetime: row.event_end_datetime ? toDateTimeLocal(row.event_end_datetime) : "",
+              }),
+          },
           { kind: "delete", onClick: (row) => setDeleting(row) },
         ]}
-      />
+      /> : (
+        <div className="event-list">
+          {submissions.map((submission) => (
+            <article className="detail" key={submission.submission_id}>
+              <div className="detail__meta">
+                <span>{submission.organizer_name}</span>
+                <span>{formatDateTime(submission.event_datetime)} ～ {formatDateTime(submission.event_end_datetime)}</span>
+                <span className={`status-pill status-pill--${submission.status}`}>{submission.status}</span>
+              </div>
+              <h3>{submission.event_name}</h3>
+              <p>{submission.location || "-"} · 希望 {submission.requested_grant_points}pt</p>
+              {submission.description ? <p>{submission.description}</p> : null}
+              {submission.review_note ? <p>審査メモ: {submission.review_note}</p> : null}
+              {submission.status === "pending" ? (
+                <div className="detail__actions">
+                  <button className="btn btn--primary" onClick={() => openReview(submission, true)}>承認</button>
+                  <button className="btn btn--danger" onClick={() => openReview(submission, false)}>却下</button>
+                </div>
+              ) : null}
+            </article>
+          ))}
+        </div>
+      )}
 
       <Modal open={!!detail} title="イベント詳細" onClose={() => setDetail(null)}>
         {detail ? (
@@ -99,6 +221,7 @@ export function EventsList({
             <div className="detail__meta">
               <span>ID: {padId(detail.event_id)}</span>
               <span>開催: {formatDateTime(detail.event_datetime)}</span>
+              <span>終了: {detail.event_end_datetime ? formatDateTime(detail.event_end_datetime) : "未設定"}</span>
               <span>場所: {detail.location ?? "-"}</span>
             </div>
             <h3 className="detail__title">{detail.event_name}</h3>
@@ -115,15 +238,46 @@ export function EventsList({
             {detail.description ? <p>概要: {detail.description}</p> : null}
             {detail.activity ? <p>活動内容: {detail.activity}</p> : null}
             {detail.notes ? <p>注意事項: {detail.notes}</p> : null}
+            <p>
+              申込 {detail.application_count || 0} / 受付 {detail.checked_in_count || 0} / 完了{" "}
+              {detail.completed_count || 0} / 未完了 {detail.incomplete_count || 0}
+            </p>
+            {eventParticipations.filter((item) => item.status === "incomplete").map((item) => (
+              <div className="detail__actions" key={item.participation_id}>
+                <span>{item.user_name} ({item.email}) · {item.grant_points_snapshot}pt</span>
+                <button
+                  className="btn btn--primary"
+                  onClick={() => {
+                    setCorrecting(item);
+                    setCorrectionReason("");
+                  }}
+                >
+                  完了へ補正
+                </button>
+              </div>
+            ))}
             <div className="detail__actions">
-              <button type="button" className="btn btn--ghost" onClick={() => showCode(detail)}>
-                QR / Check-in code
-              </button>
+              {["active", "paused"].includes(detail.status || "active") ? (
+                <button
+                  type="button"
+                  className="btn btn--danger"
+                  onClick={() => {
+                    setClosing(detail);
+                    setCloseReason("");
+                  }}
+                >
+                  イベント受付終了
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="btn btn--primary"
                 onClick={() => {
-                  setEditing({ ...detail, event_datetime: toDateTimeLocal(detail.event_datetime) });
+                  setEditing({
+                    ...detail,
+                    event_datetime: toDateTimeLocal(detail.event_datetime),
+                    event_end_datetime: detail.event_end_datetime ? toDateTimeLocal(detail.event_end_datetime) : "",
+                  });
                   setDetail(null);
                 }}
               >
@@ -131,6 +285,108 @@ export function EventsList({
               </button>
             </div>
           </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={!!reviewing}
+        title={reviewing?.approved ? "イベント申請を承認" : "イベント申請を却下"}
+        onClose={() => setReviewing(null)}
+      >
+        {reviewing ? (
+          <form
+            className="form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submitReview();
+            }}
+          >
+            <p>{reviewing.submission.organizer_name} / {reviewing.submission.event_name}</p>
+            {reviewing.approved ? (
+              <label className="form__field">
+                <span>確定付与ポイント</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={reviewPoints}
+                  onChange={(event) => setReviewPoints(Number(event.target.value))}
+                  required
+                />
+              </label>
+            ) : null}
+            <label className="form__field">
+              <span>{reviewing.approved ? "承認メモ（任意）" : "却下理由"}</span>
+              <textarea
+                value={reviewNote}
+                onChange={(event) => setReviewNote(event.target.value)}
+                required={!reviewing.approved}
+              />
+            </label>
+            <div className="form__actions">
+              <button type="button" className="btn btn--ghost" onClick={() => setReviewing(null)}>
+                キャンセル
+              </button>
+              <button type="submit" className={reviewing.approved ? "btn btn--primary" : "btn btn--danger"} disabled={submitting}>
+                {reviewing.approved ? "承認を確定" : "却下を確定"}
+              </button>
+            </div>
+          </form>
+        ) : null}
+      </Modal>
+
+      <Modal open={!!correcting} title="参加完了へ補正" onClose={() => setCorrecting(null)}>
+        {correcting ? (
+          <form
+            className="form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submitCorrection();
+            }}
+          >
+            <p>{correcting.user_name} / {correcting.grant_points_snapshot}pt</p>
+            <label className="form__field">
+              <span>補正理由</span>
+              <textarea
+                value={correctionReason}
+                onChange={(event) => setCorrectionReason(event.target.value)}
+                required
+              />
+            </label>
+            <div className="form__actions">
+              <button type="button" className="btn btn--ghost" onClick={() => setCorrecting(null)}>
+                キャンセル
+              </button>
+              <button type="submit" className="btn btn--primary" disabled={submitting}>
+                補正を確定
+              </button>
+            </div>
+          </form>
+        ) : null}
+      </Modal>
+
+      <Modal open={!!closing} title="イベント受付終了" onClose={() => setClosing(null)}>
+        {closing ? (
+          <form
+            className="form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submitClose();
+            }}
+          >
+            <p>{closing.event_name}を終了します。申込済みは欠席、受付済みは未完了になります。</p>
+            <label className="form__field">
+              <span>監査メモ（任意）</span>
+              <textarea value={closeReason} onChange={(event) => setCloseReason(event.target.value)} />
+            </label>
+            <div className="form__actions">
+              <button type="button" className="btn btn--ghost" onClick={() => setClosing(null)}>
+                キャンセル
+              </button>
+              <button type="submit" className="btn btn--danger" disabled={submitting}>
+                受付終了を確定
+              </button>
+            </div>
+          </form>
         ) : null}
       </Modal>
 
@@ -171,30 +427,6 @@ export function EventsList({
         submitting={submitting}
       />
 
-      <Modal open={!!code} title="チェックインコード" onClose={() => setCode(null)}>
-        {code ? (
-          <div className="checkin-code">
-            <p>下記コードを受付端末で読み取って利用してください。期限を過ぎると無効になります。</p>
-            <code>{code.code}</code>
-            <small>有効期限: {formatDateTime(code.expires_at)}</small>
-            <button
-              type="button"
-              className="btn btn--primary"
-              onClick={async () => {
-                try {
-                  const response = await getEventCheckInCode(code.event_id, token);
-                  setCode({ event_id: response.event_id, code: response.check_in_code, expires_at: response.expires_at });
-                  notify(true, "チェックインコードを再発行しました。");
-                } catch (error) {
-                  notify(false, getErrorMessage(error));
-                }
-              }}
-            >
-              再発行
-            </button>
-          </div>
-        ) : null}
-      </Modal>
     </section>
   );
 }
@@ -202,6 +434,7 @@ export function EventsList({
 type EventFormPayload = {
   event_name: string;
   event_datetime: string;
+  event_end_datetime: string;
   location?: string;
   grant_points: number;
   description?: string;
@@ -225,24 +458,26 @@ function EventFormModal({
 }) {
   const [name, setName] = useState(initial?.event_name ?? "");
   const [datetime, setDatetime] = useState(initial?.event_datetime ?? "");
+  const [endDatetime, setEndDatetime] = useState(initial?.event_end_datetime ?? "");
   const [location, setLocation] = useState(initial?.location ?? "");
   const [points, setPoints] = useState(initial?.grant_points ?? 50);
   const [description, setDescription] = useState(initial?.description ?? "");
   const [activity, setActivity] = useState(initial?.activity ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
-  const [status, setStatus] = useState<"active" | "paused">(initial?.status ?? "active");
+  const [status, setStatus] = useState<"active" | "paused">(initial?.status === "paused" ? "paused" : "active");
 
   // sync initial when changes
   const initialKey = initial ? initial.event_id : "new";
   useResetForm(initialKey, () => {
     setName(initial?.event_name ?? "");
     setDatetime(initial?.event_datetime ?? "");
+    setEndDatetime(initial?.event_end_datetime ?? "");
     setLocation(initial?.location ?? "");
     setPoints(initial?.grant_points ?? 50);
     setDescription(initial?.description ?? "");
     setActivity(initial?.activity ?? "");
     setNotes(initial?.notes ?? "");
-    setStatus(initial?.status ?? "active");
+    setStatus(initial?.status === "paused" ? "paused" : "active");
   });
 
   async function handle(event: FormEvent) {
@@ -251,6 +486,7 @@ function EventFormModal({
       {
         event_name: name.trim(),
         event_datetime: datetime,
+        event_end_datetime: endDatetime,
         location: location.trim() || undefined,
         grant_points: Number(points),
         description: description.trim() || undefined,
@@ -272,6 +508,16 @@ function EventFormModal({
         <label className="form__field">
           <span>開催日時</span>
           <input type="datetime-local" value={datetime} onChange={(event) => setDatetime(event.target.value)} required />
+        </label>
+        <label className="form__field">
+          <span>終了日時</span>
+          <input
+            type="datetime-local"
+            value={endDatetime}
+            min={datetime}
+            onChange={(event) => setEndDatetime(event.target.value)}
+            required
+          />
         </label>
         <label className="form__field">
           <span>場所</span>

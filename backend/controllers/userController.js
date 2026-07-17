@@ -82,12 +82,13 @@ async function getUserHistory(req, res, next) {
     }
 
     const [participations] = await pool.query(
-      `SELECT p.participation_id, p.participated_at, p.granted_points,
-              e.event_id, e.event_name, e.event_datetime, e.location
+      `SELECT p.participation_id, p.status, p.applied_at, p.checked_in_at,
+              p.completed_at, p.cancelled_at, p.granted_points,
+              e.event_id, e.event_name, e.event_datetime, e.event_end_datetime, e.location
        FROM participations p
        JOIN events e ON p.event_id = e.event_id
        WHERE p.user_id = ?
-       ORDER BY p.participated_at DESC`,
+       ORDER BY p.applied_at DESC`,
       [id]
     );
 
@@ -98,6 +99,10 @@ async function getUserHistory(req, res, next) {
        LEFT JOIN services s ON pt.service_id = s.service_id
        LEFT JOIN stores st ON s.store_id = st.store_id
        WHERE pt.user_id = ?
+         AND (pt.participation_id IS NULL OR EXISTS (
+           SELECT 1 FROM participations p
+           WHERE p.participation_id = pt.participation_id AND p.status = 'completed'
+         ))
        ORDER BY pt.created_at DESC`,
       [id]
     );

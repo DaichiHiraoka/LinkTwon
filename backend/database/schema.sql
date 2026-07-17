@@ -20,9 +20,10 @@ CREATE TABLE events (
   event_id INT AUTO_INCREMENT PRIMARY KEY,
   event_name VARCHAR(255) NOT NULL,
   event_datetime DATETIME NOT NULL,
+  event_end_datetime DATETIME NULL,
   location VARCHAR(255),
   grant_points INT NOT NULL DEFAULT 0,
-  status ENUM('active', 'paused') NOT NULL DEFAULT 'active',
+  status ENUM('active', 'paused', 'completed', 'cancelled') NOT NULL DEFAULT 'active',
   description TEXT NULL,
   activity TEXT NULL,
   notes TEXT NULL,
@@ -92,7 +93,16 @@ CREATE TABLE participations (
   participation_id INT AUTO_INCREMENT PRIMARY KEY,
   user_id INT NOT NULL,
   event_id INT NOT NULL,
-  granted_points INT NOT NULL,
+  status ENUM('applied', 'checked_in', 'completed', 'cancelled', 'absent', 'incomplete') NOT NULL DEFAULT 'applied',
+  grant_points_snapshot INT NOT NULL DEFAULT 0,
+  granted_points INT NOT NULL DEFAULT 0,
+  applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  checked_in_at DATETIME NULL,
+  completed_at DATETIME NULL,
+  cancelled_at DATETIME NULL,
+  completion_method ENUM('qr', 'admin', 'legacy') NULL,
+  completion_note TEXT NULL,
+  completed_by_admin_id VARCHAR(100) NULL,
   participated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY unique_user_event (user_id, event_id),
   CONSTRAINT fk_participations_user
@@ -107,6 +117,7 @@ CREATE TABLE point_transactions (
   transaction_id INT AUTO_INCREMENT PRIMARY KEY,
   user_id INT NOT NULL,
   service_id INT NULL,
+  participation_id INT NULL,
   type ENUM('grant', 'exchange') NOT NULL,
   points INT NOT NULL,
   description VARCHAR(255),
@@ -116,7 +127,61 @@ CREATE TABLE point_transactions (
     ON DELETE CASCADE,
   CONSTRAINT fk_transactions_service
     FOREIGN KEY (service_id) REFERENCES services(service_id)
-    ON DELETE SET NULL
+    ON DELETE SET NULL,
+  CONSTRAINT fk_transactions_participation
+    FOREIGN KEY (participation_id) REFERENCES participations(participation_id)
+    ON DELETE SET NULL,
+  UNIQUE KEY unique_participation_grant (participation_id)
+);
+
+CREATE TABLE event_submissions (
+  submission_id INT AUTO_INCREMENT PRIMARY KEY,
+  organizer_id VARCHAR(100) NOT NULL,
+  event_name VARCHAR(255) NOT NULL,
+  event_datetime DATETIME NOT NULL,
+  event_end_datetime DATETIME NOT NULL,
+  location VARCHAR(255) NULL,
+  description TEXT NULL,
+  activity TEXT NULL,
+  notes TEXT NULL,
+  requested_grant_points INT NOT NULL DEFAULT 0,
+  status ENUM('pending', 'approved', 'rejected', 'withdrawn') NOT NULL DEFAULT 'pending',
+  review_note TEXT NULL,
+  reviewed_by VARCHAR(100) NULL,
+  reviewed_at DATETIME NULL,
+  approved_event_id INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_event_submissions_status (status, created_at),
+  FOREIGN KEY (organizer_id) REFERENCES event_organizers(organizer_id) ON DELETE CASCADE,
+  FOREIGN KEY (approved_event_id) REFERENCES events(event_id) ON DELETE SET NULL
+);
+
+CREATE TABLE event_participation_status_history (
+  history_id INT AUTO_INCREMENT PRIMARY KEY,
+  participation_id INT NOT NULL,
+  from_status VARCHAR(32) NULL,
+  to_status VARCHAR(32) NOT NULL,
+  reason TEXT NULL,
+  actor_type ENUM('user', 'organizer', 'admin', 'system') NOT NULL,
+  actor_id VARCHAR(100) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (participation_id) REFERENCES participations(participation_id) ON DELETE CASCADE
+);
+
+CREATE TABLE event_attendance_scans (
+  scan_id INT AUTO_INCREMENT PRIMARY KEY,
+  participation_id INT NOT NULL,
+  organizer_id VARCHAR(100) NOT NULL,
+  scan_type ENUM('check_in', 'completion') NOT NULL,
+  nonce VARCHAR(255) NOT NULL,
+  qr_issued_at DATETIME NULL,
+  qr_expires_at DATETIME NOT NULL,
+  processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY unique_participation_scan_type (participation_id, scan_type),
+  UNIQUE KEY unique_attendance_nonce (nonce),
+  FOREIGN KEY (participation_id) REFERENCES participations(participation_id) ON DELETE CASCADE,
+  FOREIGN KEY (organizer_id) REFERENCES event_organizers(organizer_id) ON DELETE CASCADE
 );
 
 CREATE TABLE portal_event_check_ins (

@@ -4,6 +4,8 @@ import type {
   AdminStats,
   AdminUserDetail,
   EventItem,
+  EventParticipation,
+  EventSubmission,
   ManagedUser,
   StoreItem,
   SupportTicket,
@@ -65,6 +67,7 @@ export function createEvent(
   payload: {
     event_name: string;
     event_datetime: string;
+    event_end_datetime: string;
     location?: string;
     grant_points: number;
     description?: string;
@@ -74,7 +77,7 @@ export function createEvent(
   },
   token: string,
 ) {
-  return request<{ message: string; event_id: number; check_in_code: string }>("/admin/events", {
+  return request<{ message: string; event_id: number }>("/admin/events", {
     method: "POST",
     body: JSON.stringify(payload),
   }, token);
@@ -91,10 +94,46 @@ export function deleteEvent(eventId: number, token: string) {
   return request<{ message: string }>(`/admin/events/${eventId}`, { method: "DELETE" }, token);
 }
 
-export function getEventCheckInCode(eventId: number, token: string) {
-  return request<{ event_id: number; check_in_code: string; expires_at: string }>(
-    `/admin/events/${eventId}/check-in-code`,
-    {},
+export function closeEvent(eventId: number, token: string, reason?: string) {
+  return request<{ message: string; absent_count: number; incomplete_count: number }>(
+    `/admin/events/${eventId}/close`,
+    { method: "POST", body: JSON.stringify({ reason }) },
+    token,
+  );
+}
+
+export function getEventParticipations(eventId: number, token: string) {
+  return request<EventParticipation[]>(`/admin/events/${eventId}/participations`, {}, token);
+}
+
+export function completeParticipation(participationId: number, reason: string, token: string) {
+  return request<{ message: string; granted_points: number }>(
+    `/admin/participations/${participationId}/complete`,
+    { method: "POST", body: JSON.stringify({ reason }) },
+    token,
+  );
+}
+
+export function getEventSubmissions(token: string) {
+  return request<EventSubmission[]>("/admin/event-submissions", {}, token);
+}
+
+export function approveEventSubmission(
+  submissionId: number,
+  payload: { grant_points?: number; review_note?: string },
+  token: string,
+) {
+  return request<{ message: string; event_id: number }>(
+    `/admin/event-submissions/${submissionId}/approve`,
+    { method: "POST", body: JSON.stringify(payload) },
+    token,
+  );
+}
+
+export function rejectEventSubmission(submissionId: number, reviewNote: string, token: string) {
+  return request<{ message: string }>(
+    `/admin/event-submissions/${submissionId}/reject`,
+    { method: "POST", body: JSON.stringify({ review_note: reviewNote }) },
     token,
   );
 }

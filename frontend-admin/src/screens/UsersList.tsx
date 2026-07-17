@@ -141,7 +141,7 @@ export function UsersList({
             <ul className="mini-list">
               {detail.participations.map((entry) => (
                 <li key={entry.participation_id}>
-                  {formatDateTime(entry.participated_at)} — {entry.event_name} (+{entry.granted_points}pt)
+                  {formatDateTime(entry.completed_at || entry.applied_at)} — {entry.event_name} ({entry.status}, +{entry.granted_points}pt)
                 </li>
               ))}
             </ul>

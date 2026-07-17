@@ -7,7 +7,13 @@ const {
   createEvent,
   updateEvent,
   deleteEvent,
-  getEventCheckInCode,
+  getEventSubmissions,
+  getEventSubmission,
+  approveEventSubmission,
+  rejectEventSubmission,
+  getEventParticipations,
+  completeParticipationByAdmin,
+  closeEventByAdmin,
   getStores,
   createStore,
   updateStore,
@@ -29,9 +35,16 @@ router.use(authenticateToken, authorizeRole('admin'));
 
 router.get('/events', getEvents);
 router.post('/events', createEvent);
-router.get('/events/:id/check-in-code', getEventCheckInCode);
+router.get('/events/:id/participations', getEventParticipations);
+router.post('/events/:id/close', closeEventByAdmin);
 router.put('/events/:id', updateEvent);
 router.delete('/events/:id', deleteEvent);
+
+router.get('/event-submissions', getEventSubmissions);
+router.get('/event-submissions/:id', getEventSubmission);
+router.post('/event-submissions/:id/approve', approveEventSubmission);
+router.post('/event-submissions/:id/reject', rejectEventSubmission);
+router.post('/participations/:id/complete', completeParticipationByAdmin);
 
 router.get('/stores', getStores);
 router.post('/stores', createStore);

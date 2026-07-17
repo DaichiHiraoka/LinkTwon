@@ -13,6 +13,7 @@ import { Analysis } from "./screens/Analysis";
 import { readSession, writeSession, type AdminSession } from "./session";
 import {
   getEvents,
+  getEventSubmissions,
   getServices,
   getStats,
   getStores,
@@ -24,6 +25,7 @@ import type {
   AdminServiceItem,
   AdminStats,
   EventItem,
+  EventSubmission,
   ManagedUser,
   StoreItem,
   SupportTicket,
@@ -59,6 +61,7 @@ function AdminShell({ session, onLogout }: { session: AdminSession; onLogout: ()
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [eventSubmissions, setEventSubmissions] = useState<EventSubmission[]>([]);
   const [stores, setStores] = useState<StoreItem[]>([]);
   const [services, setServices] = useState<AdminServiceItem[]>([]);
   const [users, setUsers] = useState<ManagedUser[]>([]);
@@ -70,9 +73,10 @@ function AdminShell({ session, onLogout }: { session: AdminSession; onLogout: ()
   const reloadAll = useCallback(
     async (search = userSearch) => {
       try {
-        const [s, e, st, sv, u, t] = await Promise.all([
+        const [s, e, es, st, sv, u, t] = await Promise.all([
           getStats(session.token).catch(() => null),
           getEvents(session.token).catch(() => [] as EventItem[]),
+          getEventSubmissions(session.token).catch(() => [] as EventSubmission[]),
           getStores(session.token).catch(() => [] as StoreItem[]),
           getServices(session.token).catch(() => [] as AdminServiceItem[]),
           getUsers(session.token, search).catch((error) => {
@@ -83,6 +87,7 @@ function AdminShell({ session, onLogout }: { session: AdminSession; onLogout: ()
         ]);
         setStats(s);
         setEvents(e);
+        setEventSubmissions(es);
         setStores(st);
         setServices(sv);
         setUsers(u);
@@ -108,7 +113,13 @@ function AdminShell({ session, onLogout }: { session: AdminSession; onLogout: ()
           <FeedbackBanner feedback={feedback} onClose={() => setFeedback(null)} />
           {current === "home" ? <Home stats={stats} /> : null}
           {current === "events-list" ? (
-            <EventsList events={events} token={session.token} onReload={reloadAll} notify={notify} />
+            <EventsList
+              events={events}
+              submissions={eventSubmissions}
+              token={session.token}
+              onReload={reloadAll}
+              notify={notify}
+            />
           ) : null}
           {current === "events-analysis" ? <Analysis variant="events" stats={stats} /> : null}
           {current === "stores-list" ? (

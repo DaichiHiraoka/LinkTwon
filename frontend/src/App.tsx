@@ -613,6 +613,12 @@ type DisplayEvent = EventItem & {
   rawEventId?: number;
   liked?: boolean;
   likeCount?: number;
+  participation_status?: "applied" | "checked_in" | "completed" | "cancelled" | "absent" | "incomplete" | null;
+  applied_at?: string | null;
+  checked_in_at?: string | null;
+  completed_at?: string | null;
+  granted_points?: number;
+  event_status?: "active" | "paused" | "completed" | "cancelled";
 };
 type DisplayUser = typeof fallbackUser & {
   displayName: string;
@@ -681,6 +687,12 @@ function mapEvent(event: ApiEventItem, displayDate: string, language: AppLanguag
     time: parts.time,
     imageUrl: event.image_url || DUMMY_EVENT_IMAGE_URL,
     rawEventId: event.event_id,
+    event_status: event.status,
+    participation_status: event.participation_status,
+    applied_at: event.applied_at,
+    checked_in_at: event.checked_in_at,
+    completed_at: event.completed_at,
+    granted_points: event.granted_points,
     liked: toBoolean(event.liked),
     likeCount: event.like_count,
     description: displayApiText(event.description ?? ""),
@@ -701,6 +713,11 @@ function mapParticipation(participation: Participation, displayDate: string, lan
     time: parts.time,
     imageUrl: participation.image_url || DUMMY_EVENT_IMAGE_URL,
     rawEventId: participation.event_id,
+    participation_status: participation.status,
+    applied_at: participation.applied_at,
+    checked_in_at: participation.checked_in_at,
+    completed_at: participation.completed_at,
+    granted_points: participation.granted_points,
   };
 }
 
@@ -1118,7 +1135,7 @@ export function App() {
   const initialSession = readStoredSession();
   const [eventDisplayDate] = useState(getEventDisplayDate);
   const [appLanguage, setAppLanguage] = useState<AppLanguage>("ja");
-  const [eventTab, setEventTab] = useState<"recommended" | "liked" | "participated">("recommended");
+  const [eventTab, setEventTab] = useState<"recommended" | "liked" | "applied" | "completed">("recommended");
   const [exchangeTab, setExchangeTab] = useState<"recommended" | "favorite">("recommended");
   const [session, setSession] = useState<Session | null>(initialSession);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -1219,7 +1236,18 @@ export function App() {
       const mappedLikedEvents = nextLikedEvents.map((event) => mapEvent(event, eventDisplayDate, nextLanguage));
       const mappedLikedEventsById = new Map(mappedLikedEvents.flatMap((event) => (event.rawEventId ? [[event.rawEventId, event] as const] : [])));
       const mappedParticipatedEvents = nextHistory.participations.map((participation) => {
-        return mappedEventsById.get(participation.event_id) ?? mappedLikedEventsById.get(participation.event_id) ?? mapParticipation(participation, eventDisplayDate, nextLanguage);
+        const mapped =
+          mappedEventsById.get(participation.event_id) ??
+          mappedLikedEventsById.get(participation.event_id) ??
+          mapParticipation(participation, eventDisplayDate, nextLanguage);
+        return {
+          ...mapped,
+          participation_status: participation.status,
+          applied_at: participation.applied_at,
+          checked_in_at: participation.checked_in_at,
+          completed_at: participation.completed_at,
+          granted_points: participation.granted_points,
+        };
       });
       const mappedProducts = mapServices(nextServices, nextLanguage);
       const mappedEventsByAnyId = new Map([...mappedEvents, ...mappedLikedEvents, ...mappedParticipatedEvents].flatMap((event) => (event.rawEventId ? [[event.rawEventId, event] as const] : [])));
@@ -1228,11 +1256,19 @@ export function App() {
       setSettings(nextSettings);
       setAppLanguage(nextLanguage);
       setAccountEmail(nextProfile.email);
-      setRecommendedEvents(mappedEvents);
+      setRecommendedEvents(mappedEvents.filter((event) => event.event_status === "active" || !event.event_status));
       setLikedEvents(mappedLikedEvents);
-      setParticipatedEvents(mappedParticipatedEvents);
-      setScheduledEvent(mappedParticipatedEvents[0] ?? mappedEvents[0] ?? null);
-      setParticipatedEventIds(new Set(nextHistory.participations.map((participation) => participation.event_id)));
+      setParticipatedEvents(mappedParticipatedEvents.filter((event) => event.participation_status !== "cancelled"));
+      setScheduledEvent(
+        mappedParticipatedEvents.find((event) => ["applied", "checked_in"].includes(event.participation_status || "")) ?? null,
+      );
+      setParticipatedEventIds(
+        new Set(
+          nextHistory.participations
+            .filter((participation) => participation.status !== "cancelled")
+            .map((participation) => participation.event_id),
+        ),
+      );
       setProductCategories(mappedProducts);
       setSelectedEvent((current) => (current?.rawEventId ? mappedEventsByAnyId.get(current.rawEventId) ?? localizeDisplayEvent(current, nextLanguage) : current ? localizeDisplayEvent(current, nextLanguage) : current));
       setSelectedProduct((current) => (current ? mappedProductsById.get(current.id) ?? localizeProduct(current, nextLanguage) : current));
@@ -1950,6 +1986,8 @@ function LoginScreen({
       const message = getErrorMessage(error);
       if (message.includes("not verified")) {
         setLoginPlainError("メール認証が完了していません。登録確認メールのURLから認証してください。");
+      } else if (message === translate("apiConnectionError", "ja")) {
+        setLoginPlainError(message);
       } else {
         setLoginMessageKind("failed");
       }
@@ -2491,17 +2529,24 @@ function EventsScreen({
   onEventSelect,
   onCancelParticipation,
 }: {
-  tab: "recommended" | "liked" | "participated";
+  tab: "recommended" | "liked" | "applied" | "completed";
   events: DisplayEvent[];
   likedEvents: DisplayEvent[];
   participatedEvents: DisplayEvent[];
   language: AppLanguage;
   onLanguageToggle: () => void;
-  onTabChange: (tab: "recommended" | "liked" | "participated") => void;
+  onTabChange: (tab: "recommended" | "liked" | "applied" | "completed") => void;
   onEventSelect: (event: DisplayEvent) => void;
   onCancelParticipation: (event: DisplayEvent) => void;
 }) {
-  const visibleEvents = tab === "recommended" ? events : tab === "liked" ? likedEvents : participatedEvents;
+  const visibleEvents =
+    tab === "recommended"
+      ? events
+      : tab === "liked"
+        ? likedEvents
+        : tab === "applied"
+          ? participatedEvents.filter((event) => ["applied", "checked_in"].includes(event.participation_status || ""))
+          : participatedEvents.filter((event) => event.participation_status === "completed");
 
   return (
     <section>
@@ -2511,7 +2556,8 @@ function EventsScreen({
         items={[
           ["recommended", translate("recommended", language)],
           ["liked", translate("likedEvents", language)],
-          ["participated", translate("participatedEvents", language)],
+          ["applied", language === "en" ? "Applied" : "応募済み"],
+          ["completed", language === "en" ? "Completed" : "参加済み"],
         ]}
         onChange={onTabChange}
       />
@@ -2519,12 +2565,25 @@ function EventsScreen({
       <div className="event-list">
         {visibleEvents.length === 0 ? <p className="event-empty-message">{translate("eventsEmpty", language)}</p> : null}
         {visibleEvents.map((event) =>
-          tab === "participated" ? (
+          tab === "applied" || tab === "completed" ? (
             <div className="event-list__item" key={event.id}>
               <EventCard event={event} language={language} onSelect={onEventSelect} />
-              <button className="event-cancel-button" type="button" onClick={() => onCancelParticipation(event)}>
-                {translate("cancelParticipation", language)}
-              </button>
+              {event.participation_status === "checked_in" ? (
+                <p className="event-empty-message">
+                  {language === "en" ? "Checked in · awaiting completion" : "受付済み・完了確認待ち"}
+                </p>
+              ) : null}
+              {event.participation_status === "completed" ? (
+                <p className="event-empty-message">
+                  +{event.granted_points || 0}pt ·{" "}
+                  {event.completed_at ? formatTimestamp(event.completed_at) : ""}
+                </p>
+              ) : null}
+              {event.participation_status === "applied" ? (
+                <button className="event-cancel-button" type="button" onClick={() => onCancelParticipation(event)}>
+                  {translate("cancelParticipation", language)}
+                </button>
+              ) : null}
             </div>
           ) : (
             <EventCard key={event.id} event={event} language={language} onSelect={onEventSelect} />
@@ -3289,7 +3348,7 @@ function HistoryScreen({
               <li key={entry.participation_id} className="history-row">
                 <div>
                   <strong>{localizeApiText(entry.event_name, language)}</strong>
-                  <small>{formatTimestamp(entry.participated_at)}</small>
+                  <small>{formatTimestamp(entry.completed_at || entry.applied_at)}</small>
                 </div>
                 <span className="history-row__delta history-row__delta--plus">+{entry.granted_points}pt</span>
               </li>
@@ -3669,7 +3728,7 @@ function buildWalletHistoryItems({
 }): WalletHistoryGroup[] {
   const items: WalletHistoryDisplayItem[] = [
     ...participations.map((entry) => {
-      const date = parseWalletHistoryDate(entry.participated_at);
+      const date = parseWalletHistoryDate(entry.completed_at || entry.applied_at);
       const eventTime = formatDateTimeParts(entry.event_datetime);
       return {
         id: `participation-${entry.participation_id}`,

@@ -1,16 +1,12 @@
-const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const pool = require('../config/db');
 const { translateText } = require('../services/translationService');
+const { closeEvent, grantCompletionPoints } = require('../services/eventLifecycleService');
 
 const TRANSLATION_CACHE_LOCALE = 'en';
 
 function isValidStatus(status) {
-  return ['active', 'paused'].includes(status);
-}
-
-function generateCheckInCode(eventId) {
-  return `EVT-${eventId}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+  return ['active', 'paused', 'completed', 'cancelled'].includes(status);
 }
 
 function normalizeEventDateTime(value) {
@@ -25,54 +21,6 @@ function normalizeEventDateTime(value) {
   }
 
   return `${match[1]} ${match[2]}:${match[3] || '00'}`;
-}
-
-async function ensureEventCheckInCode(eventId) {
-  const [tokens] = await pool.query(
-    `SELECT token_id, check_in_code, expires_at
-     FROM event_checkin_tokens
-     WHERE event_id = ? AND is_active = 1
-     ORDER BY token_id DESC`,
-    [eventId]
-  );
-
-  if (tokens.length > 0) {
-    return tokens[0];
-  }
-
-  const code = generateCheckInCode(eventId);
-  const [result] = await pool.query(
-    `INSERT INTO event_checkin_tokens (event_id, check_in_code, expires_at, is_active)
-     VALUES (?, ?, '2030-12-31 23:59:59', 1)`,
-    [eventId, code]
-  );
-
-  return {
-    token_id: result.insertId,
-    check_in_code: code,
-    expires_at: '2030-12-31 23:59:59'
-  };
-}
-
-async function assignEventToExistingOrganizers(eventId) {
-  const [organizers] = await pool.query('SELECT organizer_id FROM event_organizers ORDER BY organizer_id ASC');
-
-  for (const organizer of organizers) {
-    const [assignments] = await pool.query(
-      `SELECT organizer_id
-       FROM event_organizer_events
-       WHERE organizer_id = ? AND event_id = ?`,
-      [organizer.organizer_id, eventId]
-    );
-
-    if (assignments.length === 0) {
-      await pool.query(
-        `INSERT INTO event_organizer_events (organizer_id, event_id)
-         VALUES (?, ?)`,
-        [organizer.organizer_id, eventId]
-      );
-    }
-  }
 }
 
 async function prewarmTranslationCache(contentType, contentId, fields) {
@@ -102,9 +50,14 @@ async function prewarmTranslationCache(contentType, contentId, fields) {
 async function getEvents(req, res, next) {
   try {
     const [rows] = await pool.query(
-      `SELECT e.*, t.check_in_code, t.expires_at AS check_in_expires_at
+      `SELECT e.*,
+              SUM(CASE WHEN p.status IN ('applied', 'checked_in', 'completed', 'absent', 'incomplete') THEN 1 ELSE 0 END) AS application_count,
+              SUM(CASE WHEN p.status IN ('checked_in', 'completed', 'incomplete') THEN 1 ELSE 0 END) AS checked_in_count,
+              SUM(CASE WHEN p.status = 'completed' THEN 1 ELSE 0 END) AS completed_count,
+              SUM(CASE WHEN p.status = 'incomplete' THEN 1 ELSE 0 END) AS incomplete_count
        FROM events e
-       LEFT JOIN event_checkin_tokens t ON e.event_id = t.event_id AND t.is_active = 1
+       LEFT JOIN participations p ON e.event_id = p.event_id
+       GROUP BY e.event_id
        ORDER BY e.event_datetime DESC`
     );
     res.json(rows);
@@ -115,11 +68,14 @@ async function getEvents(req, res, next) {
 
 async function createEvent(req, res, next) {
   try {
-    const { event_name, event_datetime, location, grant_points, description, activity, notes, status } = req.body;
+    const {
+      event_name, event_datetime, event_end_datetime, location,
+      grant_points, description, activity, notes, status
+    } = req.body;
     const eventStatus = status || 'active';
 
-    if (!event_name || !event_datetime) {
-      return res.status(400).json({ message: 'Event name and datetime are required.' });
+    if (!event_name || !event_datetime || !event_end_datetime) {
+      return res.status(400).json({ message: 'Event name, start datetime and end datetime are required.' });
     }
 
     if (!isValidStatus(eventStatus)) {
@@ -127,12 +83,18 @@ async function createEvent(req, res, next) {
     }
 
     const normalizedEventDatetime = normalizeEventDateTime(event_datetime);
+    const normalizedEventEndDatetime = normalizeEventDateTime(event_end_datetime);
+    if (new Date(normalizedEventEndDatetime) <= new Date(normalizedEventDatetime)) {
+      return res.status(400).json({ message: 'Event end datetime must be after the start datetime.' });
+    }
     const [result] = await pool.query(
-      `INSERT INTO events (event_name, event_datetime, location, grant_points, description, activity, notes, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO events
+         (event_name, event_datetime, event_end_datetime, location, grant_points, description, activity, notes, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         event_name,
         normalizedEventDatetime,
+        normalizedEventEndDatetime,
         location || null,
         Number(grant_points || 0),
         description || null,
@@ -142,8 +104,6 @@ async function createEvent(req, res, next) {
       ]
     );
 
-    const token = await ensureEventCheckInCode(result.insertId);
-    await assignEventToExistingOrganizers(result.insertId);
     await prewarmTranslationCache('event', result.insertId, {
       event_name,
       description
@@ -151,8 +111,7 @@ async function createEvent(req, res, next) {
 
     res.status(201).json({
       message: 'Event created successfully.',
-      event_id: result.insertId,
-      check_in_code: token.check_in_code
+      event_id: result.insertId
     });
   } catch (error) {
     next(error);
@@ -162,7 +121,10 @@ async function createEvent(req, res, next) {
 async function updateEvent(req, res, next) {
   try {
     const { id } = req.params;
-    const { event_name, event_datetime, location, grant_points, description, activity, notes, status } = req.body;
+    const {
+      event_name, event_datetime, event_end_datetime, location,
+      grant_points, description, activity, notes, status
+    } = req.body;
 
     const [events] = await pool.query('SELECT * FROM events WHERE event_id = ?', [id]);
     if (events.length === 0) {
@@ -177,6 +139,9 @@ async function updateEvent(req, res, next) {
     const nextEvent = {
       event_name: event_name || events[0].event_name,
       event_datetime: event_datetime ? normalizeEventDateTime(event_datetime) : events[0].event_datetime,
+      event_end_datetime: event_end_datetime
+        ? normalizeEventDateTime(event_end_datetime)
+        : events[0].event_end_datetime,
       location: location === undefined ? events[0].location : location,
       grant_points: grant_points === undefined ? events[0].grant_points : Number(grant_points),
       description: description === undefined ? events[0].description : description,
@@ -184,14 +149,22 @@ async function updateEvent(req, res, next) {
       notes: notes === undefined ? events[0].notes : notes,
       status: eventStatus
     };
+    if (!nextEvent.event_end_datetime) {
+      return res.status(400).json({ message: 'Event end datetime is required.' });
+    }
+    if (new Date(nextEvent.event_end_datetime) <= new Date(nextEvent.event_datetime)) {
+      return res.status(400).json({ message: 'Event end datetime must be after the start datetime.' });
+    }
 
     await pool.query(
       `UPDATE events
-       SET event_name = ?, event_datetime = ?, location = ?, grant_points = ?, description = ?, activity = ?, notes = ?, status = ?
+       SET event_name = ?, event_datetime = ?, event_end_datetime = ?, location = ?, grant_points = ?,
+           description = ?, activity = ?, notes = ?, status = ?
        WHERE event_id = ?`,
       [
         nextEvent.event_name,
         nextEvent.event_datetime,
+        nextEvent.event_end_datetime,
         nextEvent.location,
         nextEvent.grant_points,
         nextEvent.description,
@@ -227,23 +200,252 @@ async function deleteEvent(req, res, next) {
   }
 }
 
-async function getEventCheckInCode(req, res, next) {
+async function getEventSubmissions(req, res, next) {
   try {
-    const { id } = req.params;
-    const [events] = await pool.query('SELECT event_id FROM events WHERE event_id = ?', [id]);
-
-    if (events.length === 0) {
-      return res.status(404).json({ message: 'Event not found.' });
+    const status = req.query.status;
+    const params = [];
+    let where = '';
+    if (status) {
+      if (!['pending', 'approved', 'rejected', 'withdrawn'].includes(status)) {
+        return res.status(400).json({ message: 'Invalid submission status.' });
+      }
+      where = 'WHERE es.status = ?';
+      params.push(status);
     }
-
-    const token = await ensureEventCheckInCode(id);
-    res.json({
-      event_id: Number(id),
-      check_in_code: token.check_in_code,
-      expires_at: token.expires_at
-    });
+    const [rows] = await pool.query(
+      `SELECT es.*, eo.organizer_name, eo.contact_email
+       FROM event_submissions es
+       JOIN event_organizers eo ON es.organizer_id = eo.organizer_id
+       ${where}
+       ORDER BY CASE WHEN es.status = 'pending' THEN 0 ELSE 1 END, es.created_at DESC`,
+      params
+    );
+    res.json(rows);
   } catch (error) {
     next(error);
+  }
+}
+
+async function getEventSubmission(req, res, next) {
+  try {
+    const [rows] = await pool.query(
+      `SELECT es.*, eo.organizer_name, eo.contact_email
+       FROM event_submissions es
+       JOIN event_organizers eo ON es.organizer_id = eo.organizer_id
+       WHERE es.submission_id = ?`,
+      [req.params.id]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Event submission not found.' });
+    }
+    res.json(rows[0]);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function approveEventSubmission(req, res, next) {
+  const connection = await pool.getConnection();
+  let approvedEvent;
+  try {
+    await connection.beginTransaction();
+    const [rows] = await connection.query(
+      `SELECT * FROM event_submissions WHERE submission_id = ? FOR UPDATE`,
+      [req.params.id]
+    );
+    if (rows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Event submission not found.' });
+    }
+    if (rows[0].status !== 'pending') {
+      await connection.rollback();
+      return res.status(409).json({ message: 'This event submission has already been reviewed.' });
+    }
+
+    const submission = rows[0];
+    approvedEvent = {
+      event_name: req.body.event_name ?? submission.event_name,
+      event_datetime: normalizeEventDateTime(req.body.event_datetime ?? submission.event_datetime),
+      event_end_datetime: normalizeEventDateTime(
+        req.body.event_end_datetime ?? submission.event_end_datetime
+      ),
+      location: req.body.location ?? submission.location,
+      grant_points: Number(req.body.grant_points ?? submission.requested_grant_points ?? 0),
+      description: req.body.description ?? submission.description,
+      activity: req.body.activity ?? submission.activity,
+      notes: req.body.notes ?? submission.notes
+    };
+    if (
+      !approvedEvent.event_end_datetime ||
+      new Date(approvedEvent.event_end_datetime) <= new Date(approvedEvent.event_datetime)
+    ) {
+      await connection.rollback();
+      return res.status(400).json({ message: 'Event end datetime must be after the start datetime.' });
+    }
+
+    const [eventResult] = await connection.query(
+      `INSERT INTO events
+         (event_name, event_datetime, event_end_datetime, location, grant_points,
+          description, activity, notes, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+      [
+        approvedEvent.event_name,
+        approvedEvent.event_datetime,
+        approvedEvent.event_end_datetime,
+        approvedEvent.location || null,
+        approvedEvent.grant_points,
+        approvedEvent.description || null,
+        approvedEvent.activity || null,
+        approvedEvent.notes || null
+      ]
+    );
+    await connection.query(
+      `INSERT INTO event_organizer_events (organizer_id, event_id) VALUES (?, ?)`,
+      [submission.organizer_id, eventResult.insertId]
+    );
+    await connection.query(
+      `UPDATE event_submissions
+       SET status = 'approved', review_note = ?, reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP,
+           approved_event_id = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE submission_id = ?`,
+      [req.body.review_note || null, req.user.id, eventResult.insertId, submission.submission_id]
+    );
+    await connection.commit();
+
+    await prewarmTranslationCache('event', eventResult.insertId, {
+      event_name: approvedEvent.event_name,
+      description: approvedEvent.description
+    });
+    res.status(201).json({
+      message: 'Event submission approved.',
+      submission_id: submission.submission_id,
+      event_id: eventResult.insertId
+    });
+  } catch (error) {
+    await connection.rollback();
+    next(error);
+  } finally {
+    connection.release();
+  }
+}
+
+async function rejectEventSubmission(req, res, next) {
+  const note = String(req.body.review_note || '').trim();
+  if (!note) {
+    return res.status(400).json({ message: 'A rejection reason is required.' });
+  }
+  try {
+    const [result] = await pool.query(
+      `UPDATE event_submissions
+       SET status = 'rejected', review_note = ?, reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE submission_id = ? AND status = 'pending'`,
+      [note, req.user.id, req.params.id]
+    );
+    if (result.affectedRows === 0) {
+      const [rows] = await pool.query('SELECT status FROM event_submissions WHERE submission_id = ?', [
+        req.params.id
+      ]);
+      return res
+        .status(rows.length === 0 ? 404 : 409)
+        .json({ message: rows.length === 0 ? 'Event submission not found.' : 'This submission is not pending.' });
+    }
+    res.json({ message: 'Event submission rejected.', submission_id: Number(req.params.id) });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function getEventParticipations(req, res, next) {
+  try {
+    const [rows] = await pool.query(
+      `SELECT p.*, u.name AS user_name, u.email, e.event_name
+       FROM participations p
+       JOIN users u ON p.user_id = u.user_id
+       JOIN events e ON p.event_id = e.event_id
+       WHERE p.event_id = ?
+       ORDER BY p.applied_at DESC`,
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function completeParticipationByAdmin(req, res, next) {
+  const note = String(req.body.reason || '').trim();
+  if (!note) {
+    return res.status(400).json({ message: 'A correction reason is required.' });
+  }
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [rows] = await connection.query(
+      `SELECT p.*, e.event_name
+       FROM participations p
+       JOIN events e ON p.event_id = e.event_id
+       WHERE p.participation_id = ?
+       FOR UPDATE`,
+      [req.params.id]
+    );
+    if (rows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Participation not found.' });
+    }
+    if (rows[0].status !== 'incomplete') {
+      await connection.rollback();
+      return res.status(409).json({ message: 'Only an incomplete participation can be corrected.' });
+    }
+    const result = await grantCompletionPoints(connection, rows[0], {
+      method: 'admin',
+      note,
+      adminId: req.user.id,
+      actorType: 'admin',
+      actorId: req.user.id
+    });
+    if (result.conflict) {
+      await connection.rollback();
+      return res.status(409).json({ message: 'Points have already been granted.' });
+    }
+    await connection.commit();
+    res.json({
+      message: 'Participation corrected to completed.',
+      participation_id: Number(req.params.id),
+      granted_points: result.grantedPoints,
+      current_points: result.currentPoints
+    });
+  } catch (error) {
+    await connection.rollback();
+    if (error?.code === 'ER_DUP_ENTRY' || String(error?.message).includes('UNIQUE constraint failed')) {
+      return res.status(409).json({ message: 'Points have already been granted.' });
+    }
+    next(error);
+  } finally {
+    connection.release();
+  }
+}
+
+async function closeEventByAdmin(req, res, next) {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const result = await closeEvent(connection, req.params.id, {
+      actorType: 'admin',
+      actorId: req.user.id,
+      reason: req.body.reason || null
+    });
+    if (result.status >= 400) {
+      await connection.rollback();
+      return res.status(result.status).json(result.body);
+    }
+    await connection.commit();
+    res.json(result.body);
+  } catch (error) {
+    await connection.rollback();
+    next(error);
+  } finally {
+    connection.release();
   }
 }
 
@@ -713,7 +915,13 @@ module.exports = {
   createEvent,
   updateEvent,
   deleteEvent,
-  getEventCheckInCode,
+  getEventSubmissions,
+  getEventSubmission,
+  approveEventSubmission,
+  rejectEventSubmission,
+  getEventParticipations,
+  completeParticipationByAdmin,
+  closeEventByAdmin,
   getStores,
   createStore,
   updateStore,

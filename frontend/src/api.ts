@@ -369,17 +369,6 @@ export function cancelEventParticipation(eventId: number, token: string) {
   );
 }
 
-export function checkInEvent(checkInCode: string, token: string) {
-  return request<ParticipationResponse>(
-    "/events/check-in",
-    {
-      method: "POST",
-      body: JSON.stringify({ check_in_code: checkInCode }),
-    },
-    token,
-  );
-}
-
 export function likeEvent(eventId: number, token: string) {
   return request<{ message: string; event_id: number; liked: boolean }>(
     `/events/${eventId}/like`,

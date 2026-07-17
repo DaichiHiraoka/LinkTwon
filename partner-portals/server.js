@@ -10,6 +10,9 @@ const {
 const {
   readPartnerData,
   recordEventCheckIn,
+  recordEventCompletion,
+  saveEventSubmission,
+  closeOrganizerEvent,
   recordStoreExchange
 } = require('./lib/partnerRepository');
 const { env } = require('./config/env');
@@ -183,7 +186,10 @@ async function buildEventPayload(code, password, locale, options = {}) {
       email: organizer.contact_email
     },
     not_translated_fields: notTranslatedFields(),
-    events
+    events,
+    submissions: data.eventSubmissions.filter(
+      (submission) => String(submission.organizer_id) === String(organizer.organizer_id)
+    )
   };
 }
 
@@ -216,7 +222,7 @@ async function buildStorePayload(code, password, locale, options = {}) {
   };
 }
 
-async function processEventCheckIn(body, locale, options = {}) {
+async function processEventAttendance(body, locale, scanType, options = {}) {
   const data = await readPartnerData(options);
   const organizer = data.eventOrganizers.find((item) => matchesPartnerCredentials(item, body.code, body.password));
 
@@ -231,16 +237,43 @@ async function processEventCheckIn(body, locale, options = {}) {
   }
 
   const user = parseUserQrPayload(body.user_qr_payload);
-  const writeResult = await recordEventCheckIn({ organizer, event, user }, options);
+  const writeResult =
+    scanType === 'completion'
+      ? await recordEventCompletion({ organizer, event, user }, options)
+      : await recordEventCheckIn({ organizer, event, user }, options);
 
   if (writeResult.duplicate) {
-    return { status: 409, body: { message: 'This user QR has already been used for this event.', user, event_id: event.event_id } };
+    return { status: 409, body: { message: 'This user QR nonce has already been used.', user, event_id: event.event_id } };
   }
   if (writeResult.userNotFound) {
     return { status: 404, body: { message: 'User not found for this QR.', user, event_id: event.event_id } };
   }
-  if (writeResult.alreadyParticipated) {
-    return { status: 409, body: { message: 'This user has already checked in to this event.', user, event_id: event.event_id } };
+  if (writeResult.eventClosed) {
+    return { status: 409, body: { message: 'This event is closed.', user, event_id: event.event_id } };
+  }
+  if (writeResult.notApplied) {
+    return { status: 409, body: { message: 'This user has not applied for the event.', user, event_id: event.event_id } };
+  }
+  if (writeResult.invalidStatus) {
+    return {
+      status: 409,
+      body: {
+        message: `Invalid participation status: ${writeResult.participation_status}.`,
+        user,
+        event_id: event.event_id,
+        participation_status: writeResult.participation_status
+      }
+    };
+  }
+  if (writeResult.tooEarly) {
+    return {
+      status: 409,
+      body: {
+        message: 'Completion cannot be confirmed before the event end datetime.',
+        event_id: event.event_id,
+        event_end_datetime: writeResult.event_end_datetime
+      }
+    };
   }
 
   const cache = await loadTranslationCache(options.cachePath || CACHE_PATH);
@@ -249,14 +282,27 @@ async function processEventCheckIn(body, locale, options = {}) {
   return {
     status: 201,
     body: {
-      message: 'Event check-in completed.',
+      message: scanType === 'completion' ? 'Event completion confirmed.' : 'Event check-in completed.',
       user,
       event_id: event.event_id,
       event_name: translatedEvent.event_name,
-      granted_points: event.grant_points,
-      current_points: writeResult.current_points
+      participation_status: writeResult.participation_status,
+      ...(scanType === 'completion'
+        ? {
+            granted_points: writeResult.granted_points,
+            current_points: writeResult.current_points
+          }
+        : {}),
     }
   };
+}
+
+async function processEventCheckIn(body, locale, options = {}) {
+  return processEventAttendance(body, locale, 'check_in', options);
+}
+
+async function processEventCompletion(body, locale, options = {}) {
+  return processEventAttendance(body, locale, 'completion', options);
 }
 
 async function processStoreExchange(body, locale, options = {}) {
@@ -349,6 +395,78 @@ async function handleApi(request, response, requestUrl) {
     } catch (error) {
       return sendError(response, 400, error.message);
     }
+  }
+
+  if (request.method === 'POST' && requestUrl.pathname === '/api/event/completions') {
+    if (APP_ROLE !== 'event') {
+      return sendError(response, 404, 'API route not found.');
+    }
+    try {
+      const locale = requestUrl.searchParams.get('locale') === 'en' ? 'en' : 'ja';
+      const result = await processEventCompletion(await readJsonBody(request), locale);
+      return sendJson(response, result.status, result.body);
+    } catch (error) {
+      return sendError(response, 400, error.message);
+    }
+  }
+
+  if (APP_ROLE === 'event' && requestUrl.pathname === '/api/event/submissions') {
+    if (request.method === 'GET') {
+      const code = requestUrl.searchParams.get('code') || '';
+      const password = requestUrl.searchParams.get('password') || '';
+      const payload = await buildEventPayload(code, password, 'ja');
+      if (!payload) return sendError(response, 401, 'Invalid event organizer credentials.');
+      return sendJson(response, 200, payload.submissions);
+    }
+    if (request.method === 'POST') {
+      const body = await readJsonBody(request);
+      const data = await readPartnerData();
+      const organizer = data.eventOrganizers.find((item) =>
+        matchesPartnerCredentials(item, body.code, body.password)
+      );
+      if (!organizer) return sendError(response, 401, 'Invalid event organizer credentials.');
+      const result = await saveEventSubmission({ organizer, action: 'create', data: body });
+      if (result.error) return sendError(response, 400, result.error);
+      return sendJson(response, 201, result);
+    }
+  }
+
+  const submissionMatch = requestUrl.pathname.match(/^\/api\/event\/submissions\/(\d+)(\/withdraw)?$/);
+  if (APP_ROLE === 'event' && submissionMatch && ['PUT', 'POST'].includes(request.method)) {
+    const isWithdraw = submissionMatch[2] === '/withdraw';
+    if ((isWithdraw && request.method !== 'POST') || (!isWithdraw && request.method !== 'PUT')) {
+      return sendError(response, 405, 'Method not allowed.');
+    }
+    const body = await readJsonBody(request);
+    const data = await readPartnerData();
+    const organizer = data.eventOrganizers.find((item) =>
+      matchesPartnerCredentials(item, body.code, body.password)
+    );
+    if (!organizer) return sendError(response, 401, 'Invalid event organizer credentials.');
+    const result = await saveEventSubmission({
+      organizer,
+      submissionId: Number(submissionMatch[1]),
+      action: isWithdraw ? 'withdraw' : 'update',
+      data: body
+    });
+    if (result.notFound) return sendError(response, 404, 'Event submission not found.');
+    if (result.conflict) return sendError(response, 409, 'This event submission cannot be changed.');
+    if (result.error) return sendError(response, 400, result.error);
+    return sendJson(response, 200, result);
+  }
+
+  const closeMatch = requestUrl.pathname.match(/^\/api\/event\/events\/(\d+)\/close$/);
+  if (APP_ROLE === 'event' && request.method === 'POST' && closeMatch) {
+    const body = await readJsonBody(request);
+    const data = await readPartnerData();
+    const organizer = data.eventOrganizers.find((item) =>
+      matchesPartnerCredentials(item, body.code, body.password)
+    );
+    if (!organizer) return sendError(response, 401, 'Invalid event organizer credentials.');
+    const result = await closeOrganizerEvent({ organizer, eventId: Number(closeMatch[1]) });
+    if (result.notFound) return sendError(response, 404, 'Event not found for this organizer.');
+    if (result.conflict) return sendError(response, 409, 'Event is already closed.');
+    return sendJson(response, 200, result);
   }
 
   if (request.method === 'POST' && requestUrl.pathname === '/api/store/exchanges') {
@@ -465,6 +583,7 @@ module.exports = {
   handleRequest,
   parseUserQrPayload,
   processEventCheckIn,
+  processEventCompletion,
   processStoreExchange,
   readPartnerData,
   refreshTranslationsOnSchedule,

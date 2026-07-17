@@ -5,7 +5,6 @@ const {
   getEvents,
   participateInEvent,
   cancelEventParticipation,
-  checkInEvent,
   likeEvent,
   unlikeEvent
 } = require('../controllers/eventController');
@@ -13,7 +12,6 @@ const {
 router.get('/', authenticateToken, getEvents);
 router.post('/participate', authenticateToken, participateInEvent);
 router.delete('/:id/participation', authenticateToken, cancelEventParticipation);
-router.post('/check-in', authenticateToken, checkInEvent);
 router.post('/:id/like', authenticateToken, likeEvent);
 router.delete('/:id/like', authenticateToken, unlikeEvent);
 
