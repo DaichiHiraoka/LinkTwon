@@ -393,6 +393,13 @@ textarea.input {
   justify-items: stretch;
 }
 
+.event-card-note {
+  margin: -8px 0 0 !important;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
 .meta-list {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -546,6 +546,7 @@ function manualTemplate() {
             <button class="btn btn-outline" type="button" data-action="open-scanner-current">▣ ${escapeHtml(t('camera'))}</button>
             <button class="btn btn-primary" type="submit">${escapeHtml(t('confirm'))}</button>
           </div>
+          <button class="text-link" type="button" data-action="open-products">${escapeHtml(t('chooseAnother'))}</button>
         </form>
       </main>
     </div>
@@ -580,7 +581,8 @@ function confirmTemplate(processing = false) {
               : `<h1>${escapeHtml(t('confirmTitle'))}</h1>
                  <div class="recipient"><span>${escapeHtml(t('customer'))}</span><strong>${escapeHtml(state.pendingUser?.name || '-')}</strong></div>
                  <div class="exchange-summary"><div><span>${escapeHtml(service.service_name)}</span><strong>-${escapeHtml(service.required_points)} pt</strong></div></div>
-                 <div class="actions"><button class="btn btn-outline" type="button" data-action="cancel-confirm">${escapeHtml(t('cancel'))}</button><button class="btn btn-primary" type="button" data-action="submit-exchange">${escapeHtml(t('execute'))}</button></div>`
+                  <div class="actions"><button class="btn btn-outline" type="button" data-action="cancel-confirm">${escapeHtml(t('cancel'))}</button><button class="btn btn-primary" type="button" data-action="submit-exchange">${escapeHtml(t('execute'))}</button></div>
+                  <button class="text-link" type="button" data-action="open-products">${escapeHtml(t('chooseAnother'))}</button>`
           }
         </section>
       </div>
@@ -593,7 +595,7 @@ function successTemplate() {
 
   return `
     <div class="tablet-frame">
-      ${appHeaderTemplate()}
+      ${appHeaderTemplate({ backAction: 'open-products' })}
       <main class="status-stage status-stage--success">
         <div class="success-mark">✓</div>
         <h1>${escapeHtml(t('completed'))}</h1>
@@ -612,7 +614,7 @@ function successTemplate() {
 function errorTemplate() {
   return `
     <div class="tablet-frame tablet-frame--error">
-      ${appHeaderTemplate()}
+      ${appHeaderTemplate({ backAction: 'open-products' })}
       <main class="status-stage status-stage--error">
         <div class="error-mark">!</div>
         <h1>${escapeHtml(state.error || t('invalidQr'))}</h1>
@@ -621,6 +623,7 @@ function errorTemplate() {
           <button class="btn btn-primary" type="button" data-action="open-scanner-current">${escapeHtml(t('retry'))}</button>
           <button class="btn btn-outline" type="button" data-action="open-manual">${escapeHtml(t('manualEntry'))}</button>
         </div>
+        <button class="text-link" type="button" data-action="open-products">${escapeHtml(t('chooseAnother'))}</button>
       </main>
     </div>
   `;

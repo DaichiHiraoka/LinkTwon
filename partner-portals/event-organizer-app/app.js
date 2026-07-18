@@ -69,6 +69,7 @@ const ui = {
     notAppliedHint: '利用者アプリからイベントへ応募した後、もう一度QRを読み取ってください。',
     notCheckedIn: 'このイベントの受付が完了していないため、参加完了を認証できません。',
     notCheckedInHint: '先に受付QRを読み取ってから、参加完了QRを読み取ってください。',
+    completionUnavailable: '完了確認QRはイベント終了日時以降に利用できます。',
     cameraUnavailable: 'このブラウザではカメラQR読取を利用できません。手入力で受付してください。'
   },
   en: {
@@ -112,6 +113,7 @@ const ui = {
     notAppliedHint: 'Ask the user to apply for the event in the participant app, then scan the QR again.',
     notCheckedIn: 'This user has not checked in for this event.',
     notCheckedInHint: 'Scan the check-in QR before confirming event completion.',
+    completionUnavailable: 'Completion QR becomes available after the event end time.',
     cameraUnavailable: 'Camera QR scanning is unavailable in this browser. Use manual check-in.'
   }
 };
@@ -205,6 +207,15 @@ function currentEvent() {
 function checkinCount(eventId) {
   const eventItem = state.payload?.events.find((item) => item.event_id === eventId);
   return Number(eventItem?.checked_in_count || 0);
+}
+
+function isCompletionScanReady(eventItem, now = Date.now()) {
+  if (!eventItem?.event_end_datetime) {
+    return true;
+  }
+
+  const endTime = new Date(eventItem.event_end_datetime).getTime();
+  return Number.isNaN(endTime) || now >= endTime;
 }
 
 function parseUserPreview(rawPayload) {
@@ -562,8 +573,7 @@ function submissionCardTemplate(item) {
 }
 
 function eventCardTemplate(eventItem) {
-  const completionReady =
-    eventItem.event_end_datetime && Date.now() >= new Date(eventItem.event_end_datetime).getTime();
+  const completionReady = isCompletionScanReady(eventItem);
   return `
     <article class="event-card">
       <div class="event-card-main">
@@ -581,7 +591,8 @@ function eventCardTemplate(eventItem) {
           <div class="lbl">${state.locale === 'en' ? 'Applied / checked in / completed' : '申込 / 受付 / 完了'}</div>
         </div>
         <button class="btn btn-primary" type="button" data-action="open-scan" data-scan-type="check_in" data-event-id="${escapeHtml(eventItem.event_id)}">${state.locale === 'en' ? 'Check-in QR' : '開始受付QR'}</button>
-        <button class="btn btn-primary" type="button" data-action="open-scan" data-scan-type="completion" data-event-id="${escapeHtml(eventItem.event_id)}" ${completionReady ? '' : 'disabled'}>${state.locale === 'en' ? 'Completion QR' : '完了確認QR'}</button>
+        <button class="btn btn-primary" type="button" data-action="open-scan" data-scan-type="completion" data-event-id="${escapeHtml(eventItem.event_id)}" ${completionReady ? '' : `disabled title="${escapeHtml(t('completionUnavailable'))}"`}>${state.locale === 'en' ? 'Completion QR' : '完了確認QR'}</button>
+        ${completionReady ? '' : `<p class="event-card-note">${escapeHtml(t('completionUnavailable'))}</p>`}
         <button class="btn btn-outline" type="button" data-action="close-event" data-event-id="${escapeHtml(eventItem.event_id)}">${state.locale === 'en' ? 'Close event' : 'イベント受付終了'}</button>
       </div>
     </article>
