@@ -12,12 +12,15 @@ import { NotificationsList } from "./screens/NotificationsList";
 import { Analysis } from "./screens/Analysis";
 import { readSession, writeSession, type AdminSession } from "./session";
 import {
+  ApiError,
+  getApiTargetLabel,
   getEvents,
   getEventSubmissions,
   getServices,
   getStats,
   getStores,
   getSupportTickets,
+  getSystemConnection,
   getUsers,
   getErrorMessage,
 } from "./api";
@@ -29,6 +32,7 @@ import type {
   ManagedUser,
   StoreItem,
   SupportTicket,
+  SystemConnection,
 } from "./types";
 
 export function App() {
@@ -67,36 +71,69 @@ function AdminShell({ session, onLogout }: { session: AdminSession; onLogout: ()
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [userSearch, setUserSearch] = useState("");
+  const [connection, setConnection] = useState<SystemConnection | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<"checking" | "connected" | "error">("checking");
 
   const notify = useCallback((ok: boolean, message: string) => setFeedback({ ok, message }), []);
 
   const reloadAll = useCallback(
     async (search = userSearch) => {
-      try {
-        const [s, e, es, st, sv, u, t] = await Promise.all([
-          getStats(session.token).catch(() => null),
-          getEvents(session.token).catch(() => [] as EventItem[]),
-          getEventSubmissions(session.token).catch(() => [] as EventSubmission[]),
-          getStores(session.token).catch(() => [] as StoreItem[]),
-          getServices(session.token).catch(() => [] as AdminServiceItem[]),
-          getUsers(session.token, search).catch((error) => {
-            notify(false, `利用者一覧を取得できませんでした: ${getErrorMessage(error)}`);
-            return [] as ManagedUser[];
-          }),
-          getSupportTickets(session.token).catch(() => [] as SupportTicket[]),
-        ]);
-        setStats(s);
-        setEvents(e);
-        setEventSubmissions(es);
-        setStores(st);
-        setServices(sv);
-        setUsers(u);
-        setTickets(t);
-      } catch (error) {
-        notify(false, getErrorMessage(error));
+      setConnectionStatus("checking");
+      const results = await Promise.allSettled([
+        getSystemConnection(session.token),
+        getStats(session.token),
+        getEvents(session.token),
+        getEventSubmissions(session.token),
+        getStores(session.token),
+        getServices(session.token),
+        getUsers(session.token, search),
+        getSupportTickets(session.token),
+      ]);
+
+      const authError = results.find(
+        (result) =>
+          result.status === "rejected" &&
+          result.reason instanceof ApiError &&
+          (result.reason.status === 401 || result.reason.status === 403),
+      );
+      if (authError) {
+        onLogout();
+        return;
+      }
+
+      const failures: string[] = [];
+      function applyResult<T>(
+        label: string,
+        result: PromiseSettledResult<T>,
+        apply: (value: T) => void,
+      ) {
+        if (result.status === "fulfilled") {
+          apply(result.value);
+        } else {
+          failures.push(`${label}: ${getErrorMessage(result.reason)}`);
+        }
+      }
+
+      applyResult("DB接続", results[0], (value) => {
+        setConnection(value);
+        setConnectionStatus("connected");
+      });
+      applyResult("集計", results[1], setStats);
+      applyResult("イベント", results[2], setEvents);
+      applyResult("イベント申請", results[3], setEventSubmissions);
+      applyResult("加盟店", results[4], setStores);
+      applyResult("サービス", results[5], setServices);
+      applyResult("利用者", results[6], setUsers);
+      applyResult("お問い合わせ", results[7], setTickets);
+
+      if (results[0].status === "rejected") {
+        setConnectionStatus("error");
+      }
+      if (failures.length > 0) {
+        notify(false, `データを取得できませんでした。${failures.join(" / ")}`);
       }
     },
-    [notify, session.token, userSearch],
+    [notify, onLogout, session.token, userSearch],
   );
 
   useEffect(() => {
@@ -104,11 +141,39 @@ function AdminShell({ session, onLogout }: { session: AdminSession; onLogout: ()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.token]);
 
+  useEffect(() => {
+    if (current === "events-list") {
+      void reloadAll(userSearch);
+    }
+    // reloadAll intentionally changes with the current search term.
+  }, [current]);
+
+  useEffect(() => {
+    function refreshOnFocus() {
+      if (document.visibilityState === "visible") {
+        void reloadAll(userSearch);
+      }
+    }
+
+    window.addEventListener("focus", refreshOnFocus);
+    document.addEventListener("visibilitychange", refreshOnFocus);
+    return () => {
+      window.removeEventListener("focus", refreshOnFocus);
+      document.removeEventListener("visibilitychange", refreshOnFocus);
+    };
+  }, [reloadAll, userSearch]);
+
   return (
     <div className="admin-shell">
       <Sidebar current={current} onNavigate={setCurrent} />
       <div className="admin-main">
-        <TopBar onLogout={onLogout} />
+        <TopBar
+          onLogout={onLogout}
+          connection={connection}
+          connectionStatus={connectionStatus}
+          apiTarget={getApiTargetLabel()}
+          onRefresh={() => void reloadAll(userSearch)}
+        />
         <main className="admin-content">
           <FeedbackBanner feedback={feedback} onClose={() => setFeedback(null)} />
           {current === "home" ? <Home stats={stats} /> : null}

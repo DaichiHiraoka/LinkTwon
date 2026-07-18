@@ -19,6 +19,7 @@ const {
   buildEventPayload,
   buildStorePayload,
   parseUserQrPayload,
+  processEventEligibility,
   processEventCheckIn,
   processEventCompletion,
   processStoreExchange
@@ -58,6 +59,10 @@ async function prepareTempPartnerDb() {
   const db = openDatabase({ dbPath, seedDemoData: true });
 
   try {
+    db.prepare(
+      `INSERT INTO users (user_id, name, email, password, points, age_group, user_type, email_verified_at)
+       VALUES (2, 'Not Applied User', 'not-applied@example.com', 'test-password-placeholder', 0, '20s', 'general', CURRENT_TIMESTAMP)`
+    ).run();
     db.prepare(
       `INSERT INTO events
         (event_name, event_datetime, location, grant_points, status, description, activity, notes)
@@ -113,14 +118,14 @@ async function testPortalPayloads(cachePath, dbPath) {
   };
 }
 
-function createUserQrPayload(nonce) {
+function createUserQrPayload(nonce, user = { userId: '1', name: 'Demo User' }) {
   const issuedAt = new Date();
   const expiresAt = new Date(issuedAt.getTime() + 5 * 60 * 1000);
   const params = new URLSearchParams({
     v: '1',
     type: 'user-present',
-    user_id: '1',
-    name: 'Demo User',
+    user_id: user.userId,
+    name: user.name,
     issued_at: issuedAt.toISOString(),
     expires_at: expiresAt.toISOString(),
     nonce
@@ -189,10 +194,81 @@ function testUserQrTimeTolerance() {
 }
 
 async function testUserQrProcessing(cachePath, dbPath, ids) {
+  const notAppliedQr = createUserQrPayload(`smoke-not-applied-${Date.now()}`, {
+    userId: '2',
+    name: 'Not Applied User'
+  });
+  const notAppliedEligibility = await processEventEligibility(
+    {
+      code: 'event-demo',
+      password: 'event-demo-pass',
+      event_id: ids.eventId,
+      scan_type: 'check_in',
+      user_qr_payload: notAppliedQr
+    },
+    'en',
+    { cachePath, dbPath }
+  );
+  assert.equal(notAppliedEligibility.status, 403);
+  assert.equal(notAppliedEligibility.body.code, 'EVENT_APPLICATION_REQUIRED');
+  assert.equal(notAppliedEligibility.body.participation_status, null);
+
+  const blockedCheckIn = await processEventCheckIn(
+    {
+      code: 'event-demo',
+      password: 'event-demo-pass',
+      event_id: ids.eventId,
+      user_qr_payload: notAppliedQr
+    },
+    'en',
+    { cachePath, dbPath }
+  );
+  assert.equal(blockedCheckIn.status, 403);
+  assert.equal(blockedCheckIn.body.code, 'EVENT_APPLICATION_REQUIRED');
+  const cancelledDb = openDatabase({ dbPath });
+  cancelledDb.prepare(
+    `INSERT INTO participations
+       (user_id, event_id, status, grant_points_snapshot, granted_points, applied_at, cancelled_at)
+     VALUES (2, ?, 'cancelled', 100, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+  ).run(ids.eventId);
+  cancelledDb.close();
+  const cancelledEligibility = await processEventEligibility(
+    {
+      code: 'event-demo',
+      password: 'event-demo-pass',
+      event_id: ids.eventId,
+      scan_type: 'check_in',
+      user_qr_payload: createUserQrPayload(`smoke-cancelled-${Date.now()}`, {
+        userId: '2',
+        name: 'Not Applied User'
+      })
+    },
+    'en',
+    { cachePath, dbPath }
+  );
+  assert.equal(cancelledEligibility.status, 403);
+  assert.equal(cancelledEligibility.body.code, 'EVENT_APPLICATION_REQUIRED');
+  assert.equal(cancelledEligibility.body.participation_status, 'cancelled');
+
   const userQrPayload = createUserQrPayload(`smoke-event-${Date.now()}`);
   const parsed = parseUserQrPayload(userQrPayload);
   assert.equal(parsed.user_id, '1');
   assert.equal(parsed.name, 'Demo User');
+
+  const appliedEligibility = await processEventEligibility(
+    {
+      code: 'event-demo',
+      password: 'event-demo-pass',
+      event_id: ids.eventId,
+      scan_type: 'check_in',
+      user_qr_payload: userQrPayload
+    },
+    'en',
+    { cachePath, dbPath }
+  );
+  assert.equal(appliedEligibility.status, 200);
+  assert.equal(appliedEligibility.body.eligible, true);
+  assert.equal(appliedEligibility.body.participation_status, 'applied');
 
   const eventResult = await processEventCheckIn(
     {
@@ -208,6 +284,20 @@ async function testUserQrProcessing(cachePath, dbPath, ids) {
   assert.equal(eventResult.body.participation_status, 'checked_in');
   assert.equal('granted_points' in eventResult.body, false);
   assert.equal(eventResult.body.user.user_id, '1');
+
+  const completionEligibility = await processEventEligibility(
+    {
+      code: 'event-demo',
+      password: 'event-demo-pass',
+      event_id: ids.eventId,
+      scan_type: 'completion',
+      user_qr_payload: createUserQrPayload(`smoke-completion-eligibility-${Date.now()}`)
+    },
+    'en',
+    { cachePath, dbPath }
+  );
+  assert.equal(completionEligibility.status, 200);
+  assert.equal(completionEligibility.body.participation_status, 'checked_in');
 
   const duplicateResult = await processEventCheckIn(
     {

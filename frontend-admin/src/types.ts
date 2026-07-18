@@ -9,6 +9,13 @@ export type AdminAuthResponse = {
   admin: AdminUser;
 };
 
+export type SystemConnection = {
+  status: "ok";
+  environment: "development" | "test" | "staging" | "production";
+  db_client: "sqlite" | "mysql";
+  database: string;
+};
+
 export type EventItem = {
   event_id: number;
   event_name: string;

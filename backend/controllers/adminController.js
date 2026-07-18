@@ -1,5 +1,7 @@
 const bcrypt = require('bcryptjs');
+const path = require('path');
 const pool = require('../config/db');
+const { env } = require('../config/env');
 const { translateText } = require('../services/translationService');
 const { closeEvent, grantCompletionPoints } = require('../services/eventLifecycleService');
 
@@ -7,6 +9,36 @@ const TRANSLATION_CACHE_LOCALE = 'en';
 
 function isValidStatus(status) {
   return ['active', 'paused', 'completed', 'cancelled'].includes(status);
+}
+
+function getDatabaseLabel() {
+  if (env.DB_CLIENT === 'sqlite') {
+    return path.basename(path.resolve(env.SQLITE_PATH));
+  }
+
+  if (env.DATABASE_URL) {
+    try {
+      return decodeURIComponent(new URL(env.DATABASE_URL).pathname.replace(/^\//, '')) || env.DB_NAME;
+    } catch {
+      return env.DB_NAME;
+    }
+  }
+
+  return env.DB_NAME;
+}
+
+async function getSystemConnection(req, res, next) {
+  try {
+    await pool.query('SELECT 1');
+    res.json({
+      status: 'ok',
+      environment: env.APP_ENV,
+      db_client: env.DB_CLIENT,
+      database: getDatabaseLabel()
+    });
+  } catch (error) {
+    next(error);
+  }
 }
 
 function normalizeEventDateTime(value) {
@@ -911,6 +943,7 @@ async function updateSupportTicket(req, res, next) {
 }
 
 module.exports = {
+  getSystemConnection,
   getEvents,
   createEvent,
   updateEvent,

@@ -9,6 +9,7 @@ const {
 } = require('./lib/translationCache');
 const {
   readPartnerData,
+  verifyEventApplication,
   recordEventCheckIn,
   recordEventCompletion,
   saveEventSubmission,
@@ -251,8 +252,17 @@ async function processEventAttendance(body, locale, scanType, options = {}) {
   if (writeResult.eventClosed) {
     return { status: 409, body: { message: 'This event is closed.', user, event_id: event.event_id } };
   }
-  if (writeResult.notApplied) {
-    return { status: 409, body: { message: 'This user has not applied for the event.', user, event_id: event.event_id } };
+  if (writeResult.notApplied || (scanType === 'check_in' && writeResult.invalidStatus)) {
+    return {
+      status: 403,
+      body: {
+        code: 'EVENT_APPLICATION_REQUIRED',
+        message: 'This user has not applied for the event.',
+        user,
+        event_id: event.event_id,
+        participation_status: writeResult.participation_status ?? null
+      }
+    };
   }
   if (writeResult.invalidStatus) {
     return {
@@ -293,6 +303,60 @@ async function processEventAttendance(body, locale, scanType, options = {}) {
             current_points: writeResult.current_points
           }
         : {}),
+    }
+  };
+}
+
+async function processEventEligibility(body, locale, options = {}) {
+  const data = await readPartnerData(options);
+  const organizer = data.eventOrganizers.find((item) => matchesPartnerCredentials(item, body.code, body.password));
+
+  if (!organizer) {
+    return { status: 401, body: { message: 'Invalid event organizer credentials.' } };
+  }
+
+  const event = data.events.find((item) => item.event_id === body.event_id && organizer.event_ids.includes(item.event_id));
+  if (!event) {
+    return { status: 404, body: { message: 'Event not found for this organizer.' } };
+  }
+
+  const user = parseUserQrPayload(body.user_qr_payload);
+  const scanType = body.scan_type === 'completion' ? 'completion' : 'check_in';
+  const eligibility = await verifyEventApplication({ event, user, scanType }, options);
+
+  if (eligibility.userNotFound) {
+    return { status: 404, body: { message: 'User not found for this QR.', user, event_id: event.event_id } };
+  }
+  if (eligibility.eventClosed) {
+    return { status: 409, body: { message: 'This event is closed.', user, event_id: event.event_id } };
+  }
+  if (eligibility.notEligible) {
+    const applicationRequired = scanType === 'check_in';
+    return {
+      status: 403,
+      body: {
+        code: applicationRequired ? 'EVENT_APPLICATION_REQUIRED' : 'EVENT_CHECK_IN_REQUIRED',
+        message: applicationRequired
+          ? 'This user has not applied for the event.'
+          : 'This user has not checked in for the event.',
+        user,
+        event_id: event.event_id,
+        expected_status: eligibility.expected_status,
+        participation_status: eligibility.participation_status
+      }
+    };
+  }
+
+  const cache = await loadTranslationCache(options.cachePath || CACHE_PATH);
+  const translatedEvent = translateEvent(event, cache, locale);
+  return {
+    status: 200,
+    body: {
+      eligible: true,
+      user: { ...user, name: eligibility.user_name || user.name },
+      event_id: event.event_id,
+      event_name: translatedEvent.event_name,
+      participation_status: eligibility.participation_status
     }
   };
 }
@@ -391,6 +455,20 @@ async function handleApi(request, response, requestUrl) {
     try {
       const locale = requestUrl.searchParams.get('locale') === 'en' ? 'en' : 'ja';
       const result = await processEventCheckIn(await readJsonBody(request), locale);
+      return sendJson(response, result.status, result.body);
+    } catch (error) {
+      return sendError(response, 400, error.message);
+    }
+  }
+
+  if (request.method === 'POST' && requestUrl.pathname === '/api/event/check-in-eligibility') {
+    if (APP_ROLE !== 'event') {
+      return sendError(response, 404, 'API route not found.');
+    }
+
+    try {
+      const locale = requestUrl.searchParams.get('locale') === 'en' ? 'en' : 'ja';
+      const result = await processEventEligibility(await readJsonBody(request), locale);
       return sendJson(response, result.status, result.body);
     } catch (error) {
       return sendError(response, 400, error.message);
@@ -582,6 +660,7 @@ module.exports = {
   buildStorePayload,
   handleRequest,
   parseUserQrPayload,
+  processEventEligibility,
   processEventCheckIn,
   processEventCompletion,
   processStoreExchange,

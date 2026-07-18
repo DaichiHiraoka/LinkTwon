@@ -901,6 +901,83 @@ async function recordMysqlStoreExchange({ store, service, user }) {
   });
 }
 
+function verifySqliteEventApplication({ event, user, scanType = 'check_in' }, options = {}) {
+  const db = openDatabase(options);
+  try {
+    const dbEvent = db.prepare('SELECT event_id, status FROM events WHERE event_id = ?').get(event.event_id);
+    if (!dbEvent || !['active', 'paused'].includes(dbEvent.status)) {
+      return { eventClosed: true };
+    }
+
+    const dbUser = db.prepare('SELECT user_id, name FROM users WHERE user_id = ?').get(user.user_id);
+    if (!dbUser) {
+      return { userNotFound: true };
+    }
+
+    const participation = db
+      .prepare('SELECT participation_id, status FROM participations WHERE event_id = ? AND user_id = ?')
+      .get(event.event_id, user.user_id);
+    const expectedStatus = scanType === 'completion' ? 'checked_in' : 'applied';
+    if (!participation || participation.status !== expectedStatus) {
+      return {
+        notEligible: true,
+        expected_status: expectedStatus,
+        participation_status: participation?.status ?? null
+      };
+    }
+
+    return {
+      eligible: true,
+      participation_id: participation.participation_id,
+      participation_status: participation.status,
+      user_name: dbUser.name
+    };
+  } finally {
+    db.close();
+  }
+}
+
+async function verifyMysqlEventApplication({ event, user, scanType = 'check_in' }) {
+  const pool = getMysqlPool();
+  const [events] = await pool.query('SELECT event_id, status FROM events WHERE event_id = ?', [event.event_id]);
+  if (events.length === 0 || !['active', 'paused'].includes(events[0].status)) {
+    return { eventClosed: true };
+  }
+
+  const [users] = await pool.query('SELECT user_id, name FROM users WHERE user_id = ?', [user.user_id]);
+  if (users.length === 0) {
+    return { userNotFound: true };
+  }
+
+  const [participations] = await pool.query(
+    'SELECT participation_id, status FROM participations WHERE event_id = ? AND user_id = ?',
+    [event.event_id, user.user_id]
+  );
+  const expectedStatus = scanType === 'completion' ? 'checked_in' : 'applied';
+  if (participations.length === 0 || participations[0].status !== expectedStatus) {
+    return {
+      notEligible: true,
+      expected_status: expectedStatus,
+      participation_status: participations[0]?.status ?? null
+    };
+  }
+
+  return {
+    eligible: true,
+    participation_id: participations[0].participation_id,
+    participation_status: participations[0].status,
+    user_name: users[0].name
+  };
+}
+
+async function verifyEventApplication(payload, options = {}) {
+  if (getDbClient(options) === 'mysql') {
+    return verifyMysqlEventApplication(payload);
+  }
+
+  return verifySqliteEventApplication(payload, options);
+}
+
 function recordSqliteEventAttendance({ organizer, event, user }, scanType, options = {}) {
   const db = openDatabase(options);
   try {
@@ -1388,6 +1465,7 @@ module.exports = {
   DEFAULT_SEED_PATH,
   openDatabase,
   readPartnerData,
+  verifyEventApplication,
   recordEventCheckIn,
   recordEventCompletion,
   saveEventSubmission,

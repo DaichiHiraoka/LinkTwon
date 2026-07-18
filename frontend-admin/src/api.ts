@@ -9,11 +9,46 @@ import type {
   ManagedUser,
   StoreItem,
   SupportTicket,
+  SystemConnection,
 } from "./types";
 
-const configuredApiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
-const API_BASE_URL =
-  configuredApiBaseUrl || (import.meta.env.PROD ? "https://linktwon-backend.onrender.com" : "");
+const DEFAULT_PUBLIC_API_BASE_URL = "https://linktwon-backend.onrender.com";
+const NETWORK_RETRY_DELAYS_MS = [1200, 3000, 6000];
+
+function isLoopbackHost(hostname: string) {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
+function resolveApiBaseUrl() {
+  const configuredApiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+  const pageIsLocal = isLoopbackHost(window.location.hostname);
+
+  if (!configuredApiBaseUrl) {
+    return import.meta.env.DEV || pageIsLocal ? "" : DEFAULT_PUBLIC_API_BASE_URL;
+  }
+
+  try {
+    const configuredUrl = new URL(configuredApiBaseUrl);
+    if (!pageIsLocal && isLoopbackHost(configuredUrl.hostname)) {
+      return DEFAULT_PUBLIC_API_BASE_URL;
+    }
+  } catch {
+    return configuredApiBaseUrl;
+  }
+
+  return configuredApiBaseUrl;
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
+
+export function getApiTargetLabel() {
+  if (API_BASE_URL) {
+    return API_BASE_URL;
+  }
+
+  const proxyTarget = import.meta.env.VITE_PROXY_TARGET || "http://127.0.0.1:3000";
+  return `${window.location.origin} → ${proxyTarget}`;
+}
 
 export class ApiError extends Error {
   status: number;
@@ -22,6 +57,35 @@ export class ApiError extends Error {
     this.name = "ApiError";
     this.status = status;
   }
+}
+
+async function wait(ms: number) {
+  await new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function fetchWithRetry(url: string, init: RequestInit) {
+  const method = (init.method || "GET").toUpperCase();
+  const retryable = method === "GET";
+  const maxAttempts = retryable ? NETWORK_RETRY_DELAYS_MS.length + 1 : 1;
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      const response = await fetch(url, init);
+      if (!retryable || ![502, 503, 504].includes(response.status) || attempt >= maxAttempts - 1) {
+        return response;
+      }
+    } catch (error) {
+      lastError = error;
+      if (!retryable || attempt >= maxAttempts - 1) {
+        throw error;
+      }
+    }
+
+    await wait(NETWORK_RETRY_DELAYS_MS[attempt]);
+  }
+
+  throw lastError ?? new Error("API request failed.");
 }
 
 async function request<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
@@ -33,7 +97,7 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string):
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+  const response = await fetchWithRetry(`${API_BASE_URL}${path}`, { ...init, headers });
   const isJson = response.headers.get("content-type")?.includes("application/json");
   const payload = isJson ? await response.json() : null;
 
@@ -57,6 +121,10 @@ export function adminLogin(adminId: string, password: string) {
 
 export function getStats(token: string) {
   return request<AdminStats>("/admin/stats", {}, token);
+}
+
+export function getSystemConnection(token: string) {
+  return request<SystemConnection>("/admin/system/connection", {}, token);
 }
 
 export function getEvents(token: string) {
@@ -228,7 +296,7 @@ export function updateSupportTicket(
 export function getErrorMessage(error: unknown) {
   if (error instanceof ApiError || error instanceof Error) {
     if (error instanceof TypeError && error.message === "Failed to fetch") {
-      return "APIサーバーに接続できません。Backend URLとCORS設定を確認してください。";
+      return `APIサーバーに接続できません。接続先: ${getApiTargetLabel()}`;
     }
     return error.message;
   }

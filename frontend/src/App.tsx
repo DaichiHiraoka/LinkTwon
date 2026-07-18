@@ -21,6 +21,7 @@ import {
   deletePaymentMethod,
   deleteUser,
   exchangePoints,
+  favoriteService,
   getEvents,
   getLikedEvents,
   getMySupportTickets,
@@ -40,6 +41,7 @@ import {
   requestPasswordReset,
   resetPassword,
   unlikeEvent,
+  unfavoriteService,
   updateUserEmail,
   updateUserSettings,
   verifyEmail,
@@ -57,7 +59,6 @@ import {
   WalletIcon,
 } from "./components/Icons";
 import {
-  user as fallbackUser,
   type EventItem,
   type ProductCategory,
   type ProductItem,
@@ -172,6 +173,11 @@ const translations = {
     exchangePoints: "ポイント交換",
     recommended: "おすすめ",
     favorite: "お気に入り",
+    addFavorite: "お気に入りに追加",
+    removeFavorite: "お気に入りから削除",
+    favoriteAdded: "お気に入りに追加しました。",
+    favoriteRemoved: "お気に入りから削除しました。",
+    loading: "読み込み中",
     storeMapHint: "商品を選ぶと、提供店舗をGoogle Map上にピン表示します。",
     providedBy: "提供店舗",
     address: "住所",
@@ -338,6 +344,11 @@ const translations = {
     exchangePoints: "Exchange Points",
     recommended: "Recommended",
     favorite: "Favorites",
+    addFavorite: "Add to favorites",
+    removeFavorite: "Remove from favorites",
+    favoriteAdded: "Added to favorites.",
+    favoriteRemoved: "Removed from favorites.",
+    loading: "Loading...",
     storeMapHint: "Select a product to pin the shop on Google Maps.",
     providedBy: "Shop",
     address: "Address",
@@ -620,8 +631,13 @@ type DisplayEvent = EventItem & {
   granted_points?: number;
   event_status?: "active" | "paused" | "completed" | "cancelled";
 };
-type DisplayUser = typeof fallbackUser & {
+type DisplayUser = {
   displayName: string;
+  accountType: string | null;
+  userId: string;
+  email: string | null;
+  homePoints: number | null;
+  walletPoints: number | null;
 };
 
 function readStoredSession(): Session | null {
@@ -1148,6 +1164,7 @@ export function App() {
   const [selectedProduct, setSelectedProduct] = useState<ProductItem | null>(null);
   const [participatedEventIds, setParticipatedEventIds] = useState<Set<number>>(new Set());
   const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
+  const [favoriteServiceIdsInFlight, setFavoriteServiceIdsInFlight] = useState<Set<string>>(new Set());
   const [accountEmail, setAccountEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -1288,6 +1305,7 @@ export function App() {
       }
 
       console.error(error);
+      notifyError(error);
     }
   }
 
@@ -1297,7 +1315,7 @@ export function App() {
   }
 
   useEffect(() => {
-    if (!session || screen !== "wallet") {
+    if (!session || !["events", "wallet"].includes(screen)) {
       return undefined;
     }
 
@@ -1449,6 +1467,53 @@ export function App() {
       };
     } catch (error) {
       return { ok: false, message: getErrorMessage(error, appLanguage) };
+    }
+  }
+
+  async function handleToggleServiceFavorite(product: ProductItem) {
+    if (!session || favoriteServiceIdsInFlight.has(product.id)) {
+      if (!session) {
+        notifyError(new Error(translate("loginRequired", appLanguage)));
+      }
+      return;
+    }
+
+    const serviceId = Number(product.id);
+    if (!Number.isFinite(serviceId)) {
+      notifyError(new Error(translate("invalidServiceId", appLanguage)));
+      return;
+    }
+
+    const nextFavorited = !product.favorited;
+    const updateFavoriteState = (favorited: boolean) => {
+      setProductCategories((current) =>
+        current.map((category) => ({
+          ...category,
+          products: category.products.map((item) => (item.id === product.id ? { ...item, favorited } : item)),
+        })),
+      );
+      setSelectedProduct((current) => (current?.id === product.id ? { ...current, favorited } : current));
+    };
+
+    setFavoriteServiceIdsInFlight((current) => new Set(current).add(product.id));
+    updateFavoriteState(nextFavorited);
+
+    try {
+      if (nextFavorited) {
+        await favoriteService(serviceId, session.token);
+      } else {
+        await unfavoriteService(serviceId, session.token);
+      }
+      notifySuccess(translate(nextFavorited ? "favoriteAdded" : "favoriteRemoved", appLanguage));
+    } catch (error) {
+      updateFavoriteState(!nextFavorited);
+      notifyError(error);
+    } finally {
+      setFavoriteServiceIdsInFlight((current) => {
+        const next = new Set(current);
+        next.delete(product.id);
+        return next;
+      });
     }
   }
 
@@ -1631,12 +1696,12 @@ export function App() {
   }
 
   const displayUser = {
-    displayName: profile?.name || session?.user.name || fallbackUser.accountType,
-    accountType: profile?.user_type ? translateAccountType(profile.user_type, appLanguage) : translateAccountType(fallbackUser.accountType, appLanguage),
-    userId: profile ? String(profile.user_id) : fallbackUser.userId,
-    email: profile?.email || fallbackUser.email,
-    homePoints: profile?.points ?? fallbackUser.homePoints,
-    walletPoints: profile?.points ?? fallbackUser.walletPoints,
+    displayName: profile?.name || session?.user.name || "",
+    accountType: profile ? (profile.user_type ? translateAccountType(profile.user_type, appLanguage) : translate("notSet", appLanguage)) : null,
+    userId: profile ? String(profile.user_id) : session ? String(session.user.user_id) : "",
+    email: profile?.email ?? null,
+    homePoints: profile?.points ?? null,
+    walletPoints: profile?.points ?? null,
   };
 
   return (
@@ -1690,6 +1755,8 @@ export function App() {
               onTabChange={setExchangeTab}
               onPurchase={() => navigateToScreen("purchase")}
               onProductSelect={setSelectedProduct}
+              onToggleFavorite={handleToggleServiceFavorite}
+              favoriteServiceIdsInFlight={favoriteServiceIdsInFlight}
             />
           ) : null}
           {screen === "purchase" ? (
@@ -1782,6 +1849,8 @@ export function App() {
             language={appLanguage}
             currentPoints={displayUser.walletPoints}
             onExchange={handleExchangeService}
+            onToggleFavorite={handleToggleServiceFavorite}
+            favoriteBusy={favoriteServiceIdsInFlight.has(selectedProduct.id)}
             onClose={() => setSelectedProduct(null)}
           />
         ) : null}
@@ -2465,7 +2534,7 @@ function HomeScreen({
   onNavigate,
   onEventSelect,
 }: {
-  user: typeof fallbackUser;
+  user: DisplayUser;
   events: DisplayEvent[];
   scheduledEvent: DisplayEvent | null;
   language: AppLanguage;
@@ -2476,12 +2545,18 @@ function HomeScreen({
   return (
     <section>
       <Header language={language} onLanguageToggle={onLanguageToggle} />
-      <article className="points-card points-card--home">
+      <article className="points-card points-card--home" aria-busy={user.homePoints === null}>
         <div className="points-card__row">
           <span>{translate("pointsBalance", language)}</span>
-          <strong>
-            {user.homePoints}
-            <small>pt</small>
+          <strong className={user.homePoints === null ? "points-value--loading" : undefined} aria-live="polite">
+            {user.homePoints === null ? (
+              translate("loading", language)
+            ) : (
+              <>
+                {user.homePoints}
+                <small>pt</small>
+              </>
+            )}
           </strong>
           <ArrowIcon />
         </div>
@@ -2503,12 +2578,19 @@ function HomeScreen({
         {scheduledEvent ? (
           <EventCard event={scheduledEvent} compact language={language} onSelect={onEventSelect} />
         ) : (
-          <p className="event-empty-message">{translate("eventsEmpty", language)}</p>
+          <p className="event-empty-message" role={user.homePoints === null ? "status" : undefined}>
+            {translate(user.homePoints === null ? "loading" : "eventsEmpty", language)}
+          </p>
         )}
       </section>
       <section className="section">
         <SectionHeading>{translate("recommendedEventsTitle", language)}</SectionHeading>
         <div className="event-rail">
+          {events.length === 0 && user.homePoints === null ? (
+            <p className="event-empty-message" role="status">
+              {translate("loading", language)}
+            </p>
+          ) : null}
           {events.map((event) => (
             <EventCard key={event.id} event={event} compact language={language} onSelect={onEventSelect} />
           ))}
@@ -2606,9 +2688,11 @@ function WalletScreen({
   onTabChange,
   onPurchase,
   onProductSelect,
+  onToggleFavorite,
+  favoriteServiceIdsInFlight,
 }: {
   tab: "recommended" | "favorite";
-  user: typeof fallbackUser;
+  user: DisplayUser;
   productCategories: ProductCategory[];
   participations: Participation[];
   transactions: Transaction[];
@@ -2618,6 +2702,8 @@ function WalletScreen({
   onTabChange: (tab: "recommended" | "favorite") => void;
   onPurchase: () => void;
   onProductSelect: (product: ProductItem) => void;
+  onToggleFavorite: (product: ProductItem) => void;
+  favoriteServiceIdsInFlight: Set<string>;
 }) {
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const visibleCategories = useMemo(() => {
@@ -2643,9 +2729,11 @@ function WalletScreen({
       <Header language={language} onLanguageToggle={onLanguageToggle} />
       <section className="section section--tight">
         <h1 className="screen-title screen-title--center">{translate("pointsBalance", language)}</h1>
-        <article className="points-card points-card--wallet">
+        <article className="points-card points-card--wallet" aria-busy={user.walletPoints === null}>
           <span>{translate("availablePoints", language)}</span>
-          <strong>{user.walletPoints}pt</strong>
+          <strong className={user.walletPoints === null ? "points-value--loading" : undefined} aria-live="polite">
+            {user.walletPoints === null ? translate("loading", language) : `${user.walletPoints}pt`}
+          </strong>
           <button type="button" onClick={onPurchase}>
             {translate("buyPoints", language)}
           </button>
@@ -2663,7 +2751,9 @@ function WalletScreen({
           </button>
           <div id="wallet-history-content" className="wallet-history-content" hidden={!historyExpanded}>
             {walletHistory.length === 0 ? (
-              <p className="wallet-history-empty">{translate("walletHistoryEmpty", language)}</p>
+              <p className="wallet-history-empty" role={user.walletPoints === null ? "status" : undefined}>
+                {translate(user.walletPoints === null ? "loading" : "walletHistoryEmpty", language)}
+              </p>
             ) : (
               <div className="wallet-history-list">
                 {walletHistory.map((group) => (
@@ -2703,19 +2793,36 @@ function WalletScreen({
         />
         <p className="map-hint">{translate("storeMapHint", language)}</p>
         <div className="product-stack">
-          {visibleCategories.length === 0 ? <p className="empty-message">{emptyMessage}</p> : null}
+          {visibleCategories.length === 0 ? (
+            <p className="empty-message" role={user.walletPoints === null ? "status" : undefined}>
+              {user.walletPoints === null ? translate("loading", language) : emptyMessage}
+            </p>
+          ) : null}
           {visibleCategories.map((category) => (
             <section key={category.id}>
               <SectionHeading>{category.name}</SectionHeading>
               <div className="product-rail">
                 {category.products.map((product) => (
-                  <button className="product-card product-card--button" type="button" key={product.id} onClick={() => onProductSelect(product)}>
-                    <div>
-                      <img src={product.imageUrl || DUMMY_PRODUCT_IMAGE_URL} alt={formatTranslation("productImageAlt", language, { name: product.name })} loading="lazy" />
-                    </div>
-                    <span>{product.name}</span>
-                    <small>{product.storeName}</small>
-                  </button>
+                  <article className="product-card" key={product.id}>
+                    <button className="product-card__detail" type="button" onClick={() => onProductSelect(product)}>
+                      <div className="product-card__image">
+                        <img src={product.imageUrl || DUMMY_PRODUCT_IMAGE_URL} alt={formatTranslation("productImageAlt", language, { name: product.name })} loading="lazy" />
+                      </div>
+                      <span>{product.name}</span>
+                      <small>{product.storeName}</small>
+                    </button>
+                    <button
+                      className={`product-card__favorite ${product.favorited ? "is-favorited" : ""}`}
+                      type="button"
+                      aria-label={translate(product.favorited ? "removeFavorite" : "addFavorite", language)}
+                      aria-pressed={Boolean(product.favorited)}
+                      title={translate(product.favorited ? "removeFavorite" : "addFavorite", language)}
+                      disabled={favoriteServiceIdsInFlight.has(product.id)}
+                      onClick={() => onToggleFavorite(product)}
+                    >
+                      <span aria-hidden="true">{product.favorited ? "♥" : "♡"}</span>
+                    </button>
+                  </article>
                 ))}
               </div>
             </section>
@@ -2735,7 +2842,7 @@ function PurchaseScreen({
   onLanguageToggle,
   onPurchase,
 }: {
-  points: number;
+  points: number | null;
   paymentMethods: PaymentMethod[];
   language: AppLanguage;
   onLanguageToggle: () => void;
@@ -2747,6 +2854,7 @@ function PurchaseScreen({
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<ActionResult | null>(null);
+  const pointsLoaded = points !== null;
 
   useEffect(() => {
     if (paymentMethods.some((method) => method.payment_method_id === paymentMethodId)) {
@@ -2756,7 +2864,7 @@ function PurchaseScreen({
   }, [paymentMethodId, paymentMethods]);
 
   async function handleSubmit() {
-    if (isSubmitting) {
+    if (isSubmitting || !pointsLoaded) {
       return;
     }
 
@@ -2776,9 +2884,11 @@ function PurchaseScreen({
   return (
     <section>
       <Header help language={language} onLanguageToggle={onLanguageToggle} />
-      <article className="purchase-summary">
+      <article className="purchase-summary" aria-busy={!pointsLoaded}>
         <span>{translate("availablePoints", language)}</span>
-        <strong>{points}pt</strong>
+        <strong className={!pointsLoaded ? "points-value--loading" : undefined} aria-live="polite">
+          {pointsLoaded ? `${points}pt` : translate("loading", language)}
+        </strong>
         <dl>
           <div>
             <dt>{translate("purchasePoints", language)}</dt>
@@ -2790,7 +2900,7 @@ function PurchaseScreen({
           </div>
           <div>
             <dt>{translate("totalAvailablePoints", language)}</dt>
-            <dd>{points + selectedAmount} pt</dd>
+            <dd>{pointsLoaded ? `${points + selectedAmount} pt` : translate("loading", language)}</dd>
           </div>
         </dl>
       </article>
@@ -2817,7 +2927,9 @@ function PurchaseScreen({
             onChange={(event) => setPaymentMethodId(event.target.value ? Number(event.target.value) : "")}
             disabled={isSubmitting || paymentMethods.length === 0}
           >
-            {paymentMethods.length === 0 ? <option value="">支払い方法が未登録です</option> : null}
+            {paymentMethods.length === 0 ? (
+              <option value="">{pointsLoaded ? "支払い方法が未登録です" : translate("loading", language)}</option>
+            ) : null}
             {paymentMethods.map((method) => (
               <option key={method.payment_method_id} value={method.payment_method_id}>
                 {method.label} ({method.brand} **** {method.last4})
@@ -2834,7 +2946,7 @@ function PurchaseScreen({
           type="button"
           className="primary-button purchase-execute-button"
           onClick={handleSubmit}
-          disabled={isSubmitting || !paymentMethodId}
+          disabled={isSubmitting || !paymentMethodId || !pointsLoaded}
         >
           {isSubmitting ? translate("purchasing", language) : `${translate("executePurchase", language)} (${selectedAmount}pt)`}
         </button>
@@ -2868,7 +2980,7 @@ function AccountScreen({
   onLogout,
   onNavigate,
 }: {
-  user: typeof fallbackUser;
+  user: DisplayUser;
   settings: UserSettings | null;
   language: AppLanguage;
   onLanguageToggle: () => void;
@@ -2898,16 +3010,21 @@ function AccountScreen({
           <h2>{translate("account", language)}</h2>
           <div className="account-info-row">
             <span>{translate("accountType", language)}</span>
-            <strong>{user.accountType}</strong>
+            <strong aria-live="polite">{user.accountType ?? translate("loading", language)}</strong>
           </div>
           <div className="account-info-row">
             <span>{translate("userId", language)}</span>
-            <strong>{user.userId}</strong>
+            <strong aria-live="polite">{user.email ? user.userId : translate("loading", language)}</strong>
           </div>
           <form onSubmit={onSaveAccount}>
             <label className="account-field">
               <span>{translate("emailSettings", language)}</span>
-              <input value={accountEmail} onChange={(event) => onEmailChange(event.target.value)} />
+              <input
+                value={accountEmail}
+                placeholder={user.email ? undefined : translate("loading", language)}
+                disabled={!user.email}
+                onChange={(event) => onEmailChange(event.target.value)}
+              />
             </label>
             {settings ? (
               <>
@@ -3822,12 +3939,16 @@ function ProductMapModal({
   language,
   currentPoints,
   onExchange,
+  onToggleFavorite,
+  favoriteBusy,
   onClose,
 }: {
   product: ProductItem;
   language: AppLanguage;
-  currentPoints: number;
+  currentPoints: number | null;
   onExchange: (product: ProductItem) => Promise<ActionResult>;
+  onToggleFavorite: (product: ProductItem) => void;
+  favoriteBusy: boolean;
   onClose: () => void;
 }) {
   const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(product.mapQuery)}&output=embed&z=17`;
@@ -3837,8 +3958,9 @@ function ProductMapModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<ActionResult | null>(null);
   const requiredPoints = product.requiredPoints ?? 0;
-  const insufficient = requiredPoints > 0 && currentPoints < requiredPoints;
-  const exchangeDisabled = requiredPoints <= 0 || insufficient;
+  const pointsLoaded = currentPoints !== null;
+  const insufficient = pointsLoaded && requiredPoints > 0 && currentPoints < requiredPoints;
+  const exchangeDisabled = !pointsLoaded || requiredPoints <= 0 || insufficient;
 
   async function handleExecute() {
     if (isSubmitting) {
@@ -3870,9 +3992,22 @@ function ProductMapModal({
             <p>{translate("mapTitle", language)}</p>
             <h2>{product.name}</h2>
           </div>
-          <button type="button" onClick={onClose} aria-label={translate("close", language)}>
-            ×
-          </button>
+          <div className="product-map-header__actions">
+            <button
+              className={`product-map-favorite ${product.favorited ? "is-favorited" : ""}`}
+              type="button"
+              aria-label={translate(product.favorited ? "removeFavorite" : "addFavorite", language)}
+              aria-pressed={Boolean(product.favorited)}
+              title={translate(product.favorited ? "removeFavorite" : "addFavorite", language)}
+              disabled={favoriteBusy}
+              onClick={() => onToggleFavorite(product)}
+            >
+              <span aria-hidden="true">{product.favorited ? "♥" : "♡"}</span>
+            </button>
+            <button type="button" onClick={onClose} aria-label={translate("close", language)}>
+              ×
+            </button>
+          </div>
         </header>
         <dl className="product-map-details">
           <div>
@@ -3906,7 +4041,11 @@ function ProductMapModal({
             {result.message}
           </p>
         ) : null}
-        {insufficient ? (
+        {!pointsLoaded ? (
+          <p className="action-banner action-banner--loading" role="status">
+            {translate("loading", language)}
+          </p>
+        ) : insufficient ? (
           <p className="action-banner action-banner--error" role="alert">
             {translate("notEnoughPoints", language)} ({currentPoints}pt / {requiredPoints}pt)
           </p>

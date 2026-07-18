@@ -3,6 +3,7 @@ const router = express.Router();
 const { authenticateToken } = require('../middlewares/authMiddleware');
 const { authorizeRole } = require('../middlewares/roleMiddleware');
 const {
+  getSystemConnection,
   getEvents,
   createEvent,
   updateEvent,
@@ -33,6 +34,7 @@ const {
 
 router.use(authenticateToken, authorizeRole('admin'));
 
+router.get('/system/connection', getSystemConnection);
 router.get('/events', getEvents);
 router.post('/events', createEvent);
 router.get('/events/:id/participations', getEventParticipations);

@@ -115,6 +115,10 @@ async function main() {
       body: JSON.stringify({ admin_id: 'admin', password: 'admin123' })
     });
     const adminAuth = { Authorization: `Bearer ${admin.token}` };
+    const systemConnection = await request('/admin/system/connection', { headers: adminAuth });
+    assert.strictEqual(systemConnection.status, 'ok');
+    assert.strictEqual(systemConnection.db_client, 'sqlite');
+    assert.strictEqual(systemConnection.database, 'test.sqlite');
 
     const events = await request('/events', { headers: userAuth });
     assert.ok(events.length > 0);
@@ -169,6 +173,10 @@ async function main() {
     assert.ok(favorites.length > 0);
     const localizedFavorites = await request(`/users/${userId}/favorite-services?locale=en`, { headers: userAuth });
     assertTranslatedName(localizedFavorites[0].service_name, favorites[0].service_name);
+    await request(`/points/services/${services[0].service_id}/favorite`, { method: 'DELETE', headers: userAuth });
+    const favoritesAfterDelete = await request(`/users/${userId}/favorite-services`, { headers: userAuth });
+    assert.ok(!favoritesAfterDelete.some((service) => service.service_id === services[0].service_id));
+    await request(`/points/services/${services[0].service_id}/favorite`, { method: 'POST', headers: userAuth }, 201);
     await request('/points/exchange', {
       method: 'POST',
       headers: userAuth,

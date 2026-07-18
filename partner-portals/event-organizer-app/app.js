@@ -64,6 +64,11 @@ const ui = {
     scanAgain: 'もう一度読み取る',
     qrRequired: 'QR内容を入力してください。',
     invalidQr: 'QRの形式を確認してください。',
+    validating: 'イベント応募状況を確認中です…',
+    notApplied: 'このイベントに応募していないため受付できません。',
+    notAppliedHint: '利用者アプリからイベントへ応募した後、もう一度QRを読み取ってください。',
+    notCheckedIn: 'このイベントの受付が完了していないため、参加完了を認証できません。',
+    notCheckedInHint: '先に受付QRを読み取ってから、参加完了QRを読み取ってください。',
     cameraUnavailable: 'このブラウザではカメラQR読取を利用できません。手入力で受付してください。'
   },
   en: {
@@ -102,6 +107,11 @@ const ui = {
     scanAgain: 'Scan again',
     qrRequired: 'Enter the QR payload.',
     invalidQr: 'Check the QR format.',
+    validating: 'Checking event application…',
+    notApplied: 'This user has not applied for this event.',
+    notAppliedHint: 'Ask the user to apply for the event in the participant app, then scan the QR again.',
+    notCheckedIn: 'This user has not checked in for this event.',
+    notCheckedInHint: 'Scan the check-in QR before confirming event completion.',
     cameraUnavailable: 'Camera QR scanning is unavailable in this browser. Use manual check-in.'
   }
 };
@@ -340,13 +350,47 @@ async function readQrWithCamera() {
   });
 }
 
-function prepareConfirmation(rawPayload) {
+async function prepareConfirmation(rawPayload) {
   try {
     const pendingUser = ensurePreview(rawPayload);
+    const eventItem = currentEvent();
+    if (!eventItem) {
+      throw new Error(t('invalidQr'));
+    }
+
     setState({
-      screen: 'confirm',
+      screen: 'validating',
       pendingPayload: String(rawPayload || '').trim(),
       pendingUser,
+      error: ''
+    });
+
+    const response = await fetch(`/api/event/check-in-eligibility?locale=${encodeURIComponent(state.locale)}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        code: state.code,
+        password: state.password,
+        event_id: eventItem.event_id,
+        scan_type: state.scanType,
+        user_qr_payload: state.pendingPayload
+      })
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      const message =
+        result.code === 'EVENT_APPLICATION_REQUIRED'
+          ? t('notApplied')
+          : result.code === 'EVENT_CHECK_IN_REQUIRED'
+            ? t('notCheckedIn')
+            : result.message || t('invalidQr');
+      throw new Error(message);
+    }
+
+    setState({
+      screen: 'confirm',
+      pendingUser: result.user,
       error: ''
     });
   } catch (error) {
@@ -645,6 +689,23 @@ function confirmTemplate() {
   `;
 }
 
+function validatingTemplate() {
+  const eventItem = currentEvent();
+
+  return `
+    <div class="tablet-frame">
+      ${appHeaderTemplate(eventItem, { backTo: 'open-home', dimmed: true })}
+      ${scanStageTemplate({ dimmed: true })}
+      <div class="modal-overlay">
+        <section class="modal" role="status" aria-live="polite" aria-label="${escapeHtml(t('validating'))}">
+          <h1>${escapeHtml(t('validating'))}</h1>
+        </section>
+      </div>
+      <div class="frame-id">E-06</div>
+    </div>
+  `;
+}
+
 function successTemplate() {
   const eventItem = currentEvent();
   const result = state.latestResult;
@@ -673,7 +734,13 @@ function errorTemplate() {
       <main class="alert-stage warn">
         <div class="mark">!</div>
         <div class="msg">${escapeHtml(state.error || t('invalidQr'))}</div>
-        <div class="hint">${escapeHtml(t('invalidQr'))}</div>
+        <div class="hint">${escapeHtml(
+          state.error === t('notApplied')
+            ? t('notAppliedHint')
+            : state.error === t('notCheckedIn')
+              ? t('notCheckedInHint')
+              : t('invalidQr')
+        )}</div>
         <button class="btn btn-primary btn-xl" type="button" data-action="open-scan-current">${escapeHtml(t('scanAgain'))}</button>
       </main>
       <div class="frame-id">E-08</div>
@@ -693,6 +760,7 @@ function render() {
     eventList: eventListTemplate,
     scan: scanTemplate,
     manual: manualTemplate,
+    validating: validatingTemplate,
     confirm: confirmTemplate,
     success: successTemplate,
     error: errorTemplate

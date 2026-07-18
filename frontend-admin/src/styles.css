@@ -277,8 +277,43 @@ a {
   border-bottom: 1px solid var(--line);
 }
 
-.topbar__spacer {
-  flex: 1;
+.topbar__connection {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-alt);
+  color: var(--ink-soft);
+  font-size: 12px;
+  text-align: left;
+}
+
+.topbar__connection:hover {
+  border-color: var(--line-strong);
+}
+
+.topbar__connection-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--ink-mute);
+}
+
+.topbar__connection--connected .topbar__connection-dot {
+  background: var(--success);
+}
+
+.topbar__connection--error .topbar__connection-dot {
+  background: var(--error);
+}
+
+.topbar__connection small {
+  color: var(--ink-mute);
+  white-space: nowrap;
 }
 
 .topbar__actions {
@@ -670,6 +705,16 @@ a {
 .status-pill--paused {
   background: var(--warn-soft);
   color: var(--warn);
+}
+
+.status-pill--completed {
+  background: var(--surface-alt);
+  color: var(--ink-soft);
+}
+
+.status-pill--cancelled {
+  background: var(--error-soft);
+  color: var(--error);
 }
 
 /* Modal */

@@ -18,6 +18,17 @@ import type { EventItem, EventParticipation, EventSubmission } from "../types";
 
 type FeedbackSetter = (ok: boolean, message: string) => void;
 
+const EVENT_STATUS_LABELS: Record<NonNullable<EventItem["status"]>, string> = {
+  active: "公開中",
+  paused: "停止中",
+  completed: "終了",
+  cancelled: "中止",
+};
+
+function getEventStatusLabel(status: EventItem["status"]) {
+  return EVENT_STATUS_LABELS[status ?? "active"];
+}
+
 export function EventsList({
   events,
   submissions,
@@ -64,7 +75,7 @@ export function EventsList({
       label: "状態",
       render: (row) => (
         <span className={`status-pill status-pill--${row.status ?? "active"}`}>
-          {row.status === "paused" ? "停止中" : "公開中"}
+          {getEventStatusLabel(row.status)}
         </span>
       ),
       width: "100px",
@@ -232,7 +243,7 @@ export function EventsList({
               </div>
               <div>
                 <dt>状態</dt>
-                <dd>{detail.status === "paused" ? "停止中" : "公開中"}</dd>
+                <dd>{getEventStatusLabel(detail.status)}</dd>
               </div>
             </dl>
             {detail.description ? <p>概要: {detail.description}</p> : null}

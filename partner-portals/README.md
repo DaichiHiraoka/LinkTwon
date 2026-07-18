@@ -129,7 +129,10 @@ Invoke-RestMethod -Method Post http://localhost:5181/api/translations/refresh
 
 住民向け `frontend/` のQRタブで本人確認QRを表示し、イベント主催者アプリまたは商店アプリがそのQRを読み取る。
 
-- イベント主催者アプリ: `POST /api/event/check-ins`
+- イベント主催者アプリ:
+  - QR読取直後の応募資格確認: `POST /api/event/check-in-eligibility`
+  - 受付確定: `POST /api/event/check-ins`
 - 商店アプリ: `POST /api/store/exchanges`
 
 QRには `user_id`、表示名、発行時刻、有効期限、nonce を含める。認証トークンやパスワードは含めない。
+イベント受付では、QR読取直後と受付確定時の両方で対象イベントへの応募状態を検証し、`applied` 以外の利用者を拒否する。
