@@ -79,6 +79,7 @@ import type {
 } from "./types";
 
 const SESSION_STORAGE_KEY = "link-town-session";
+const HOME_THEME_STORAGE_KEY = "link-town-home-theme";
 const DUMMY_EVENT_IMAGE_URL = "/dummy-event-image.svg";
 const DUMMY_PRODUCT_IMAGE_URL = "/dummy-product-image.svg";
 const SCREEN_ROUTES: Record<Screen, string> = {
@@ -158,6 +159,7 @@ function isKnownAppPath(pathname: string) {
 }
 
 type AppLanguage = "ja" | "en";
+type HomeTheme = "standard" | "kids";
 
 const translations = {
   ja: {
@@ -191,6 +193,13 @@ const translations = {
     notificationSettings: "通知設定",
     languageSettings: "言語設定",
     fontSizeSettings: "文字サイズの変更",
+    homeThemeSettings: "ホーム画面テーマ",
+    homeThemeStandard: "通常",
+    homeThemeKids: "子供向け",
+    kidsCurrentPoints: "いまのポイント",
+    kidsPointsDetail: "くわしくみる",
+    kidsEventCta: "イベントにいく",
+    kidsQrCta: "QRコード",
     saveSettings: "設定を保存",
     security: "セキュリティ",
     currentPassword: "現在のパスワード",
@@ -230,6 +239,10 @@ const translations = {
     paymentMethods: "支払方法",
     paymentMethodsEmpty: "登録されている支払方法はありません。",
     addPaymentMethod: "支払方法を追加",
+    defaultPaymentMethods: "支払い方法を選択",
+    paymentMethodCreditCard: "クレジットカード",
+    paymentMethodBankAccount: "口座",
+    paymentMethodPointsApp: "ポイントアプリ",
     paymentLabel: "ラベル",
     paymentBrand: "種別 (例: VISA / 銀行)",
     paymentLast4: "下4桁",
@@ -362,6 +375,13 @@ const translations = {
     notificationSettings: "Notifications",
     languageSettings: "Language",
     fontSizeSettings: "Font size",
+    homeThemeSettings: "Home screen theme",
+    homeThemeStandard: "Standard",
+    homeThemeKids: "For kids",
+    kidsCurrentPoints: "Points now",
+    kidsPointsDetail: "See details",
+    kidsEventCta: "Go to events",
+    kidsQrCta: "QR code",
     saveSettings: "Save settings",
     security: "Security",
     currentPassword: "Current password",
@@ -401,6 +421,10 @@ const translations = {
     paymentMethods: "Payment methods",
     paymentMethodsEmpty: "No payment methods registered.",
     addPaymentMethod: "Add payment method",
+    defaultPaymentMethods: "Select a payment method",
+    paymentMethodCreditCard: "Credit card",
+    paymentMethodBankAccount: "Bank account",
+    paymentMethodPointsApp: "Points app",
     paymentLabel: "Label",
     paymentBrand: "Brand (e.g. VISA / Bank)",
     paymentLast4: "Last 4 digits",
@@ -662,6 +686,22 @@ function writeStoredSession(session: Session | null) {
   } else {
     window.localStorage.removeItem(SESSION_STORAGE_KEY);
   }
+}
+
+function getHomeThemeStorageKey(userId: number) {
+  return `${HOME_THEME_STORAGE_KEY}:${userId}`;
+}
+
+function readStoredHomeTheme(userId?: number): HomeTheme {
+  if (!userId) {
+    return "standard";
+  }
+
+  return window.localStorage.getItem(getHomeThemeStorageKey(userId)) === "kids" ? "kids" : "standard";
+}
+
+function writeStoredHomeTheme(userId: number, theme: HomeTheme) {
+  window.localStorage.setItem(getHomeThemeStorageKey(userId), theme);
 }
 
 function formatDisplayDate(date: Date) {
@@ -1154,6 +1194,7 @@ export function App() {
   const [eventTab, setEventTab] = useState<"recommended" | "liked" | "applied" | "completed">("recommended");
   const [exchangeTab, setExchangeTab] = useState<"recommended" | "favorite">("recommended");
   const [session, setSession] = useState<Session | null>(initialSession);
+  const [homeTheme, setHomeTheme] = useState<HomeTheme>(() => readStoredHomeTheme(initialSession?.user.user_id));
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [recommendedEvents, setRecommendedEvents] = useState<DisplayEvent[]>([]);
@@ -1311,7 +1352,16 @@ export function App() {
 
   function handleSession(nextSession: Session | null) {
     setSession(nextSession);
+    setHomeTheme(readStoredHomeTheme(nextSession?.user.user_id));
     writeStoredSession(nextSession);
+  }
+
+  function handleHomeThemeChange(nextTheme: HomeTheme) {
+    setHomeTheme(nextTheme);
+
+    if (session) {
+      writeStoredHomeTheme(session.user.user_id, nextTheme);
+    }
   }
 
   useEffect(() => {
@@ -1582,7 +1632,7 @@ export function App() {
     }
   }
 
-  async function handlePurchasePoints(points: number, paymentMethodId: number): Promise<ActionResult> {
+  async function handlePurchasePoints(points: number, paymentMethodId: number | null): Promise<ActionResult> {
     if (!session) {
       return { ok: false, message: translate("loginRequired", appLanguage) };
     }
@@ -1722,6 +1772,7 @@ export function App() {
               user={displayUser}
               events={recommendedEvents}
               scheduledEvent={scheduledEvent}
+              theme={homeTheme}
               language={appLanguage}
               onLanguageToggle={handleToggleLanguage}
               onNavigate={navigateToScreen}
@@ -1772,6 +1823,7 @@ export function App() {
             <AccountScreen
               user={displayUser}
               settings={settings}
+              homeTheme={homeTheme}
               language={appLanguage}
               onLanguageToggle={handleToggleLanguage}
               accountEmail={accountEmail}
@@ -1784,6 +1836,7 @@ export function App() {
               onCurrentPasswordChange={setCurrentPassword}
               onNewPasswordChange={setNewPassword}
               onSettingsChange={handleSettingsChange}
+              onHomeThemeChange={handleHomeThemeChange}
               onSaveAccount={handleSaveAccount}
               onChangePassword={handleChangePassword}
               onDeleteAccount={handleDeleteAccount}
@@ -2529,6 +2582,7 @@ function HomeScreen({
   user,
   events,
   scheduledEvent,
+  theme,
   language,
   onLanguageToggle,
   onNavigate,
@@ -2537,11 +2591,16 @@ function HomeScreen({
   user: DisplayUser;
   events: DisplayEvent[];
   scheduledEvent: DisplayEvent | null;
+  theme: HomeTheme;
   language: AppLanguage;
   onLanguageToggle: () => void;
   onNavigate: (screen: Screen) => void;
   onEventSelect: (event: DisplayEvent) => void;
 }) {
+  if (theme === "kids") {
+    return <KidsHomeScreen user={user} language={language} onNavigate={onNavigate} />;
+  }
+
   return (
     <section>
       <Header language={language} onLanguageToggle={onLanguageToggle} />
@@ -2596,6 +2655,57 @@ function HomeScreen({
           ))}
         </div>
       </section>
+    </section>
+  );
+}
+
+function KidsHomeScreen({
+  user,
+  language,
+  onNavigate,
+}: {
+  user: DisplayUser;
+  language: AppLanguage;
+  onNavigate: (screen: Screen) => void;
+}) {
+  return (
+    <section className="kids-home">
+      <header className="kids-home__header">
+        <Logo />
+      </header>
+      <div className="kids-home__canvas">
+        <button
+          className="kids-home__action kids-home__points"
+          type="button"
+          onClick={() => onNavigate("wallet")}
+          aria-label={translate("pointsBalance", language)}
+        >
+          <span>{translate("kidsCurrentPoints", language)}</span>
+          <strong className={user.homePoints === null ? "kids-home__loading" : undefined} aria-live="polite">
+            {user.homePoints === null ? translate("loading", language) : user.homePoints}
+          </strong>
+          <small>{translate("kidsPointsDetail", language)}</small>
+        </button>
+
+        <button
+          className="kids-home__action kids-home__events"
+          type="button"
+          onClick={() => onNavigate("events")}
+        >
+          <span>{translate("kidsEventCta", language)}</span>
+        </button>
+
+        <button
+          className="kids-home__action kids-home__qr"
+          type="button"
+          onClick={() => onNavigate("scan")}
+        >
+          <span className="kids-home__qr-icon" aria-hidden="true">
+            <QrIcon />
+          </span>
+          <strong>{translate("kidsQrCta", language)}</strong>
+        </button>
+      </div>
     </section>
   );
 }
@@ -2834,6 +2944,21 @@ function WalletScreen({
 }
 
 const PURCHASE_AMOUNT_OPTIONS = [100, 500, 1000, 3000, 5000] as const;
+type DefaultPaymentMethodId = "credit-card" | "bank-account" | "points-app";
+
+const DEFAULT_PAYMENT_METHOD_OPTIONS: Array<{
+  id: DefaultPaymentMethodId;
+  labelKey: TranslationKey;
+  mark: string;
+}> = [
+  { id: "credit-card", labelKey: "paymentMethodCreditCard", mark: "CARD" },
+  { id: "bank-account", labelKey: "paymentMethodBankAccount", mark: "BANK" },
+  { id: "points-app", labelKey: "paymentMethodPointsApp", mark: "POINT" },
+];
+
+function getDefaultSavedPaymentMethodId(paymentMethods: PaymentMethod[]) {
+  return paymentMethods.find((method) => toBoolean(method.is_default))?.payment_method_id ?? paymentMethods[0]?.payment_method_id ?? null;
+}
 
 function PurchaseScreen({
   points,
@@ -2846,37 +2971,37 @@ function PurchaseScreen({
   paymentMethods: PaymentMethod[];
   language: AppLanguage;
   onLanguageToggle: () => void;
-  onPurchase: (points: number, paymentMethodId: number) => Promise<ActionResult>;
+  onPurchase: (points: number, paymentMethodId: number | null) => Promise<ActionResult>;
 }) {
   const [selectedAmount, setSelectedAmount] = useState<number>(500);
-  const [paymentMethodId, setPaymentMethodId] = useState<number | "">(() => {
-    return paymentMethods.find((method) => toBoolean(method.is_default))?.payment_method_id ?? paymentMethods[0]?.payment_method_id ?? "";
-  });
+  const [savedPaymentMethodId, setSavedPaymentMethodId] = useState<number | null>(() => getDefaultSavedPaymentMethodId(paymentMethods));
+  const [defaultPaymentMethodId, setDefaultPaymentMethodId] = useState<DefaultPaymentMethodId>("credit-card");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<ActionResult | null>(null);
   const pointsLoaded = points !== null;
+  const usesDefaultPaymentMethods = paymentMethods.length === 0;
 
   useEffect(() => {
-    if (paymentMethods.some((method) => method.payment_method_id === paymentMethodId)) {
+    if (paymentMethods.some((method) => method.payment_method_id === savedPaymentMethodId)) {
       return;
     }
-    setPaymentMethodId(paymentMethods.find((method) => toBoolean(method.is_default))?.payment_method_id ?? paymentMethods[0]?.payment_method_id ?? "");
-  }, [paymentMethodId, paymentMethods]);
+    setSavedPaymentMethodId(getDefaultSavedPaymentMethodId(paymentMethods));
+  }, [paymentMethods, savedPaymentMethodId]);
 
   async function handleSubmit() {
     if (isSubmitting || !pointsLoaded) {
       return;
     }
 
-    if (!paymentMethodId) {
-      setResult({ ok: false, message: "支払い方法を登録してから購入してください。" });
+    if (!usesDefaultPaymentMethods && !savedPaymentMethodId) {
+      setResult({ ok: false, message: translate("paymentMethodsEmpty", language) });
       return;
     }
 
     setIsSubmitting(true);
     setResult(null);
 
-    const next = await onPurchase(selectedAmount, Number(paymentMethodId));
+    const next = await onPurchase(selectedAmount, usesDefaultPaymentMethods ? null : savedPaymentMethodId);
     setResult(next);
     setIsSubmitting(false);
   }
@@ -2919,24 +3044,46 @@ function PurchaseScreen({
             </button>
           ))}
         </div>
-        <label className="payment-method">
-          <span className="payment-method__avatar" />
-          <select
-            aria-label={translate("paymentMethodPlaceholder", language)}
-            value={paymentMethodId}
-            onChange={(event) => setPaymentMethodId(event.target.value ? Number(event.target.value) : "")}
-            disabled={isSubmitting || paymentMethods.length === 0}
-          >
-            {paymentMethods.length === 0 ? (
-              <option value="">{pointsLoaded ? "支払い方法が未登録です" : translate("loading", language)}</option>
-            ) : null}
-            {paymentMethods.map((method) => (
-              <option key={method.payment_method_id} value={method.payment_method_id}>
-                {method.label} ({method.brand} **** {method.last4})
-              </option>
-            ))}
-          </select>
-        </label>
+        {usesDefaultPaymentMethods ? (
+          <fieldset className="default-payment-methods" disabled={isSubmitting}>
+            <legend>{translate("defaultPaymentMethods", language)}</legend>
+            <div className="default-payment-methods__options">
+              {DEFAULT_PAYMENT_METHOD_OPTIONS.map((method) => (
+                <label
+                  key={method.id}
+                  className={`default-payment-method ${defaultPaymentMethodId === method.id ? "is-selected" : ""}`}
+                  onClick={() => setDefaultPaymentMethodId(method.id)}
+                >
+                  <input
+                    type="radio"
+                    name="default-payment-method"
+                    value={method.id}
+                    checked={defaultPaymentMethodId === method.id}
+                    onChange={() => setDefaultPaymentMethodId(method.id)}
+                  />
+                  <span aria-hidden="true">{method.mark}</span>
+                  <strong>{translate(method.labelKey, language)}</strong>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        ) : (
+          <label className="payment-method">
+            <span className="payment-method__avatar" />
+            <select
+              aria-label={translate("paymentMethodPlaceholder", language)}
+              value={savedPaymentMethodId ?? ""}
+              onChange={(event) => setSavedPaymentMethodId(event.target.value ? Number(event.target.value) : null)}
+              disabled={isSubmitting}
+            >
+              {paymentMethods.map((method) => (
+                <option key={method.payment_method_id} value={method.payment_method_id}>
+                  {method.label} ({method.brand} **** {method.last4})
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         {result ? (
           <p className={`action-banner ${result.ok ? "action-banner--success" : "action-banner--error"}`} role={result.ok ? "status" : "alert"}>
             {result.message}
@@ -2946,7 +3093,7 @@ function PurchaseScreen({
           type="button"
           className="primary-button purchase-execute-button"
           onClick={handleSubmit}
-          disabled={isSubmitting || !paymentMethodId || !pointsLoaded}
+          disabled={isSubmitting || (!usesDefaultPaymentMethods && !savedPaymentMethodId) || !pointsLoaded}
         >
           {isSubmitting ? translate("purchasing", language) : `${translate("executePurchase", language)} (${selectedAmount}pt)`}
         </button>
@@ -2961,6 +3108,7 @@ function PurchaseScreen({
 function AccountScreen({
   user,
   settings,
+  homeTheme,
   language,
   onLanguageToggle,
   accountEmail,
@@ -2973,6 +3121,7 @@ function AccountScreen({
   onCurrentPasswordChange,
   onNewPasswordChange,
   onSettingsChange,
+  onHomeThemeChange,
   onSaveAccount,
   onChangePassword,
   onDeleteAccount,
@@ -2982,6 +3131,7 @@ function AccountScreen({
 }: {
   user: DisplayUser;
   settings: UserSettings | null;
+  homeTheme: HomeTheme;
   language: AppLanguage;
   onLanguageToggle: () => void;
   accountEmail: string;
@@ -2994,6 +3144,7 @@ function AccountScreen({
   onCurrentPasswordChange: (value: string) => void;
   onNewPasswordChange: (value: string) => void;
   onSettingsChange: (settings: UserSettings) => void;
+  onHomeThemeChange: (theme: HomeTheme) => void;
   onSaveAccount: (event: FormEvent) => void;
   onChangePassword: (event: FormEvent) => void;
   onDeleteAccount: () => void;
@@ -3054,6 +3205,41 @@ function AccountScreen({
                     <option value="large">{translate("fontLarge", language)}</option>
                   </select>
                 </label>
+                <fieldset className="home-theme-fieldset">
+                  <legend>{translate("homeThemeSettings", language)}</legend>
+                  <div className="home-theme-options">
+                    <label className={`home-theme-option ${homeTheme === "standard" ? "is-selected" : ""}`}>
+                      <input
+                        type="radio"
+                        name="home-theme"
+                        value="standard"
+                        checked={homeTheme === "standard"}
+                        onChange={() => onHomeThemeChange("standard")}
+                      />
+                      <span className="home-theme-option__preview home-theme-option__preview--standard" aria-hidden="true">
+                        <i />
+                        <i />
+                        <i />
+                      </span>
+                      <strong>{translate("homeThemeStandard", language)}</strong>
+                    </label>
+                    <label className={`home-theme-option ${homeTheme === "kids" ? "is-selected" : ""}`}>
+                      <input
+                        type="radio"
+                        name="home-theme"
+                        value="kids"
+                        checked={homeTheme === "kids"}
+                        onChange={() => onHomeThemeChange("kids")}
+                      />
+                      <span className="home-theme-option__preview home-theme-option__preview--kids" aria-hidden="true">
+                        <i />
+                        <i />
+                        <i />
+                      </span>
+                      <strong>{translate("homeThemeKids", language)}</strong>
+                    </label>
+                  </div>
+                </fieldset>
               </>
             ) : null}
             <button className="account-action-button" type="submit">

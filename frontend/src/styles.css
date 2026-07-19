@@ -552,6 +552,139 @@ select.auth-input {
   border-right: 0;
 }
 
+.kids-home {
+  min-height: calc(100dvh - var(--nav-height));
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.kids-home__header {
+  height: 72px;
+  position: relative;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  padding: 17px 24px 12px;
+  background: #ffffff;
+}
+
+.kids-home__header .logo {
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.kids-home__header .logo__mark {
+  width: 23px;
+  height: 23px;
+}
+
+.kids-home__canvas {
+  min-height: calc(100dvh - var(--nav-height) - 72px);
+  position: relative;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.kids-home__action {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  color: #ffffff;
+  font-weight: 800;
+  text-align: center;
+  -webkit-tap-highlight-color: transparent;
+  transition: filter 140ms ease, transform 140ms ease;
+}
+
+.kids-home__action:hover {
+  filter: brightness(0.96);
+}
+
+.kids-home__action:active {
+  transform: scale(0.985);
+}
+
+.kids-home__action:focus-visible {
+  outline: 4px solid #111111;
+  outline-offset: -7px;
+}
+
+.kids-home__points {
+  width: 61%;
+  height: 34%;
+  top: 0;
+  right: -2%;
+  z-index: 1;
+  gap: clamp(12px, 2.4dvh, 24px);
+  padding: 4% 4% 2% 12%;
+  border-radius: 58% 0 9% 55% / 52% 0 13% 55%;
+  background: #42c779;
+}
+
+.kids-home__points span {
+  font-size: clamp(13px, 3.4vw, 17px);
+}
+
+.kids-home__points strong {
+  font-size: clamp(48px, 14vw, 68px);
+  line-height: 0.9;
+}
+
+.kids-home__points strong.kids-home__loading {
+  max-width: 80%;
+  font-size: clamp(13px, 3.8vw, 18px);
+  line-height: 1.4;
+}
+
+.kids-home__points small {
+  font-size: clamp(10px, 2.5vw, 12px);
+  font-weight: 800;
+}
+
+.kids-home__events {
+  width: 64%;
+  aspect-ratio: 1;
+  top: 25%;
+  left: -7%;
+  z-index: 2;
+  border-radius: 50%;
+  padding-left: 5%;
+  background: #f31a21;
+  font-size: clamp(18px, 5vw, 24px);
+}
+
+.kids-home__qr {
+  width: 108%;
+  height: 54%;
+  right: -4%;
+  bottom: -1px;
+  z-index: 3;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 14% 5% 0;
+  border-radius: 96% 18% 0 0 / 92% 14% 0 0;
+  background: #4834ff;
+}
+
+.kids-home__qr-icon {
+  width: clamp(92px, 27vw, 126px);
+  height: clamp(92px, 27vw, 126px);
+}
+
+.kids-home__qr-icon svg {
+  stroke-width: 2.8;
+}
+
+.kids-home__qr strong {
+  font-size: clamp(24px, 7vw, 34px);
+  line-height: 1;
+}
+
 .section {
   padding: 28px 29px 0;
 }
@@ -1068,6 +1201,88 @@ select.auth-input {
   margin: 0;
   font-size: 13px;
   line-height: 1.4;
+}
+
+.default-payment-methods {
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.default-payment-methods legend {
+  margin-bottom: 10px;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.default-payment-methods__options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.default-payment-method {
+  min-width: 0;
+  min-height: 106px;
+  position: relative;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 9px;
+  border: 2px solid #c9c9c9;
+  border-radius: 12px;
+  padding: 13px 5px 10px;
+  background: #ffffff;
+  cursor: pointer;
+  text-align: center;
+}
+
+.default-payment-method.is-selected {
+  border-color: var(--green);
+  background: var(--green-soft);
+  box-shadow: 0 0 0 2px rgba(47, 132, 47, 0.12);
+}
+
+.default-payment-method input {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--green);
+}
+
+.default-payment-method > span {
+  min-width: 48px;
+  height: 29px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: #e5e5e5;
+  color: #4a4a4a;
+  padding: 0 6px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.default-payment-method.is-selected > span {
+  background: var(--green);
+  color: #ffffff;
+}
+
+.default-payment-method strong {
+  min-height: 2.7em;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.default-payment-methods:disabled .default-payment-method {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 .purchase-ad {
@@ -1804,6 +2019,121 @@ select.auth-input {
 
 .account-checkbox {
   justify-content: flex-start;
+}
+
+.home-theme-fieldset {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  padding: 12px 15px 15px;
+  background: #eeeeee;
+}
+
+.home-theme-fieldset legend {
+  width: 100%;
+  padding: 0;
+  font-size: 14px;
+}
+
+.home-theme-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.home-theme-option {
+  min-width: 0;
+  position: relative;
+  display: grid;
+  gap: 7px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  padding: 7px;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.home-theme-option.is-selected {
+  border-color: var(--green);
+  box-shadow: 0 0 0 2px rgba(47, 132, 47, 0.12);
+}
+
+.home-theme-option input {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 17px;
+  height: 17px;
+  accent-color: var(--green);
+}
+
+.home-theme-option > strong {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.home-theme-option__preview {
+  height: 76px;
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.home-theme-option__preview--standard {
+  display: grid;
+  gap: 5px;
+  align-content: start;
+  padding: 12px 8px;
+}
+
+.home-theme-option__preview--standard i {
+  display: block;
+  height: 13px;
+  border-radius: 4px;
+  background: var(--green-soft);
+}
+
+.home-theme-option__preview--standard i:nth-child(2),
+.home-theme-option__preview--standard i:nth-child(3) {
+  width: 72%;
+  background: #dedede;
+}
+
+.home-theme-option__preview--kids i {
+  position: absolute;
+  display: block;
+}
+
+.home-theme-option__preview--kids i:nth-child(1) {
+  width: 55%;
+  height: 56%;
+  top: -4%;
+  right: -5%;
+  border-radius: 50% 0 0 50%;
+  background: #42c779;
+}
+
+.home-theme-option__preview--kids i:nth-child(2) {
+  width: 48%;
+  aspect-ratio: 1;
+  top: 31%;
+  left: -5%;
+  border-radius: 50%;
+  background: #f31a21;
+}
+
+.home-theme-option__preview--kids i:nth-child(3) {
+  width: 78%;
+  height: 51%;
+  right: -9%;
+  bottom: -4%;
+  border-radius: 90% 18% 0 0 / 100% 18% 0 0;
+  background: #4834ff;
 }
 
 .account-action-button {
