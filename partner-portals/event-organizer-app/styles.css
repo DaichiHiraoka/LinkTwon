@@ -263,6 +263,42 @@ textarea.input {
   box-shadow: 0 0 0 4px rgba(233, 27, 79, 0.12);
 }
 
+.submission-form .input::placeholder {
+  color: #8a94a6;
+  opacity: 1;
+  font-weight: 400;
+}
+
+.submission-datetime-field {
+  min-width: 0;
+  position: relative;
+  display: block;
+}
+
+.submission-datetime-field__placeholder {
+  position: absolute;
+  top: 1px;
+  right: 38px;
+  bottom: 1px;
+  left: 1px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px 0 0 5px;
+  background: var(--paper);
+  color: #8a94a6;
+  padding: 0 8px;
+  font-size: 0.72rem;
+  font-weight: 400;
+  pointer-events: none;
+}
+
+.submission-datetime-field:focus-within .submission-datetime-field__placeholder,
+.submission-datetime-field:has(input:valid) .submission-datetime-field__placeholder {
+  opacity: 0;
+}
+
 .auth-error input.input {
   border-color: #ff5879;
 }

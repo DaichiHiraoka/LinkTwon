@@ -510,6 +510,24 @@ function accessTemplate() {
 
 function eventListTemplate() {
   const account = state.payload.account;
+  const submissionPlaceholders =
+    state.locale === 'en'
+      ? {
+          eventName: 'Event name (required)',
+          startDateTime: 'Start date and time (required)',
+          endDateTime: 'End date and time (required)',
+          location: 'Location (e.g. Central Park)',
+          requestedPoints: 'Requested points (e.g. 100)',
+          description: 'Event details (activities, requirements, etc.)'
+        }
+      : {
+          eventName: 'イベント名（必須・例：地域清掃イベント）',
+          startDateTime: '開始日時（必須）',
+          endDateTime: '終了日時（必須）',
+          location: '開催場所（例：〇〇公園）',
+          requestedPoints: '付与希望ポイント（例：100）',
+          description: 'イベント概要（活動内容・参加条件など）'
+        };
 
   return `
     <div class="tablet-frame">
@@ -534,14 +552,20 @@ function eventListTemplate() {
         <section class="event-list">
           <h1>${state.locale === 'en' ? 'Event submissions' : 'イベント申請'}</h1>
           <form class="submission-form">
-            <input class="input" name="event_name" required placeholder="${state.locale === 'en' ? 'Event name' : 'イベント名'}" />
+            <input class="input" name="event_name" required aria-label="${escapeHtml(submissionPlaceholders.eventName)}" placeholder="${escapeHtml(submissionPlaceholders.eventName)}" />
             <div class="split-actions">
-              <input class="input" name="event_datetime" type="datetime-local" required />
-              <input class="input" name="event_end_datetime" type="datetime-local" required />
+              <label class="submission-datetime-field">
+                <span class="submission-datetime-field__placeholder" aria-hidden="true">${escapeHtml(submissionPlaceholders.startDateTime)}</span>
+                <input class="input" name="event_datetime" type="datetime-local" required aria-label="${escapeHtml(submissionPlaceholders.startDateTime)}" placeholder="${escapeHtml(submissionPlaceholders.startDateTime)}" />
+              </label>
+              <label class="submission-datetime-field">
+                <span class="submission-datetime-field__placeholder" aria-hidden="true">${escapeHtml(submissionPlaceholders.endDateTime)}</span>
+                <input class="input" name="event_end_datetime" type="datetime-local" required aria-label="${escapeHtml(submissionPlaceholders.endDateTime)}" placeholder="${escapeHtml(submissionPlaceholders.endDateTime)}" />
+              </label>
             </div>
-            <input class="input" name="location" placeholder="${state.locale === 'en' ? 'Location' : '会場'}" />
-            <input class="input" name="requested_grant_points" type="number" min="0" value="0" />
-            <textarea class="input" name="description" placeholder="${state.locale === 'en' ? 'Description' : '概要'}"></textarea>
+            <input class="input" name="location" aria-label="${escapeHtml(submissionPlaceholders.location)}" placeholder="${escapeHtml(submissionPlaceholders.location)}" />
+            <input class="input" name="requested_grant_points" type="number" min="0" aria-label="${escapeHtml(submissionPlaceholders.requestedPoints)}" placeholder="${escapeHtml(submissionPlaceholders.requestedPoints)}" />
+            <textarea class="input" name="description" aria-label="${escapeHtml(submissionPlaceholders.description)}" placeholder="${escapeHtml(submissionPlaceholders.description)}"></textarea>
             <button class="btn btn-primary" type="submit">${state.locale === 'en' ? 'Submit for review' : '審査へ申請'}</button>
           </form>
           <div class="event-grid">
