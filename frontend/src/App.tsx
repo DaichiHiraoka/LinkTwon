@@ -82,6 +82,10 @@ const SESSION_STORAGE_KEY = "link-town-session";
 const HOME_THEME_STORAGE_KEY = "link-town-home-theme";
 const DUMMY_EVENT_IMAGE_URL = "/dummy-event-image.svg";
 const DUMMY_PRODUCT_IMAGE_URL = "/dummy-product-image.svg";
+const POINT_EXCHANGE_LOCATION_NAME = "大阪国際工科専門職大学";
+const POINT_EXCHANGE_LOCATION_ADDRESS = "〒530-0001 大阪府大阪市北区梅田3-3-1 梅田総合校舎";
+const POINT_EXCHANGE_LOCATION_DISPLAY = `${POINT_EXCHANGE_LOCATION_NAME}（${POINT_EXCHANGE_LOCATION_ADDRESS}）`;
+const POINT_EXCHANGE_MAP_QUERY = `${POINT_EXCHANGE_LOCATION_NAME} ${POINT_EXCHANGE_LOCATION_ADDRESS}`;
 const SCREEN_ROUTES: Record<Screen, string> = {
   login: "/login",
   home: "/app",
@@ -783,14 +787,12 @@ function mapServices(services: ServiceItem[], language: AppLanguage): ProductCat
   for (const service of services) {
     const serviceName = localizeApiText(service.service_name, language);
     const storeName = service.store_name;
-    const storeAddress = service.store_address || "";
-    const mapQuery = service.map_query || [storeName, storeAddress].filter(Boolean).join(" ");
     const product: ProductItem = {
       id: String(service.service_id),
       name: serviceName,
       storeName,
-      storeAddress,
-      mapQuery,
+      storeAddress: POINT_EXCHANGE_LOCATION_DISPLAY,
+      mapQuery: POINT_EXCHANGE_MAP_QUERY,
       description: displayApiText(service.description ?? ""),
       requiredPoints: service.required_points,
       imageUrl: service.image_url || DUMMY_PRODUCT_IMAGE_URL,
@@ -4218,7 +4220,7 @@ function ProductMapModal({
           ) : null}
         </dl>
         <p className="map-demo-notice">{translate("mapDemoNotice", language)}</p>
-        <iframe className="product-map-frame" title={`${product.storeName} Google Map`} src={mapUrl} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
+        <iframe className="product-map-frame" title={`${POINT_EXCHANGE_LOCATION_NAME} Google Map`} src={mapUrl} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
         <a className="product-map-link" href={externalMapUrl} target="_blank" rel="noreferrer">
           {translate("openInGoogleMaps", language)}
         </a>

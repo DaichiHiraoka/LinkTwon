@@ -123,7 +123,8 @@ button {
 
 .icon-btn,
 .locale-btn,
-.logout-btn {
+.logout-btn,
+.header-nav-btn {
   min-width: 44px;
   height: 44px;
   border: 1px solid var(--line);
@@ -141,6 +142,18 @@ button {
   padding: 0 12px;
   color: var(--ink-soft);
   font-size: 0.78rem;
+}
+
+.header-nav-btn {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+  padding: 0 16px;
+  font-size: 0.78rem;
+}
+
+.header-nav-btn:hover {
+  background: var(--accent-dark);
 }
 
 .counter {
@@ -267,6 +280,37 @@ textarea.input {
   color: #8a94a6;
   opacity: 1;
   font-weight: 400;
+}
+
+.submission-page {
+  display: grid;
+  gap: 32px;
+}
+
+.submission-panel {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fbfcfe;
+  padding: 24px;
+}
+
+.submission-panel h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.submission-description {
+  margin: 8px 0 20px;
+  color: var(--ink-soft);
+}
+
+.submission-form {
+  display: grid;
+  gap: 12px;
+}
+
+.submission-history {
+  margin-top: 0;
 }
 
 .submission-datetime-field {
@@ -766,6 +810,13 @@ textarea.input {
 
   .header-actions {
     gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .header-nav-btn {
+    padding-inline: 10px;
+    font-size: 0.7rem;
   }
 
   .brand-name {
@@ -782,8 +833,13 @@ textarea.input {
   }
 
   .event-list h1,
-  .manual-form h1 {
+  .manual-form h1,
+  .submission-panel h1 {
     font-size: 1.55rem;
+  }
+
+  .submission-panel {
+    padding: 18px;
   }
 
   .scan-info {

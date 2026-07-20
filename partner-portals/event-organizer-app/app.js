@@ -41,6 +41,12 @@ const ui = {
     forgotCode: 'パスワードを忘れた方',
     invalidCode: 'イベント主催者IDまたはパスワードが違います',
     homeTitle: '受付するイベント',
+    submissionNav: 'イベント申請',
+    submissionTitle: 'イベント申請',
+    submissionSubtitle: '新しいイベントを申請・管理',
+    submissionDescription: '必要事項を入力して管理者の審査へ申請してください。',
+    submissionHistory: '申請履歴',
+    submissionEmpty: '申請はまだありません。',
     organizer: '主催者',
     contact: '連絡先',
     eventDate: '開催日時',
@@ -85,6 +91,12 @@ const ui = {
     forgotCode: 'Forgot code',
     invalidCode: 'Check the access code.',
     homeTitle: 'Events to check in',
+    submissionNav: 'Event application',
+    submissionTitle: 'Event application',
+    submissionSubtitle: 'Apply for and manage events',
+    submissionDescription: 'Enter the event details and submit them for administrator review.',
+    submissionHistory: 'Application history',
+    submissionEmpty: 'No submissions yet.',
     organizer: 'Organizer',
     contact: 'Contact',
     eventDate: 'Date',
@@ -263,7 +275,7 @@ function showError(message) {
   setState({ screen: 'error', error: message || t('invalidQr') });
 }
 
-async function loadPortal(event) {
+async function loadPortal(event, nextScreen = 'eventList') {
   if (event) {
     event.preventDefault();
   }
@@ -288,7 +300,7 @@ async function loadPortal(event) {
     setState({
       payload,
       error: '',
-      screen: 'eventList',
+      screen: nextScreen,
       selectedEventId: payload.events[0]?.event_id || '',
       manualPayload: '',
       pendingPayload: '',
@@ -456,8 +468,8 @@ function brandMarkTemplate() {
 }
 
 function appHeaderTemplate(eventItem, options = {}) {
-  const title = eventItem ? eventItem.event_name : t('product');
-  const sub = eventItem ? formatEventSub(eventItem) : t('title');
+  const title = options.title || (eventItem ? eventItem.event_name : t('product'));
+  const sub = options.subtitle || (eventItem ? formatEventSub(eventItem) : t('title'));
   const showBack = options.backTo;
   const count = eventItem ? checkinCount(eventItem.event_id) : 0;
 
@@ -477,6 +489,7 @@ function appHeaderTemplate(eventItem, options = {}) {
       <div class="header-actions">
         <button class="logout-btn" type="button" data-action="logout">${escapeHtml(t('logout'))}</button>
         <button class="locale-btn" type="button" data-action="toggle-locale">${escapeHtml(t('language'))}</button>
+        ${options.showSubmissionButton ? `<button class="header-nav-btn" type="button" data-action="open-submission">${escapeHtml(t('submissionNav'))}</button>` : ''}
         ${eventItem ? `<div class="counter"><div class="num">${escapeHtml(count)}</div><div class="lbl">${escapeHtml(t('accepted'))}</div></div>` : ''}
       </div>
     </header>
@@ -510,6 +523,34 @@ function accessTemplate() {
 
 function eventListTemplate() {
   const account = state.payload.account;
+
+  return `
+    <div class="tablet-frame">
+      ${appHeaderTemplate(null, { showSubmissionButton: true })}
+      <main class="event-home">
+        <section class="account-strip">
+          <div>
+            <div class="label">${escapeHtml(t('organizer'))}</div>
+            <strong>${escapeHtml(account.name)}</strong>
+          </div>
+          <div>
+            <div class="label">${escapeHtml(t('contact'))}</div>
+            <strong>${escapeHtml(account.email)}</strong>
+          </div>
+        </section>
+        <section class="event-list" aria-label="${escapeHtml(t('homeTitle'))}">
+          <h1>${escapeHtml(t('homeTitle'))}</h1>
+          <div class="event-grid">
+            ${state.payload.events.map(eventCardTemplate).join('')}
+          </div>
+        </section>
+      </main>
+      <div class="frame-id">E-03</div>
+    </div>
+  `;
+}
+
+function submissionTemplate() {
   const submissionPlaceholders =
     state.locale === 'en'
       ? {
@@ -531,26 +572,15 @@ function eventListTemplate() {
 
   return `
     <div class="tablet-frame">
-      ${appHeaderTemplate(null)}
-      <main class="event-home">
-        <section class="account-strip">
-          <div>
-            <div class="label">${escapeHtml(t('organizer'))}</div>
-            <strong>${escapeHtml(account.name)}</strong>
-          </div>
-          <div>
-            <div class="label">${escapeHtml(t('contact'))}</div>
-            <strong>${escapeHtml(account.email)}</strong>
-          </div>
-        </section>
-        <section class="event-list" aria-label="${escapeHtml(t('homeTitle'))}">
-          <h1>${escapeHtml(t('homeTitle'))}</h1>
-          <div class="event-grid">
-            ${state.payload.events.map(eventCardTemplate).join('')}
-          </div>
-        </section>
-        <section class="event-list">
-          <h1>${state.locale === 'en' ? 'Event submissions' : 'イベント申請'}</h1>
+      ${appHeaderTemplate(null, {
+        backTo: 'open-home',
+        title: t('submissionTitle'),
+        subtitle: t('submissionSubtitle')
+      })}
+      <main class="event-home submission-page">
+        <section class="submission-panel">
+          <h1>${escapeHtml(t('submissionTitle'))}</h1>
+          <p class="submission-description">${escapeHtml(t('submissionDescription'))}</p>
           <form class="submission-form">
             <input class="input" name="event_name" required aria-label="${escapeHtml(submissionPlaceholders.eventName)}" placeholder="${escapeHtml(submissionPlaceholders.eventName)}" />
             <div class="split-actions">
@@ -568,13 +598,15 @@ function eventListTemplate() {
             <textarea class="input" name="description" aria-label="${escapeHtml(submissionPlaceholders.description)}" placeholder="${escapeHtml(submissionPlaceholders.description)}"></textarea>
             <button class="btn btn-primary" type="submit">${state.locale === 'en' ? 'Submit for review' : '審査へ申請'}</button>
           </form>
+        </section>
+        <section class="event-list submission-history">
+          <h1>${escapeHtml(t('submissionHistory'))}</h1>
           <div class="event-grid">
-            ${(state.payload.submissions || []).map(submissionCardTemplate).join('') ||
-              `<p>${state.locale === 'en' ? 'No submissions yet.' : '申請はまだありません。'}</p>`}
+            ${(state.payload.submissions || []).map(submissionCardTemplate).join('') || `<p>${escapeHtml(t('submissionEmpty'))}</p>`}
           </div>
         </section>
       </main>
-      <div class="frame-id">E-03</div>
+      <div class="frame-id">E-09</div>
     </div>
   `;
 }
@@ -793,6 +825,7 @@ function render() {
 
   const templates = {
     eventList: eventListTemplate,
+    submission: submissionTemplate,
     scan: scanTemplate,
     manual: manualTemplate,
     validating: validatingTemplate,
@@ -812,9 +845,10 @@ app.addEventListener('click', async (event) => {
   }
 
   if (target.dataset.action === 'toggle-locale') {
+    const nextScreen = state.screen === 'submission' ? 'submission' : 'eventList';
     setState({ locale: state.locale === 'ja' ? 'en' : 'ja' });
     if (state.payload) {
-      loadPortal();
+      loadPortal(null, nextScreen);
     }
     return;
   }
@@ -826,6 +860,11 @@ app.addEventListener('click', async (event) => {
 
   if (target.dataset.action === 'open-home') {
     setState({ screen: 'eventList', error: '' });
+    return;
+  }
+
+  if (target.dataset.action === 'open-submission') {
+    setState({ screen: 'submission', error: '' });
     return;
   }
 
@@ -867,7 +906,7 @@ app.addEventListener('click', async (event) => {
     });
     const result = await response.json();
     if (!response.ok) return showError(result.message);
-    await loadPortal();
+    await loadPortal(null, 'submission');
     return;
   }
 
@@ -953,7 +992,7 @@ app.addEventListener('submit', (event) => {
       .then(async (response) => ({ response, result: await response.json() }))
       .then(({ response, result }) => {
         if (!response.ok) throw new Error(result.message);
-        return loadPortal();
+        return loadPortal(null, 'submission');
       })
       .catch((error) => showError(error.message));
   }
