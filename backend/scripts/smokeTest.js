@@ -103,6 +103,37 @@ async function main() {
       400
     );
 
+    fs.rmSync(process.env.MAIL_OUTBOX_DIR, { recursive: true, force: true });
+    fs.writeFileSync(process.env.MAIL_OUTBOX_DIR, 'temporarily unavailable', 'utf8');
+
+    const originalConsoleError = console.error;
+    console.error = () => {};
+    try {
+      await request(
+        '/auth/register',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            name: 'Pending Mail User',
+            email: 'pending@example.com',
+            password: 'password123'
+          })
+        },
+        503
+      );
+    } finally {
+      console.error = originalConsoleError;
+    }
+
+    const [pendingUsers] = await pool.query(
+      'SELECT user_id, email_verified_at FROM users WHERE email = ?',
+      ['pending@example.com']
+    );
+    assert.strictEqual(pendingUsers.length, 0);
+
+    fs.unlinkSync(process.env.MAIL_OUTBOX_DIR);
+    fs.mkdirSync(process.env.MAIL_OUTBOX_DIR, { recursive: true });
+
     const login = await request('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email: 'demo@example.com', password: 'password123' })

@@ -84,7 +84,10 @@ Required in production and staging:
 - `FRONTEND_BASE_URL`: public user frontend URL for email links.
 - `MAIL_DRIVER`: `smtp`, `resend`, `outbox`, `console`, or `none`.
 - `SMTP_HOST`, `SMTP_FROM`: required when `MAIL_DRIVER=smtp`.
-- `RESEND_API_KEY`: required when `MAIL_DRIVER=resend`.
+- `RESEND_API_KEY`, `SMTP_FROM`: required when `MAIL_DRIVER=resend`.
+
+When Resend rejects or cannot deliver a registration email, registration is rolled back and the API returns `503 Service Unavailable`.
+The frontend reports a mail server outage instead of exposing the upstream Resend status or asking the user to resend a registration email.
 
 Optional backend variables:
 

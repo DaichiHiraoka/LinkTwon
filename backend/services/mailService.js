@@ -31,6 +31,15 @@ function createMailConfigError(message) {
   return error;
 }
 
+function createMailDeliveryError(provider, providerStatusCode, providerResponse) {
+  const error = new Error('Email delivery service is temporarily unavailable. Please try again later.');
+  error.statusCode = 503;
+  error.provider = provider;
+  error.providerStatusCode = providerStatusCode;
+  error.providerResponse = providerResponse;
+  return error;
+}
+
 function getSmtpTransportConfig() {
   const user = env.SMTP_USER;
   const pass = env.SMTP_PASSWORD;
@@ -94,12 +103,14 @@ async function sendResendMail(message) {
             return;
           }
 
-          reject(createMailConfigError(`Resend API error: ${response.statusCode} ${responseData}`));
+          reject(createMailDeliveryError('resend', response.statusCode, responseData));
         });
       }
     );
 
-    request.on('error', reject);
+    request.on('error', (error) => {
+      reject(createMailDeliveryError('resend', null, error.message));
+    });
     request.write(data);
     request.end();
   });
@@ -132,28 +143,35 @@ async function sendSmtpMail(message) {
 async function sendMail(message) {
   const driver = getMailDriver();
 
-  if (driver === 'none') {
-    return { driver };
-  }
+  try {
+    if (driver === 'none') {
+      return { driver };
+    }
 
-  if (driver === 'console') {
-    console.log('[mail]', JSON.stringify(message, null, 2));
-    return { driver };
-  }
+    if (driver === 'console') {
+      console.log('[mail]', JSON.stringify(message, null, 2));
+      return { driver };
+    }
 
-  if (driver === 'outbox') {
-    return writeOutboxMail(message);
-  }
+    if (driver === 'outbox') {
+      return await writeOutboxMail(message);
+    }
 
-  if (driver === 'resend') {
-    return sendResendMail(message);
-  }
+    if (driver === 'resend') {
+      return await sendResendMail(message);
+    }
 
-  if (driver === 'smtp') {
-    return sendSmtpMail(message);
-  }
+    if (driver === 'smtp') {
+      return await sendSmtpMail(message);
+    }
 
-  throw createMailConfigError(`Unsupported MAIL_DRIVER: ${driver}`);
+    throw createMailConfigError(`Unsupported MAIL_DRIVER: ${driver}`);
+  } catch (error) {
+    if (error.statusCode) {
+      throw error;
+    }
+    throw createMailDeliveryError(driver, null, error.message);
+  }
 }
 
 function buildEmailVerificationHtml(verificationUrl, expiresAt) {

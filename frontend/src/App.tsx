@@ -2159,7 +2159,11 @@ function LoginScreen({
       );
       setView("register-sent");
     } catch (error) {
-      setRegistrationMessage(getErrorMessage(error));
+      setRegistrationMessage(
+        error instanceof ApiError && error.status === 503
+          ? "現在メールサーバーに障害が発生しているため、新規登録を完了できません。復旧後にもう一度お試しください。"
+          : getErrorMessage(error),
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -2207,7 +2211,11 @@ function LoginScreen({
           : "認証メールを再送信しました。メール内のURLから認証を完了してください。",
       );
     } catch (error) {
-      setVerificationMessage(getErrorMessage(error));
+      setVerificationMessage(
+        error instanceof ApiError && error.status === 503
+          ? "現在メールサーバーに障害が発生しているため、認証メールを送信できません。復旧までお待ちください。"
+          : getErrorMessage(error),
+      );
     } finally {
       setIsSubmitting(false);
     }

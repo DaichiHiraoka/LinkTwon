@@ -127,6 +127,10 @@ function createEnv() {
   const jwtSecret = readString('JWT_SECRET', isDeployed ? '' : 'link-town-local-secret');
   const deeplApiKey = readString('DEEPL_API_KEY');
   const translationProvider = readString('TRANSLATION_PROVIDER', deeplApiKey ? 'deepl' : 'mock').toLowerCase();
+  const smtpFrom =
+    readString('SMTP_FROM') ||
+    readString('MAIL_FROM') ||
+    (mailDriver === 'smtp' ? readString('SMTP_USER') : '');
   const frontendOrigins = readOriginList('FRONTEND_ORIGIN', errors);
   const frontendOriginPatterns = readRegexList('FRONTEND_ORIGIN_PATTERNS', errors);
   const frontendBaseUrl = assertUrl(
@@ -185,8 +189,13 @@ function createEnv() {
     }
   }
 
-  if (mailDriver === 'resend' && isDeployed && !readString('RESEND_API_KEY')) {
-    errors.push('RESEND_API_KEY is required when MAIL_DRIVER=resend in staging or production.');
+  if (mailDriver === 'resend' && isDeployed) {
+    if (!readString('RESEND_API_KEY')) {
+      errors.push('RESEND_API_KEY is required when MAIL_DRIVER=resend in staging or production.');
+    }
+    if (!smtpFrom) {
+      errors.push('SMTP_FROM is required when MAIL_DRIVER=resend in staging or production.');
+    }
   }
 
   const env = {
@@ -230,7 +239,7 @@ function createEnv() {
     SMTP_SECURE: readBoolean('SMTP_SECURE'),
     SMTP_USER: readString('SMTP_USER'),
     SMTP_PASSWORD: readString('SMTP_PASSWORD'),
-    SMTP_FROM: readString('SMTP_FROM') || readString('MAIL_FROM') || readString('SMTP_USER'),
+    SMTP_FROM: smtpFrom,
     SMTP_TLS_REJECT_UNAUTHORIZED: readBoolean('SMTP_TLS_REJECT_UNAUTHORIZED', true),
     RESEND_API_KEY: readString('RESEND_API_KEY')
   };

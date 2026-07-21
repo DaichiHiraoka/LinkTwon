@@ -31,6 +31,9 @@
 登録確認メールは既定で `MAIL_DRIVER=smtp` として実SMTP配送します。`SMTP_HOST`、`SMTP_FROM`、必要に応じて `SMTP_USER` / `SMTP_PASSWORD` を設定してください。  
 自動テストや明示的なローカル確認のみ `MAIL_DRIVER=outbox` と `MAIL_EXPOSE_VERIFICATION_TOKEN=true` を使用できます。
 
+登録確認メールを送信できない場合、ユーザー登録はロールバックされ、登録APIは `503 Service Unavailable` を返します。
+利用者向け画面にはメールサーバーで障害が発生していることを表示し、メールの再送操作は要求しません。
+
 ## Users
 
 | Method | Path | Auth | 概要 |
