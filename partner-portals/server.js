@@ -47,6 +47,112 @@ function sendError(response, statusCode, message) {
   sendJson(response, statusCode, { message });
 }
 
+const API_ERROR_MESSAGES = {
+  ja: {
+    INVALID_REQUEST: '送信された情報を確認できませんでした。もう一度お試しください。',
+    QR_REQUIRED: 'QRコードが読み取られていません。利用者のQRコードをもう一度読み取ってください。',
+    QR_INVALID_FORMAT: 'Link Townの利用者QRではありません。利用者アプリに表示されたQRコードを確認してください。',
+    QR_INVALID_TYPE: 'このQRコードは利用者確認用ではありません。利用者アプリのQRコードを確認してください。',
+    QR_MISSING_FIELDS: 'QRコードの情報が不足しています。利用者アプリでQRコードを更新してください。',
+    QR_NOT_YET_VALID: 'QRコードの時刻が正しくありません。端末の時刻設定を確認してください。',
+    QR_EXPIRED: 'QRコードの有効期限が切れています。利用者アプリでQRコードを更新してください。',
+    QR_ALREADY_USED: 'このQRコードはすでに使用されています。利用者アプリで新しいQRコードを表示してください。',
+    QR_USER_NOT_FOUND: 'QRコードの利用者が見つかりません。利用者アカウントを確認してください。',
+    EVENT_ORGANIZER_AUTH_INVALID: 'イベント主催者IDまたはパスワードが正しくありません。',
+    EVENT_NOT_FOUND: '選択したイベントを確認できません。イベント一覧を更新してください。',
+    EVENT_CLOSED: 'このイベントは受付を終了しています。',
+    EVENT_APPLICATION_REQUIRED: 'この利用者はイベントに応募していないため、受付できません。',
+    EVENT_CHECK_IN_REQUIRED: 'この利用者は開始受付が完了していないため、参加完了にできません。',
+    EVENT_ALREADY_CHECKED_IN: 'この利用者はすでに開始受付済みです。',
+    EVENT_ALREADY_COMPLETED: 'この利用者はすでに参加完了済みです。',
+    PARTICIPATION_STATUS_INVALID: '現在の参加状態では、このQR操作を実行できません。',
+    COMPLETION_TOO_EARLY: '完了確認はイベント終了日時以降に実行してください。',
+    STORE_AUTH_INVALID: '店舗IDまたはパスワードが正しくありません。',
+    SERVICE_NOT_FOUND: '選択した商品を確認できません。商品一覧を更新してください。',
+    POINTS_INSUFFICIENT: '利用者のポイントが不足しています。',
+    SERVER_ERROR: 'サーバー処理に失敗しました。時間をおいてもう一度お試しください。'
+  },
+  en: {
+    INVALID_REQUEST: 'The submitted request could not be read. Please try again.',
+    QR_REQUIRED: 'No QR code was received. Scan the participant QR code again.',
+    QR_INVALID_FORMAT: 'This is not a Link Town participant QR code.',
+    QR_INVALID_TYPE: 'This QR code cannot be used to identify a participant.',
+    QR_MISSING_FIELDS: 'The QR code is missing required information. Ask the participant to refresh it.',
+    QR_NOT_YET_VALID: 'The QR code time is invalid. Check the device clock.',
+    QR_EXPIRED: 'The QR code has expired. Ask the participant to refresh it.',
+    QR_ALREADY_USED: 'This QR code has already been used. Ask the participant to display a new one.',
+    QR_USER_NOT_FOUND: 'The participant for this QR code was not found.',
+    EVENT_ORGANIZER_AUTH_INVALID: 'The event organizer ID or password is incorrect.',
+    EVENT_NOT_FOUND: 'The selected event could not be found. Refresh the event list.',
+    EVENT_CLOSED: 'This event is closed.',
+    EVENT_APPLICATION_REQUIRED: 'This participant has not applied for the event.',
+    EVENT_CHECK_IN_REQUIRED: 'This participant has not checked in for the event.',
+    EVENT_ALREADY_CHECKED_IN: 'This participant has already checked in.',
+    EVENT_ALREADY_COMPLETED: 'This participant has already completed the event.',
+    PARTICIPATION_STATUS_INVALID: 'This QR operation is not available for the current participation status.',
+    COMPLETION_TOO_EARLY: 'Completion can only be confirmed after the event end time.',
+    STORE_AUTH_INVALID: 'The store ID or password is incorrect.',
+    SERVICE_NOT_FOUND: 'The selected item could not be found. Refresh the item list.',
+    POINTS_INSUFFICIENT: 'The participant does not have enough points.',
+    SERVER_ERROR: 'The server could not complete the request. Please try again later.'
+  }
+};
+
+function apiErrorMessage(code, locale) {
+  const language = locale === 'en' ? 'en' : 'ja';
+  return API_ERROR_MESSAGES[language][code] || API_ERROR_MESSAGES[language].SERVER_ERROR;
+}
+
+function createApiError(code, statusCode = 400) {
+  const error = new Error(API_ERROR_MESSAGES.en[code] || API_ERROR_MESSAGES.en.SERVER_ERROR);
+  error.code = code;
+  error.statusCode = statusCode;
+  return error;
+}
+
+function apiFailure(status, code, locale, details = {}) {
+  return {
+    status,
+    body: {
+      code,
+      message: apiErrorMessage(code, locale),
+      ...details
+    }
+  };
+}
+
+function sendQrError(response, error, locale) {
+  if (error?.code && API_ERROR_MESSAGES.en[error.code]) {
+    return sendJson(response, error.statusCode || 400, {
+      code: error.code,
+      message: apiErrorMessage(error.code, locale)
+    });
+  }
+
+  if (error instanceof SyntaxError) {
+    return sendJson(response, 400, {
+      code: 'INVALID_REQUEST',
+      message: apiErrorMessage('INVALID_REQUEST', locale)
+    });
+  }
+
+  console.error('[qr-api] Unexpected QR processing error.', error);
+  return sendJson(response, 500, {
+    code: 'SERVER_ERROR',
+    message: apiErrorMessage('SERVER_ERROR', locale)
+  });
+}
+
+function participationErrorCode(scanType, participationStatus) {
+  if (participationStatus === 'completed') {
+    return 'EVENT_ALREADY_COMPLETED';
+  }
+  if (scanType === 'check_in' && participationStatus === 'checked_in') {
+    return 'EVENT_ALREADY_CHECKED_IN';
+  }
+  return scanType === 'completion' ? 'EVENT_CHECK_IN_REQUIRED' : 'EVENT_APPLICATION_REQUIRED';
+}
+
 function toSqlDateTime(date) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
     return null;
@@ -73,27 +179,36 @@ async function readJsonBody(request) {
 
 function parseUserQrPayload(rawPayload) {
   if (typeof rawPayload !== 'string' || rawPayload.trim() === '') {
-    throw new Error('User QR payload is required.');
+    throw createApiError('QR_REQUIRED');
   }
 
   const trimmed = rawPayload.trim();
   let payload;
 
   if (trimmed.startsWith('{')) {
-    payload = JSON.parse(trimmed);
+    try {
+      payload = JSON.parse(trimmed);
+    } catch (error) {
+      throw createApiError('QR_INVALID_FORMAT');
+    }
   } else {
-    const payloadUrl = new URL(trimmed);
+    let payloadUrl;
+    try {
+      payloadUrl = new URL(trimmed);
+    } catch (error) {
+      throw createApiError('QR_INVALID_FORMAT');
+    }
     const isUserPresentUrl = payloadUrl.protocol === 'linktown:' && payloadUrl.hostname === 'user-present';
 
     if (!isUserPresentUrl) {
-      throw new Error('Invalid user QR format.');
+      throw createApiError('QR_INVALID_FORMAT');
     }
 
     payload = Object.fromEntries(payloadUrl.searchParams.entries());
   }
 
   if (payload.type !== 'user-present') {
-    throw new Error('Invalid user QR type.');
+    throw createApiError('QR_INVALID_TYPE');
   }
 
   const userId = String(payload.user_id || '').trim();
@@ -103,20 +218,20 @@ function parseUserQrPayload(rawPayload) {
   const expiresAt = new Date(payload.expires_at);
 
   if (!userId || !nonce || Number.isNaN(expiresAt.getTime())) {
-    throw new Error('User QR is missing required fields.');
+    throw createApiError('QR_MISSING_FIELDS');
   }
 
   if (issuedAt && Number.isNaN(issuedAt.getTime())) {
-    throw new Error('User QR is missing required fields.');
+    throw createApiError('QR_MISSING_FIELDS');
   }
 
   const now = Date.now();
   if (issuedAt && issuedAt.getTime() - USER_QR_CLOCK_TOLERANCE_MS > now) {
-    throw new Error('User QR is not valid yet.');
+    throw createApiError('QR_NOT_YET_VALID');
   }
 
   if (expiresAt.getTime() + USER_QR_CLOCK_TOLERANCE_MS < now) {
-    throw new Error('User QR has expired.');
+    throw createApiError('QR_EXPIRED');
   }
 
   return {
@@ -228,13 +343,13 @@ async function processEventAttendance(body, locale, scanType, options = {}) {
   const organizer = data.eventOrganizers.find((item) => matchesPartnerCredentials(item, body.code, body.password));
 
   if (!organizer) {
-    return { status: 401, body: { message: 'Invalid event organizer credentials.' } };
+    return apiFailure(401, 'EVENT_ORGANIZER_AUTH_INVALID', locale);
   }
 
   const event = data.events.find((item) => item.event_id === body.event_id && organizer.event_ids.includes(item.event_id));
 
   if (!event) {
-    return { status: 404, body: { message: 'Event not found for this organizer.' } };
+    return apiFailure(404, 'EVENT_NOT_FOUND', locale);
   }
 
   const user = parseUserQrPayload(body.user_qr_payload);
@@ -244,46 +359,35 @@ async function processEventAttendance(body, locale, scanType, options = {}) {
       : await recordEventCheckIn({ organizer, event, user }, options);
 
   if (writeResult.duplicate) {
-    return { status: 409, body: { message: 'This user QR nonce has already been used.', user, event_id: event.event_id } };
+    return apiFailure(409, 'QR_ALREADY_USED', locale, { user, event_id: event.event_id });
   }
   if (writeResult.userNotFound) {
-    return { status: 404, body: { message: 'User not found for this QR.', user, event_id: event.event_id } };
+    return apiFailure(404, 'QR_USER_NOT_FOUND', locale, { user, event_id: event.event_id });
   }
   if (writeResult.eventClosed) {
-    return { status: 409, body: { message: 'This event is closed.', user, event_id: event.event_id } };
+    return apiFailure(409, 'EVENT_CLOSED', locale, { user, event_id: event.event_id });
   }
-  if (writeResult.notApplied || (scanType === 'check_in' && writeResult.invalidStatus)) {
-    return {
-      status: 403,
-      body: {
-        code: 'EVENT_APPLICATION_REQUIRED',
-        message: 'This user has not applied for the event.',
-        user,
-        event_id: event.event_id,
-        participation_status: writeResult.participation_status ?? null
-      }
-    };
+  if (writeResult.notApplied) {
+    const code = scanType === 'completion' ? 'EVENT_CHECK_IN_REQUIRED' : 'EVENT_APPLICATION_REQUIRED';
+    return apiFailure(403, code, locale, {
+      user,
+      event_id: event.event_id,
+      participation_status: writeResult.participation_status ?? null
+    });
   }
   if (writeResult.invalidStatus) {
-    return {
-      status: 409,
-      body: {
-        message: `Invalid participation status: ${writeResult.participation_status}.`,
-        user,
-        event_id: event.event_id,
-        participation_status: writeResult.participation_status
-      }
-    };
+    const code = participationErrorCode(scanType, writeResult.participation_status);
+    return apiFailure(409, code, locale, {
+      user,
+      event_id: event.event_id,
+      participation_status: writeResult.participation_status
+    });
   }
   if (writeResult.tooEarly) {
-    return {
-      status: 409,
-      body: {
-        message: 'Completion cannot be confirmed before the event end datetime.',
-        event_id: event.event_id,
-        event_end_datetime: writeResult.event_end_datetime
-      }
-    };
+    return apiFailure(409, 'COMPLETION_TOO_EARLY', locale, {
+      event_id: event.event_id,
+      event_end_datetime: writeResult.event_end_datetime
+    });
   }
 
   const cache = await loadTranslationCache(options.cachePath || CACHE_PATH);
@@ -312,12 +416,12 @@ async function processEventEligibility(body, locale, options = {}) {
   const organizer = data.eventOrganizers.find((item) => matchesPartnerCredentials(item, body.code, body.password));
 
   if (!organizer) {
-    return { status: 401, body: { message: 'Invalid event organizer credentials.' } };
+    return apiFailure(401, 'EVENT_ORGANIZER_AUTH_INVALID', locale);
   }
 
   const event = data.events.find((item) => item.event_id === body.event_id && organizer.event_ids.includes(item.event_id));
   if (!event) {
-    return { status: 404, body: { message: 'Event not found for this organizer.' } };
+    return apiFailure(404, 'EVENT_NOT_FOUND', locale);
   }
 
   const user = parseUserQrPayload(body.user_qr_payload);
@@ -325,26 +429,19 @@ async function processEventEligibility(body, locale, options = {}) {
   const eligibility = await verifyEventApplication({ event, user, scanType }, options);
 
   if (eligibility.userNotFound) {
-    return { status: 404, body: { message: 'User not found for this QR.', user, event_id: event.event_id } };
+    return apiFailure(404, 'QR_USER_NOT_FOUND', locale, { user, event_id: event.event_id });
   }
   if (eligibility.eventClosed) {
-    return { status: 409, body: { message: 'This event is closed.', user, event_id: event.event_id } };
+    return apiFailure(409, 'EVENT_CLOSED', locale, { user, event_id: event.event_id });
   }
   if (eligibility.notEligible) {
-    const applicationRequired = scanType === 'check_in';
-    return {
-      status: 403,
-      body: {
-        code: applicationRequired ? 'EVENT_APPLICATION_REQUIRED' : 'EVENT_CHECK_IN_REQUIRED',
-        message: applicationRequired
-          ? 'This user has not applied for the event.'
-          : 'This user has not checked in for the event.',
-        user,
-        event_id: event.event_id,
-        expected_status: eligibility.expected_status,
-        participation_status: eligibility.participation_status
-      }
-    };
+    const code = participationErrorCode(scanType, eligibility.participation_status);
+    return apiFailure(403, code, locale, {
+      user,
+      event_id: event.event_id,
+      expected_status: eligibility.expected_status,
+      participation_status: eligibility.participation_status
+    });
   }
 
   const cache = await loadTranslationCache(options.cachePath || CACHE_PATH);
@@ -374,35 +471,31 @@ async function processStoreExchange(body, locale, options = {}) {
   const store = data.stores.find((item) => matchesPartnerCredentials(item, body.code, body.password));
 
   if (!store) {
-    return { status: 401, body: { message: 'Invalid store credentials.' } };
+    return apiFailure(401, 'STORE_AUTH_INVALID', locale);
   }
 
   const service = data.services.find((item) => item.service_id === body.service_id && store.service_ids.includes(item.service_id));
 
   if (!service) {
-    return { status: 404, body: { message: 'Service not found for this store.' } };
+    return apiFailure(404, 'SERVICE_NOT_FOUND', locale);
   }
 
   const user = parseUserQrPayload(body.user_qr_payload);
   const writeResult = await recordStoreExchange({ store, service, user }, options);
 
   if (writeResult.duplicate) {
-    return { status: 409, body: { message: 'This user QR has already been used for this service.', user, service_id: service.service_id } };
+    return apiFailure(409, 'QR_ALREADY_USED', locale, { user, service_id: service.service_id });
   }
   if (writeResult.userNotFound) {
-    return { status: 404, body: { message: 'User not found for this QR.', user, service_id: service.service_id } };
+    return apiFailure(404, 'QR_USER_NOT_FOUND', locale, { user, service_id: service.service_id });
   }
   if (writeResult.notEnoughPoints) {
-    return {
-      status: 400,
-      body: {
-        message: 'Not enough points.',
-        user,
-        service_id: service.service_id,
-        required_points: service.required_points,
-        current_points: writeResult.current_points
-      }
-    };
+    return apiFailure(400, 'POINTS_INSUFFICIENT', locale, {
+      user,
+      service_id: service.service_id,
+      required_points: service.required_points,
+      current_points: writeResult.current_points
+    });
   }
 
   const cache = await loadTranslationCache(options.cachePath || CACHE_PATH);
@@ -452,12 +545,12 @@ async function handleApi(request, response, requestUrl) {
       return sendError(response, 404, 'API route not found.');
     }
 
+    const locale = requestUrl.searchParams.get('locale') === 'en' ? 'en' : 'ja';
     try {
-      const locale = requestUrl.searchParams.get('locale') === 'en' ? 'en' : 'ja';
       const result = await processEventCheckIn(await readJsonBody(request), locale);
       return sendJson(response, result.status, result.body);
     } catch (error) {
-      return sendError(response, 400, error.message);
+      return sendQrError(response, error, locale);
     }
   }
 
@@ -466,12 +559,12 @@ async function handleApi(request, response, requestUrl) {
       return sendError(response, 404, 'API route not found.');
     }
 
+    const locale = requestUrl.searchParams.get('locale') === 'en' ? 'en' : 'ja';
     try {
-      const locale = requestUrl.searchParams.get('locale') === 'en' ? 'en' : 'ja';
       const result = await processEventEligibility(await readJsonBody(request), locale);
       return sendJson(response, result.status, result.body);
     } catch (error) {
-      return sendError(response, 400, error.message);
+      return sendQrError(response, error, locale);
     }
   }
 
@@ -479,12 +572,12 @@ async function handleApi(request, response, requestUrl) {
     if (APP_ROLE !== 'event') {
       return sendError(response, 404, 'API route not found.');
     }
+    const locale = requestUrl.searchParams.get('locale') === 'en' ? 'en' : 'ja';
     try {
-      const locale = requestUrl.searchParams.get('locale') === 'en' ? 'en' : 'ja';
       const result = await processEventCompletion(await readJsonBody(request), locale);
       return sendJson(response, result.status, result.body);
     } catch (error) {
-      return sendError(response, 400, error.message);
+      return sendQrError(response, error, locale);
     }
   }
 
@@ -552,12 +645,12 @@ async function handleApi(request, response, requestUrl) {
       return sendError(response, 404, 'API route not found.');
     }
 
+    const locale = requestUrl.searchParams.get('locale') === 'en' ? 'en' : 'ja';
     try {
-      const locale = requestUrl.searchParams.get('locale') === 'en' ? 'en' : 'ja';
       const result = await processStoreExchange(await readJsonBody(request), locale);
       return sendJson(response, result.status, result.body);
     } catch (error) {
-      return sendError(response, 400, error.message);
+      return sendQrError(response, error, locale);
     }
   }
 

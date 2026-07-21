@@ -24,7 +24,8 @@ const state = {
   pendingUser: null,
   latestResult: null,
   resultById: {},
-  error: ''
+  error: '',
+  errorCode: ''
 };
 
 const ui = {
@@ -69,13 +70,40 @@ const ui = {
     participant: '参加者',
     scanAgain: 'もう一度読み取る',
     qrRequired: 'QR内容を入力してください。',
+    qrRequiredHint: '利用者アプリに表示されたQRコードを読み取ってください。',
     invalidQr: 'QRの形式を確認してください。',
+    invalidQrHint: 'Link Townの利用者アプリに表示されたQRコードを読み取ってください。',
+    qrMissingFields: 'QRコードの情報が不足しています。',
+    qrMissingFieldsHint: '利用者アプリでQRコードを更新してから、もう一度読み取ってください。',
+    qrExpired: 'QRコードの有効期限が切れています。',
+    qrExpiredHint: '利用者アプリで新しいQRコードを表示してもらってください。',
+    qrNotYetValid: 'QRコードの時刻が正しくありません。',
+    qrNotYetValidHint: '利用者端末の時刻設定を確認してから、QRコードを更新してください。',
+    qrAlreadyUsed: 'このQRコードはすでに使用されています。',
+    qrAlreadyUsedHint: '利用者アプリで新しいQRコードを表示してもらってください。',
+    userNotFound: 'QRコードの利用者が見つかりません。',
+    userNotFoundHint: '利用者が正しいアカウントでログインしているか確認してください。',
     validating: 'イベント応募状況を確認中です…',
     notApplied: 'このイベントに応募していないため受付できません。',
     notAppliedHint: '利用者アプリからイベントへ応募した後、もう一度QRを読み取ってください。',
     notCheckedIn: 'このイベントの受付が完了していないため、参加完了を認証できません。',
     notCheckedInHint: '先に受付QRを読み取ってから、参加完了QRを読み取ってください。',
+    alreadyCheckedIn: 'この利用者はすでに開始受付済みです。',
+    alreadyCheckedInHint: '参加完了を登録する場合は、イベント終了後に完了確認を選択してください。',
+    alreadyCompleted: 'この利用者はすでに参加完了済みです。',
+    alreadyCompletedHint: '同じ利用者へ重複してポイントは付与されません。',
+    eventClosed: 'このイベントは受付を終了しています。',
+    eventClosedHint: 'イベントの状態を確認し、別のイベントを選択してください。',
     completionUnavailable: '完了確認QRはイベント終了日時以降に利用できます。',
+    completionUnavailableHint: 'イベント終了日時以降に、もう一度完了確認を行ってください。',
+    organizerAuthInvalid: 'イベント主催者の認証情報を確認できません。',
+    organizerAuthInvalidHint: 'ログアウトして、イベント主催者IDとパスワードを確認してください。',
+    eventNotFound: '選択したイベントを確認できません。',
+    eventNotFoundHint: 'イベント一覧へ戻って情報を更新してください。',
+    serverError: 'サーバー処理に失敗しました。',
+    serverErrorHint: '時間をおいてもう一度お試しください。解消しない場合は管理者へ連絡してください。',
+    communicationError: 'サーバーに接続できませんでした。',
+    communicationErrorHint: '通信環境を確認してから、もう一度お試しください。',
     cameraUnavailable: 'このブラウザではカメラQR読取を利用できません。手入力で受付してください。'
   },
   en: {
@@ -119,15 +147,63 @@ const ui = {
     participant: 'Participant',
     scanAgain: 'Scan again',
     qrRequired: 'Enter the QR payload.',
+    qrRequiredHint: 'Scan the QR code displayed in the participant app.',
     invalidQr: 'Check the QR format.',
+    invalidQrHint: 'Scan the QR code displayed in the Link Town participant app.',
+    qrMissingFields: 'The QR code is missing required information.',
+    qrMissingFieldsHint: 'Ask the participant to refresh the QR code and scan it again.',
+    qrExpired: 'The QR code has expired.',
+    qrExpiredHint: 'Ask the participant to display a new QR code.',
+    qrNotYetValid: 'The QR code time is invalid.',
+    qrNotYetValidHint: 'Check the participant device clock and refresh the QR code.',
+    qrAlreadyUsed: 'This QR code has already been used.',
+    qrAlreadyUsedHint: 'Ask the participant to display a new QR code.',
+    userNotFound: 'The participant for this QR code was not found.',
+    userNotFoundHint: 'Check that the participant is signed in with the correct account.',
     validating: 'Checking event application…',
     notApplied: 'This user has not applied for this event.',
     notAppliedHint: 'Ask the user to apply for the event in the participant app, then scan the QR again.',
     notCheckedIn: 'This user has not checked in for this event.',
     notCheckedInHint: 'Scan the check-in QR before confirming event completion.',
+    alreadyCheckedIn: 'This participant has already checked in.',
+    alreadyCheckedInHint: 'To complete participation, select completion confirmation after the event ends.',
+    alreadyCompleted: 'This participant has already completed the event.',
+    alreadyCompletedHint: 'Points will not be awarded twice to the same participant.',
+    eventClosed: 'This event is closed.',
+    eventClosedHint: 'Check the event status and select another event.',
     completionUnavailable: 'Completion QR becomes available after the event end time.',
+    completionUnavailableHint: 'Try completion confirmation again after the event end time.',
+    organizerAuthInvalid: 'The organizer credentials could not be verified.',
+    organizerAuthInvalidHint: 'Log out and check the organizer ID and password.',
+    eventNotFound: 'The selected event could not be found.',
+    eventNotFoundHint: 'Return to the event list and refresh it.',
+    serverError: 'The server could not complete the request.',
+    serverErrorHint: 'Try again later. Contact an administrator if the problem continues.',
+    communicationError: 'Could not connect to the server.',
+    communicationErrorHint: 'Check the network connection and try again.',
     cameraUnavailable: 'Camera QR scanning is unavailable in this browser. Use manual check-in.'
   }
+};
+
+const QR_ERROR_PRESENTATIONS = {
+  QR_REQUIRED: ['qrRequired', 'qrRequiredHint'],
+  QR_INVALID_FORMAT: ['invalidQr', 'invalidQrHint'],
+  QR_INVALID_TYPE: ['invalidQr', 'invalidQrHint'],
+  QR_MISSING_FIELDS: ['qrMissingFields', 'qrMissingFieldsHint'],
+  QR_NOT_YET_VALID: ['qrNotYetValid', 'qrNotYetValidHint'],
+  QR_EXPIRED: ['qrExpired', 'qrExpiredHint'],
+  QR_ALREADY_USED: ['qrAlreadyUsed', 'qrAlreadyUsedHint'],
+  QR_USER_NOT_FOUND: ['userNotFound', 'userNotFoundHint'],
+  EVENT_APPLICATION_REQUIRED: ['notApplied', 'notAppliedHint'],
+  EVENT_CHECK_IN_REQUIRED: ['notCheckedIn', 'notCheckedInHint'],
+  EVENT_ALREADY_CHECKED_IN: ['alreadyCheckedIn', 'alreadyCheckedInHint'],
+  EVENT_ALREADY_COMPLETED: ['alreadyCompleted', 'alreadyCompletedHint'],
+  EVENT_CLOSED: ['eventClosed', 'eventClosedHint'],
+  COMPLETION_TOO_EARLY: ['completionUnavailable', 'completionUnavailableHint'],
+  EVENT_ORGANIZER_AUTH_INVALID: ['organizerAuthInvalid', 'organizerAuthInvalidHint'],
+  EVENT_NOT_FOUND: ['eventNotFound', 'eventNotFoundHint'],
+  SERVER_ERROR: ['serverError', 'serverErrorHint'],
+  NETWORK_ERROR: ['communicationError', 'communicationErrorHint']
 };
 
 const app = document.getElementById('app');
@@ -234,12 +310,15 @@ function parseUserPreview(rawPayload) {
   const trimmed = String(rawPayload || '').trim();
 
   if (!trimmed) {
-    throw new Error(t('qrRequired'));
+    throw createUiError('QR_REQUIRED');
   }
 
   try {
     if (trimmed.startsWith('{')) {
       const payload = JSON.parse(trimmed);
+      if (payload.type !== 'user-present') {
+        throw createUiError('QR_INVALID_TYPE');
+      }
       return {
         user_id: String(payload.user_id || '').trim(),
         name: String(payload.name || '').trim(),
@@ -248,13 +327,19 @@ function parseUserPreview(rawPayload) {
     }
 
     const payloadUrl = new URL(trimmed);
+    if (payloadUrl.protocol !== 'linktown:' || payloadUrl.hostname !== 'user-present') {
+      throw createUiError('QR_INVALID_FORMAT');
+    }
     return {
       user_id: String(payloadUrl.searchParams.get('user_id') || '').trim(),
       name: String(payloadUrl.searchParams.get('name') || '').trim(),
       nonce: String(payloadUrl.searchParams.get('nonce') || '').trim()
     };
   } catch (error) {
-    throw new Error(t('invalidQr'));
+    if (error.code) {
+      throw error;
+    }
+    throw createUiError('QR_INVALID_FORMAT');
   }
 }
 
@@ -262,7 +347,7 @@ function ensurePreview(rawPayload) {
   const user = parseUserPreview(rawPayload);
 
   if (!user.user_id || !user.nonce) {
-    throw new Error(t('invalidQr'));
+    throw createUiError('QR_MISSING_FIELDS');
   }
 
   return {
@@ -271,8 +356,34 @@ function ensurePreview(rawPayload) {
   };
 }
 
-function showError(message) {
-  setState({ screen: 'error', error: message || t('invalidQr') });
+function createUiError(code, message = '') {
+  const presentation = QR_ERROR_PRESENTATIONS[code];
+  const error = new Error(message || (presentation ? t(presentation[0]) : t('serverError')));
+  error.code = code;
+  return error;
+}
+
+function apiResponseError(response, result) {
+  const code = result?.code || (response.status >= 500 ? 'SERVER_ERROR' : 'QR_INVALID_FORMAT');
+  return createUiError(code, QR_ERROR_PRESENTATIONS[code] ? '' : result?.message);
+}
+
+async function readQrApiResponse(response) {
+  try {
+    return await response.json();
+  } catch (error) {
+    throw createUiError('SERVER_ERROR');
+  }
+}
+
+function showError(error, fallbackCode = '') {
+  let code = error?.code || fallbackCode;
+  if (!code && error instanceof TypeError) {
+    code = 'NETWORK_ERROR';
+  }
+  const presentation = QR_ERROR_PRESENTATIONS[code];
+  const message = presentation ? t(presentation[0]) : error?.message || error || t('serverError');
+  setState({ screen: 'error', error: message, errorCode: code });
 }
 
 async function loadPortal(event, nextScreen = 'eventList') {
@@ -385,7 +496,8 @@ async function prepareConfirmation(rawPayload) {
       screen: 'validating',
       pendingPayload: String(rawPayload || '').trim(),
       pendingUser,
-      error: ''
+      error: '',
+      errorCode: ''
     });
 
     const response = await fetch(`/api/event/check-in-eligibility?locale=${encodeURIComponent(state.locale)}`, {
@@ -399,25 +511,20 @@ async function prepareConfirmation(rawPayload) {
         user_qr_payload: state.pendingPayload
       })
     });
-    const result = await response.json();
+    const result = await readQrApiResponse(response);
 
     if (!response.ok) {
-      const message =
-        result.code === 'EVENT_APPLICATION_REQUIRED'
-          ? t('notApplied')
-          : result.code === 'EVENT_CHECK_IN_REQUIRED'
-            ? t('notCheckedIn')
-            : result.message || t('invalidQr');
-      throw new Error(message);
+      throw apiResponseError(response, result);
     }
 
     setState({
       screen: 'confirm',
       pendingUser: result.user,
-      error: ''
+      error: '',
+      errorCode: ''
     });
   } catch (error) {
-    showError(error.message);
+    showError(error);
   }
 }
 
@@ -425,7 +532,7 @@ async function submitEventScan() {
   const eventItem = currentEvent();
 
   if (!eventItem || !state.pendingPayload) {
-    showError(t('invalidQr'));
+    showError(createUiError('QR_REQUIRED'));
     return;
   }
 
@@ -441,10 +548,10 @@ async function submitEventScan() {
         user_qr_payload: state.pendingPayload
       })
     });
-    const result = await response.json();
+    const result = await readQrApiResponse(response);
 
     if (!response.ok) {
-      throw new Error(result.message || 'Scan failed.');
+      throw apiResponseError(response, result);
     }
 
     setState({
@@ -454,10 +561,11 @@ async function submitEventScan() {
       manualPayload: '',
       pendingPayload: '',
       pendingUser: null,
-      error: ''
+      error: '',
+      errorCode: ''
     });
   } catch (error) {
-    showError(error.message);
+    showError(error);
   }
 }
 
@@ -794,6 +902,7 @@ function successTemplate() {
 
 function errorTemplate() {
   const eventItem = currentEvent();
+  const presentation = QR_ERROR_PRESENTATIONS[state.errorCode];
 
   return `
     <div class="tablet-frame">
@@ -801,13 +910,7 @@ function errorTemplate() {
       <main class="alert-stage warn">
         <div class="mark">!</div>
         <div class="msg">${escapeHtml(state.error || t('invalidQr'))}</div>
-        <div class="hint">${escapeHtml(
-          state.error === t('notApplied')
-            ? t('notAppliedHint')
-            : state.error === t('notCheckedIn')
-              ? t('notCheckedInHint')
-              : t('invalidQr')
-        )}</div>
+        <div class="hint">${escapeHtml(presentation ? t(presentation[1]) : t('serverErrorHint'))}</div>
         <button class="btn btn-primary btn-xl" type="button" data-action="open-scan-current">${escapeHtml(t('scanAgain'))}</button>
       </main>
       <div class="frame-id">E-08</div>

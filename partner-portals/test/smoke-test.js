@@ -148,6 +148,23 @@ function createUserQrPayloadWithDates(nonce, issuedAt, expiresAt) {
   return `linktown://user-present?${params.toString()}`;
 }
 
+function assertQrError(payload, expectedCode) {
+  assert.throws(
+    () => parseUserQrPayload(payload),
+    (error) => error.code === expectedCode,
+    `Expected QR error code ${expectedCode}`
+  );
+}
+
+function testUserQrErrorClassification() {
+  assertQrError('', 'QR_REQUIRED');
+  assertQrError('not-a-url', 'QR_INVALID_FORMAT');
+  assertQrError('https://example.com/user-present?type=user-present', 'QR_INVALID_FORMAT');
+  assertQrError('{broken-json', 'QR_INVALID_FORMAT');
+  assertQrError(JSON.stringify({ type: 'store-exchange', user_id: '1', nonce: 'wrong-type' }), 'QR_INVALID_TYPE');
+  assertQrError(JSON.stringify({ type: 'user-present', user_id: '1' }), 'QR_MISSING_FIELDS');
+}
+
 function testUserQrTimeTolerance() {
   const now = Date.now();
   const withinFutureTolerance = parseUserQrPayload(
@@ -169,27 +186,21 @@ function testUserQrTimeTolerance() {
   );
   assert.equal(withinExpiredTolerance.user_id, '1');
 
-  assert.throws(
-    () =>
-      parseUserQrPayload(
-        createUserQrPayloadWithDates(
-          'future-outside-tolerance',
-          new Date(now + 31 * 60 * 1000),
-          new Date(now + 40 * 60 * 1000)
-        )
-      ),
-    /not valid yet/
+  assertQrError(
+    createUserQrPayloadWithDates(
+      'future-outside-tolerance',
+      new Date(now + 31 * 60 * 1000),
+      new Date(now + 40 * 60 * 1000)
+    ),
+    'QR_NOT_YET_VALID'
   );
-  assert.throws(
-    () =>
-      parseUserQrPayload(
-        createUserQrPayloadWithDates(
-          'expired-outside-tolerance',
-          new Date(now - 45 * 60 * 1000),
-          new Date(now - 31 * 60 * 1000)
-        )
-      ),
-    /expired/
+  assertQrError(
+    createUserQrPayloadWithDates(
+      'expired-outside-tolerance',
+      new Date(now - 45 * 60 * 1000),
+      new Date(now - 31 * 60 * 1000)
+    ),
+    'QR_EXPIRED'
   );
 }
 
@@ -225,6 +236,7 @@ async function testUserQrProcessing(cachePath, dbPath, ids) {
   );
   assert.equal(blockedCheckIn.status, 403);
   assert.equal(blockedCheckIn.body.code, 'EVENT_APPLICATION_REQUIRED');
+  assert.equal(blockedCheckIn.body.message, 'This participant has not applied for the event.');
   const cancelledDb = openDatabase({ dbPath });
   cancelledDb.prepare(
     `INSERT INTO participations
@@ -285,6 +297,21 @@ async function testUserQrProcessing(cachePath, dbPath, ids) {
   assert.equal('granted_points' in eventResult.body, false);
   assert.equal(eventResult.body.user.user_id, '1');
 
+  const alreadyCheckedInEligibility = await processEventEligibility(
+    {
+      code: 'event-demo',
+      password: 'event-demo-pass',
+      event_id: ids.eventId,
+      scan_type: 'check_in',
+      user_qr_payload: createUserQrPayload(`smoke-already-checked-in-${Date.now()}`)
+    },
+    'ja',
+    { cachePath, dbPath }
+  );
+  assert.equal(alreadyCheckedInEligibility.status, 403);
+  assert.equal(alreadyCheckedInEligibility.body.code, 'EVENT_ALREADY_CHECKED_IN');
+  assert.equal(alreadyCheckedInEligibility.body.message, 'この利用者はすでに開始受付済みです。');
+
   const completionEligibility = await processEventEligibility(
     {
       code: 'event-demo',
@@ -310,6 +337,7 @@ async function testUserQrProcessing(cachePath, dbPath, ids) {
     { cachePath, dbPath }
   );
   assert.equal(duplicateResult.status, 409);
+  assert.equal(duplicateResult.body.code, 'QR_ALREADY_USED');
 
   const timingDb = openDatabase({ dbPath });
   timingDb.prepare("UPDATE events SET event_end_datetime = '2099-01-01 12:00:00' WHERE event_id = ?").run(ids.eventId);
@@ -326,7 +354,7 @@ async function testUserQrProcessing(cachePath, dbPath, ids) {
     { cachePath, dbPath }
   );
   assert.equal(tooEarlyResult.status, 409);
-  assert.match(tooEarlyResult.body.message, /before the event end/);
+  assert.equal(tooEarlyResult.body.code, 'COMPLETION_TOO_EARLY');
   const finishedDb = openDatabase({ dbPath });
   finishedDb.prepare("UPDATE events SET event_end_datetime = '2000-01-01 12:00:00' WHERE event_id = ?").run(ids.eventId);
   finishedDb.close();
@@ -344,6 +372,20 @@ async function testUserQrProcessing(cachePath, dbPath, ids) {
   assert.equal(completionResult.status, 201);
   assert.equal(completionResult.body.participation_status, 'completed');
   assert.equal(completionResult.body.granted_points, 100);
+
+  const alreadyCompletedEligibility = await processEventEligibility(
+    {
+      code: 'event-demo',
+      password: 'event-demo-pass',
+      event_id: ids.eventId,
+      scan_type: 'completion',
+      user_qr_payload: createUserQrPayload(`smoke-already-completed-${Date.now()}`)
+    },
+    'ja',
+    { cachePath, dbPath }
+  );
+  assert.equal(alreadyCompletedEligibility.status, 403);
+  assert.equal(alreadyCompletedEligibility.body.code, 'EVENT_ALREADY_COMPLETED');
 
   const exchangeResult = await processStoreExchange(
     {
@@ -377,6 +419,7 @@ async function main() {
   const dbPath = await prepareTempPartnerDb();
   const cachePath = await prepareTempTranslationCache(dbPath);
   const ids = await testPortalPayloads(cachePath, dbPath);
+  testUserQrErrorClassification();
   testUserQrTimeTolerance();
   await testUserQrProcessing(cachePath, dbPath, ids);
   console.log('partner-portals smoke test passed');

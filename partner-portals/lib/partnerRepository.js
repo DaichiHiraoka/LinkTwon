@@ -498,7 +498,7 @@ function getMysqlConfigFromUrl(databaseUrl) {
   };
 }
 
-async function getMysqlPool() {
+function getMysqlPool() {
   if (!mysqlPool) {
     if (!mysql) {
       mysql = require('mysql2/promise');

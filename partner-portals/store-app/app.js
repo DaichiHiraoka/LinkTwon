@@ -67,7 +67,9 @@ const ui = {
     duplicateQr: 'このQRコードはすでに使用されています',
     expiredQr: 'QRコードの有効期限が切れています',
     futureQr: 'QRコードの時刻を確認してください',
+    userNotFound: 'QRコードの利用者が見つかりません',
     insufficientPoints: 'ポイントが不足しています',
+    serverError: 'サーバー処理に失敗しました',
     cameraUnavailable: 'カメラを利用できません',
     communicationError: '通信に失敗しました',
     errorHint: 'お客様の画面を確認して、もう一度お試しください'
@@ -112,7 +114,9 @@ const ui = {
     duplicateQr: 'This QR code has already been used',
     expiredQr: 'This QR code has expired',
     futureQr: 'Check the QR code time',
+    userNotFound: 'The customer for this QR code was not found',
     insufficientPoints: 'The customer does not have enough points',
+    serverError: 'The server could not complete the request',
     cameraUnavailable: 'The camera is unavailable',
     communicationError: 'Connection failed',
     errorHint: 'Check the customer screen and try again'
@@ -214,8 +218,29 @@ function parseUserPreview(rawPayload) {
   }
 }
 
-function classifyExchangeError(message) {
+function classifyExchangeError(error) {
+  const code = error?.code || '';
+  const message = error?.message || error;
   const value = String(message || '').toLowerCase();
+
+  if (code === 'QR_ALREADY_USED') {
+    return { kind: 'duplicate', message: t('duplicateQr') };
+  }
+  if (code === 'POINTS_INSUFFICIENT') {
+    return { kind: 'points', message: t('insufficientPoints') };
+  }
+  if (code === 'QR_EXPIRED') {
+    return { kind: 'expired', message: t('expiredQr') };
+  }
+  if (code === 'QR_NOT_YET_VALID') {
+    return { kind: 'time', message: t('futureQr') };
+  }
+  if (code === 'QR_USER_NOT_FOUND') {
+    return { kind: 'user', message: t('userNotFound') };
+  }
+  if (code === 'SERVER_ERROR') {
+    return { kind: 'server', message: t('serverError') };
+  }
 
   if (value.includes('already been used') || value.includes('duplicate')) {
     return { kind: 'duplicate', message: t('duplicateQr') };
@@ -240,8 +265,18 @@ function classifyExchangeError(message) {
 }
 
 function showError(error) {
-  const classified = classifyExchangeError(error?.message || error);
+  const classified = classifyExchangeError(error);
   setState({ screen: 'error', error: classified.message, errorKind: classified.kind });
+}
+
+async function readExchangeResponse(response) {
+  try {
+    return await response.json();
+  } catch (cause) {
+    const error = new Error(t('serverError'));
+    error.code = 'SERVER_ERROR';
+    throw error;
+  }
 }
 
 async function loadPortal(event) {
@@ -371,10 +406,12 @@ async function submitExchange() {
         user_qr_payload: state.pendingPayload
       })
     });
-    const result = await response.json();
+    const result = await readExchangeResponse(response);
 
     if (!response.ok) {
-      throw new Error(result.message || t('invalidQr'));
+      const error = new Error(result.message || t('invalidQr'));
+      error.code = result.code || (response.status >= 500 ? 'SERVER_ERROR' : '');
+      throw error;
     }
 
     setState({
